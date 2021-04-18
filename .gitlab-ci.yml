@@ -1,0 +1,24 @@
+default:  
+  image: ubuntu:20.04
+
+  before_script:
+    - export DEBIAN_FRONTEND=noninteractive 
+    - apt-get update
+    - apt-get upgrade -y
+    - apt-get install -y build-essential cmake libvtk7-dev libfmt-dev clang-format unifdef
+
+check-format-job:
+  stage: build
+  script:
+    - ./tools/check-format
+  only:  
+    - master
+    - merge_requests
+
+check-compile-full:
+  stage: build
+  script:
+    - mkdir ./build && cd ./build && cmake .. && make
+  only:  
+    - master
+    - merge_requests

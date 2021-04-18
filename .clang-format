@@ -1,0 +1,6 @@
+Language: Cpp
+ColumnLimit: 120
+IndentWidth: 4
+TabWidth: 4
+AllowShortIfStatementsOnASingleLine: true
+UseTab: Never
