@@ -1,10 +1,10 @@
 ![](FluidchenLogo.png)
 
-Fluidchen is a CFD Solver developed for the CFD Lab taught at TUM Informatics, Chair of Scientific Computing in Computer Science.
+Fluidchen is a CFD Solver developed for the CFD Lab taught at TUM Informatics, Chair of Scientific Computing in ComputerScience.
 
 Lecturers:
 - Gerasimos Chourdakis, M.Sc.
-- Benjamin Rüth, M.Sc.
+- Benjamin Rodenberg, M.Sc.
 
 Contributors:
 - Oguz Ziya Koseomur
@@ -13,6 +13,10 @@ Contributors:
 - Moritz Gnisia
 
 We thank https://instagram.com/radioactivebunnies for designing such a cool logo for us:)
+
+## Working with fluidchen
+
+You will extend this code step-by-step starting from a pure framework to a parallel CFD solver. Please follow these [instructions for work with git and submitting the assignments](docs/first-steps.md).
 
 ## Software Requirements
 
@@ -23,8 +27,8 @@ Detailed information is given below.
 
 ## Installing
 ```shell
-git clone git@gitlab.lrz.de:YOUR_ACCOUNT_NAME/YOUR_GROUP_NAME.git
-cd YOUR_GROUP_NAME
+git clone https://gitlab.lrz.de/oguzziya/GroupFCFDLab.git
+cd GroupFCFDLab
 mkdir build && cd build
 cmake ..
 make
@@ -97,18 +101,13 @@ apt-get install -y build-essential cmake libvtk7-dev libfmt-dev gcc-9 g++-9
 apt-get install -y gcc-9 g++-9
 ```
 
-### Setup of VTK (OSX)
-In macOS you do not need to install GCC compiler, you can directly use Clang (no need to do anything). The dependencies can be installed by using `homebrew` package manager as
+### Setup of VTK and GCC 9 (OSX)
+The dependencies can be installed by using `homebrew` package manager as
 ```
+brew install gcc
 brew install vtk
 ```
-
-If you want to install GCC compiler anyways
-````
-brew install vtk
-````
-
-By default, `g++` command is linked to `clang` command in OSX operating systems. In order to use GCC
+By default, `g++` command is linked to `clang` command in OSX operating systems. In order to use the installed version
 ```shell
 cmake -DCMAKE_CXX_COMPILER=/usr/local/bin/g++-9 ..
 ```
