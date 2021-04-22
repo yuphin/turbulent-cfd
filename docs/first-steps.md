@@ -2,20 +2,20 @@
 
 For your development we ask you to use Git (a version control system) and the GitLab instance hosted by LRZ (this interface). If you are not familiar with these, we recommend having a look into the [Git Book](https://git-scm.com/book/en/v2) and the [GitLab documentation](https://docs.gitlab.com/ee/README.html).
 
-1. [fork](#fork) (only once, one repository per group, let us know which repository we should look at, if more than one)
-2. [make it private](#2-make-it-private)
-3. [invite us as reporters](#3-invite-us-as-reporters) (@gchourdakis, @benjaminrueth)
-4. [clone it](#4-clone-it)
-5. [work on it: create a branch. Then commit, commit, push...](#5-work-on-it-create-a-branch-then-commit-commit-push)
-6. [create a merge request to `master` when ready](#6-create-a-merge-request-to-master-when-ready)
-7. for the next worksheet, go to 5.
+1. [Fork](#fork) (only once, one repository per group, let us know which repository we should look at, if more than one)
+2. [Rename and make it private](#2-rename-and-make-it-private)
+3. [Invite us as developers](#3-invite-us-as-developers) (@gchourdakis, @benjaminrodenberg)
+4. [Clone it](#4-clone-it)
+5. [Work on it](#5-work-on-it)
+6. [Create a merge request to `master` when ready](#6-create-a-merge-request-to-master-when-ready)
+7. For the next worksheet, go to 5.
 
 For convenience, please make sure to:
 
 * Use your real name (and, potentially, photo) on GitLab, not your LRZ Identifier (`ga12xyz`...)
 * Name your Repository as `<GroupX>CFDLab`
 
-# 1. Fork
+## 1. Fork
 
 ![fork1](images/fork1.png)
 
@@ -27,14 +27,17 @@ For convenience, please make sure to:
 
 ![fork3](images/fork3.png)
 
+## 2. Rename and make it private
+
+![private1](images/private1.png)
 
 ---
 
-![fork4](images/fork4.png)
+![rename1](images/rename1.png)
 
-# 2. Make it private
+---
 
-![private1](images/private1.png)
+![rename2](images/rename2.png)
 
 ---
 
@@ -48,7 +51,7 @@ For convenience, please make sure to:
 
 ![private4](images/private4.png)
 
-# 3. invite us as reporters
+## 3. Invite us as developers
 
 ![invite1](images/invite1.png)
 
@@ -56,25 +59,16 @@ For convenience, please make sure to:
 
 ![invite2](images/invite2.png)
 
----
 
-![invite3](images/invite3.png)
-
----
-(optional: Expiration Date)  
-![invite4](images/invite4.png)
-
----
-![invite5](images/invite5.png)
-
-
-# 4. Clone it
+## 4. Clone it
 
 ```bash
-git clone https://gitlab.lrz.de/[yourName]/public/[GroupXCFDLab].git
+git clone https://gitlab.lrz.de/[yourName]/public/[GroupX_CFDLab].git
 ```
 
-# 5. Work on it: create a branch. Then commit, commit, push...
+## 5. Work on it
+
+Create a branch. Then commit, commit, push, repeat.
 
 ```bash
 # create a branch
@@ -83,7 +77,7 @@ git checkout -b ws1
 # see which files you have changed:
 git status # or git diff
 # collect files to commit:
-git add file1.c file2.c
+git add file1.cpp file2.cpp
 # commit (save the state of your project):
 git commit -m "This is a useful and short commit message"
 # get the latest changes from GitLab:
@@ -92,7 +86,7 @@ git pull # or git pull --rebase to avoid merge commits
 git push [origin branch]
 ```
 
-Please work on one branch for each worksheet. E.g. `ws1`. The merge request of this branch into `master` will be your submission.
+You are free to create as many branches as you want, but please create one branch for each worksheet: `ws1`, `ws2`, `ws3`. The merge request of this branch into `master` will be your submission.
 
 It is very important that you commit and push your work frequently, in small batches, but it is also important that every commit is meaningful (or at least that it has a meaningful commit message and description). Keep your commit messages (first line) short and use the body (rest of the lines) to describe why you are commiting these changes. Your colleagues should be able to understand the history of your project/changes without looking into the code.
 
@@ -113,6 +107,6 @@ Even better, instead of merging the branch directly, you may [open a Merge Reque
 
 [Read more about branching](https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell).
 
-# 6. Create a merge request to `master` when ready
+## 6. Create a merge request to `master` when ready
 
-[Open a Merge Request from `ws1` into `master`](https://docs.gitlab.com/ee/gitlab-basics/add-merge-request.html) when your submission is ready. We will then review this merge request. After the review session on the worksheet you can apply suggestions from the review and merge the solution into `master`.
+[Open a Merge Request from your `ws1` into your `master`](https://docs.gitlab.com/ee/gitlab-basics/add-merge-request.html) when your submission is ready. We will then review this merge request. After the review session on the worksheet you can apply suggestions from the review and merge the solution into `master`.
