@@ -97,11 +97,11 @@ Case::Case(std::string file_name, int argn, char **args) {
     _tolerance = eps;
 
     // Construct boundaries
-    if (not _grid.moving_wall_cells().empty()) {
+    if (!_grid.moving_wall_cells().empty()) {
         _boundaries.push_back(
             std::make_unique<MovingWallBoundary>(_grid.moving_wall_cells(), LidDrivenCavity::wall_velocity));
     }
-    if (not _grid.fixed_wall_cells().empty()) {
+    if (!_grid.fixed_wall_cells().empty()) {
         _boundaries.push_back(std::make_unique<FixedWallBoundary>(_grid.fixed_wall_cells()));
     }
 }

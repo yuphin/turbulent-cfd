@@ -36,7 +36,7 @@ if(gpp9)
     add_compile_definitions(gpp9)
 else()
     message("g++ Version is lower than Version 9")
-    if (NOT APPLE)  
+    if (NOT(APPLE OR WIN32))  
       # Link Filesystem Libraries
       link_libraries(stdc++fs)
     endif()

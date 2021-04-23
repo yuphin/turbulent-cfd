@@ -59,7 +59,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
                 _cells(i, j) = Cell(i, j, cell_type::MOVING_WALL, geometry_data.at(i_geom).at(j_geom));
                 _moving_wall_cells.push_back(&_cells(i, j));
             } else {
-                if (i == 0 or j == 0 or i == _domain.size_x + 1 or j == _domain.size_y + 1) {
+                if (i == 0 || j == 0 || i == _domain.size_x + 1 || j == _domain.size_y + 1) {
                     // Outer walls
                     _cells(i, j) = Cell(i, j, cell_type::FIXED_WALL, geometry_data.at(i_geom).at(j_geom));
                     _fixed_wall_cells.push_back(&_cells(i, j));
@@ -236,7 +236,7 @@ void Grid::parse_geometry_file(std::string filedoc, std::vector<std::vector<int>
     // Fourth line : depth
     ss >> depth;
 
-    int array[numrows][numcols];
+    //int array[numrows][numcols];
 
     // Following lines : data
     for (int col = numcols - 1; col > -1; --col) {
