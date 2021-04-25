@@ -23,7 +23,7 @@ Case::Case(std::string file_name, int argn, char **args) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
-    double nu;      /* viscosity   */
+    double nu = DBL_MAX;      /* viscosity   */
     double UI;      /* velocity x-direction */
     double VI;      /* velocity y-direction */
     double PI;      /* pressure */
@@ -39,6 +39,7 @@ Case::Case(std::string file_name, int argn, char **args) {
     double tau;     /* safety factor for time step*/
     int itermax;    /* max. number of iterations for pressure per time step */
     double eps;     /* accuracy bound for pressure*/
+    double re = DBL_MAX;      /* Reynolds number */
 
     if (file.is_open()) {
 
@@ -66,10 +67,18 @@ Case::Case(std::string file_name, int argn, char **args) {
                 if (var == "itermax") file >> itermax;
                 if (var == "imax") file >> imax;
                 if (var == "jmax") file >> jmax;
+                if (var == "Re") file >> re;
             }
         }
     }
     file.close();
+    // We assume Reynolds number = 1 / nu for now
+    if (re != DBL_MAX && nu == DBL_MAX) {
+        nu = 1 / re;
+    } else {
+        std::cerr << "Viscosity or Reynolds number not specified, defaulting viscosity to 0\n";
+        nu = 0.0;
+    } 
 
     std::map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
@@ -194,7 +203,8 @@ void Case::simulate() {
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
         // Output u,v,p
-        output_vtk(timestep);
+        // Note: Comment out for intermediate values
+        // output_vtk(timestep);
         t += dt;
         timestep++;
     }

@@ -21,7 +21,7 @@ void Fields::calculate_rs(Grid &grid) {
     for (int i = 1; i <= grid.imax(); i++) {
         for (int j = 1; j <= grid.jmax(); j++) {
             double f_diff = 1 / grid.dx() * (f(i, j) - f(i - 1, j));
-            double g_diff = 1 / grid.dy() * (g(i, j) - g(i - 1, j));
+            double g_diff = 1 / grid.dy() * (g(i, j) - g(i, j - 1));
             rs(i, j) = 1 / dt() * (f_diff + g_diff);
         }
     }
