@@ -176,8 +176,30 @@ void Case::simulate() {
 
     double t = 0.0;
     double dt = _field.dt();
-    int timestep = 0;
+    uint32_t timestep = 0;
     double output_counter = 0.0;
+    while (t < _t_end) {
+        // Select dt
+        // Set boundary values
+        // Compute F & G
+        // Set RHS of PPE
+        _field.calculate_rs(_grid);
+        // Perform pressure solve
+        uint32_t it = 0;
+        double res = DBL_MAX;
+        while (it < _max_iter && res > _tolerance) {
+            res = _pressure_solver->solve(_field, _grid, _boundaries);
+            it++;
+        }
+        // Compute u^(n+1) & v^(n+1)
+        _field.calculate_velocities(_grid);
+        // Output u,v,p
+        output_vtk(timestep);
+        t += dt;
+        timestep++;
+    }
+    // Output u,v,p
+    output_vtk(timestep);
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
