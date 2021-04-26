@@ -86,6 +86,12 @@ class Fields {
     /// pressure matrix access and modify
     Matrix<double> &p_matrix();
 
+    /// velocity u matrix access and modify
+    Matrix<double> &u_matrix();
+
+    /// velocity v matrix access and modify
+    Matrix<double> &v_matrix();
+
   private:
     /// x-velocity matrix
     Matrix<double> _U;

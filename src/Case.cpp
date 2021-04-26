@@ -191,6 +191,7 @@ void Case::simulate() {
         // Select dt
         // Set boundary values
         // Compute F & G
+        _field.calculate_fluxes(_grid);
         // Set RHS of PPE
         _field.calculate_rs(_grid);
         // Perform pressure solve

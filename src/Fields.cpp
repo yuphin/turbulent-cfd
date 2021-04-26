@@ -14,7 +14,17 @@ Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, 
     _RS = Matrix<double>(imax + 2, jmax + 2, 0.0);
 }
 
-void Fields::calculate_fluxes(Grid &grid) {}
+void Fields::calculate_fluxes(Grid &grid) {
+    // Note: external forces e.g gravity not yet included
+    for (auto currentCell : grid.fluid_cells()) {
+        int i = currentCell->i();
+        int j = currentCell->j();
+        f(i, j) = u(i, j) + dt() * (_nu * Discretization::diffusion(u_matrix(), i, j) 
+                                    - Discretization::convection_u(u_matrix(), v_matrix(), i, j));
+        g(i, j) = v(i, j) + dt() * (_nu * Discretization::diffusion(v_matrix(), i, j) 
+                                    - Discretization::convection_v(u_matrix(), v_matrix(), i, j));
+    }
+}
 
 void Fields::calculate_rs(Grid &grid) {
     // Note: Index 0 and imax+1 are reserved for ghost cells
@@ -50,5 +60,8 @@ double &Fields::g(int i, int j) { return _G(i, j); }
 double &Fields::rs(int i, int j) { return _RS(i, j); }
 
 Matrix<double> &Fields::p_matrix() { return _P; }
+Matrix<double> &Fields::u_matrix() { return _U; }
+Matrix<double> &Fields::v_matrix() { return _V; }
+
 
 double Fields::dt() const { return _dt; }
