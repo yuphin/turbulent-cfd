@@ -26,12 +26,13 @@ if (NOT VTK_FOUND)
   return ()
 endif()
 message (STATUS "VTK_VERSION: ${VTK_VERSION}")
-include(${VTK_USE_FILE})
+if (${VTK_VERSION} VERSION_LESS 9)
+  include(${VTK_USE_FILE})
+endif()
+
 
 # Filesystem
-set(gpp9 False)
-#set(gpp9 True)
-if(gpp9)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 9)
     message("g++ Version is 9 or higher")
     add_compile_definitions(gpp9)
 else()
