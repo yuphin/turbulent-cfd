@@ -26,7 +26,7 @@ if (NOT VTK_FOUND)
   return ()
 endif()
 message (STATUS "VTK_VERSION: ${VTK_VERSION}")
-if (True)
+if (${VTK_VERSION} VERSION_LESS 9)
   include(${VTK_USE_FILE})
 endif()
 
