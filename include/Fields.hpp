@@ -95,7 +95,7 @@ class Fields {
   private:
     /// x-velocity matrix
     Matrix<double> _U;
-    /// x-velocity matrix
+    /// y-velocity matrix
     Matrix<double> _V;
     /// pressure matrix
     Matrix<double> _P;

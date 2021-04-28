@@ -20,13 +20,13 @@ find_package(MPI REQUIRED)
 # find_package(Boost COMPONENTS filesystem REQUIRED)
 
 # VTK Library
-find_package(VTK REQUIRED)
+find_package(VTK 7 REQUIRED)
 if (NOT VTK_FOUND)
   message("VTK not found")
   return ()
 endif()
 message (STATUS "VTK_VERSION: ${VTK_VERSION}")
-if (${VTK_VERSION} VERSION_LESS 9)
+if (True)
   include(${VTK_USE_FILE})
 endif()
 

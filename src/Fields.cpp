@@ -50,7 +50,24 @@ void Fields::calculate_velocities(Grid &grid) {
     }
 }
 
-double Fields::calculate_dt(Grid &grid) { return _dt; }
+double Fields::calculate_dt(Grid &grid) {
+    double dx2 = grid.dx() * grid.dx(); 
+    double dy2 = grid.dy() * grid.dy();
+    double cond_1 = 1.0/(2.0*_nu) * ((dx2*dy2)/(dx2+dy2));
+
+    double uMax = *std::max_element(_U.data(), _U.data()+_U.size());
+    double vMax = *std::max_element(_V.data(), _V.data()+_V.size());
+    double absUMax = std::abs(uMax);
+    double absVMax = std::abs(vMax);
+    double cond_2 = grid.dx() / absUMax;
+    double cond_3 = grid.dy() / absVMax;
+
+    double minimum = std::min(cond_1, cond_2);
+    minimum = std::min(minimum, cond_3);
+    _dt = _tau * minimum;
+
+    return _dt;
+}
 
 double &Fields::p(int i, int j) { return _P(i, j); }
 double &Fields::u(int i, int j) { return _U(i, j); }
