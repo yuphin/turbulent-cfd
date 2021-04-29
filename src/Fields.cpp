@@ -28,24 +28,24 @@ void Fields::calculate_fluxes(Grid &grid) {
 
 void Fields::calculate_rs(Grid &grid) {
     // Note: Index 0 and imax+1 are reserved for ghost cells
-    for (int i = 1; i <= grid.imax(); i++) {
-        for (int j = 1; j <= grid.jmax(); j++) {
-            double f_diff = 1 / grid.dx() * (f(i, j) - f(i - 1, j));
-            double g_diff = 1 / grid.dy() * (g(i, j) - g(i, j - 1));
-            rs(i, j) = 1 / dt() * (f_diff + g_diff);
-        }
+    for (const auto &current_cell : grid.fluid_cells()) {
+        int i = current_cell->i();
+        int j = current_cell->j();
+        double f_diff = 1 / grid.dx() * (f(i, j) - f(i - 1, j));
+        double g_diff = 1 / grid.dy() * (g(i, j) - g(i, j - 1));
+        rs(i, j) = 1 / dt() * (f_diff + g_diff);
     }
 }
 
 void Fields::calculate_velocities(Grid &grid) {
-    for (int i = 1; i <= grid.imax(); i++) {
-        for (int j = 1; j <= grid.jmax(); j++) {
-            if (i <= grid.imax() - 1) {
-                u(i, j) = f(i, j) - dt() / grid.dx() * (p(i + 1, j) - p(i, j));
-            }
-            if (j <= grid.jmax() - 1) {
-                v(i, j) = g(i, j) - dt() / grid.dy() * (p(i, j + 1) - p(i, j));
-            }
+    for (const auto &current_cell : grid.fluid_cells()) {
+        int i = current_cell->i();
+        int j = current_cell->j();
+        if (i <= grid.imax() - 1) {
+            u(i, j) = f(i, j) - dt() / grid.dx() * (p(i + 1, j) - p(i, j));
+        }
+        if (j <= grid.jmax() - 1) {
+            v(i, j) = g(i, j) - dt() / grid.dy() * (p(i, j + 1) - p(i, j));
         }
     }
 }
