@@ -38,8 +38,8 @@ void Fields::calculate_rs(Grid &grid) {
 }
 
 void Fields::calculate_velocities(Grid &grid) {
-    for (int i = 0; i <= grid.imax(); i++) {
-        for (int j = 0; j <= grid.jmax(); j++) {
+    for (int i = 1; i <= grid.imax(); i++) {
+        for (int j = 1; j <= grid.jmax(); j++) {
             if (i <= grid.imax() - 1) {
                 u(i, j) = f(i, j) - dt() / grid.dx() * (p(i + 1, j) - p(i, j));
             }
