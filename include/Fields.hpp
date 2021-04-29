@@ -92,6 +92,12 @@ class Fields {
     /// velocity v matrix access and modify
     Matrix<double> &v_matrix();
 
+    /// x-momentum flux matrix
+    Matrix<double> &f_matrix();
+
+    /// y-momentum flux matrix
+    Matrix<double> &g_matrix();
+
   private:
     /// x-velocity matrix
     Matrix<double> _U;
