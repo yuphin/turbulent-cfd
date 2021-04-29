@@ -20,7 +20,11 @@ find_package(MPI REQUIRED)
 # find_package(Boost COMPONENTS filesystem REQUIRED)
 
 # VTK Library
-find_package(VTK 7 REQUIRED)
+if(WIN32)
+  find_package(VTK REQUIRED)
+else()
+  find_package(VTK 7 REQUIRED)
+endif()
 if (NOT VTK_FOUND)
   message("VTK not found")
   return ()
