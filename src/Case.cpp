@@ -189,7 +189,11 @@ void Case::simulate() {
     double output_counter = 0.0;
     while (t < _t_end) {
         // Select dt
+        _field.calculate_dt(_grid);
         // Set boundary values
+        for (auto &boundary : _boundaries) {
+            boundary->apply(_field);
+        }
         // Compute F & G
         _field.calculate_fluxes(_grid);
         // Set RHS of PPE
