@@ -189,7 +189,7 @@ void Case::simulate() {
     double output_counter = 0.0;
     while (t < _t_end) {
         // Select dt
-        _field.calculate_dt(_grid);
+        dt = _field.calculate_dt(_grid);
         // Set boundary values
         for (auto &boundary : _boundaries) {
             boundary->apply(_field);
@@ -208,6 +208,7 @@ void Case::simulate() {
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
         // Output u,v,p
+
         // Note: Comment out for intermediate values
         // output_vtk(timestep);
         t += dt;
