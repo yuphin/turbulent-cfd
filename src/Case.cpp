@@ -5,7 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <map>
+#include <unordered_map>
 #include <vector>
 
 namespace filesystem = std::filesystem;
@@ -80,7 +80,7 @@ Case::Case(std::string file_name, int argn, char **args) {
         nu = 0.0;
     }
 
-    std::map<int, double> wall_vel;
+    std::unordered_map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
         wall_vel.insert(std::pair<int, double>(LidDrivenCavity::moving_wall_id, LidDrivenCavity::wall_velocity));
     }

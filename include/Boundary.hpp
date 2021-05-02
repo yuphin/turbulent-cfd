@@ -1,10 +1,9 @@
 #pragma once
 
-#include <vector>
-
 #include "Cell.hpp"
 #include "Fields.hpp"
-#include <map>
+#include <unordered_map>
+#include <vector>
 
 /**
  * @brief Abstact of boundary conditions.
@@ -32,15 +31,15 @@ class Boundary {
 class FixedWallBoundary : public Boundary {
   public:
     FixedWallBoundary(std::vector<Cell *> cells);
-    FixedWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_temperature);
+    FixedWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_temperature);
     virtual ~FixedWallBoundary() = default;
-    void enforce_uv(Fields&field, Grid &) override;
+    void enforce_uv(Fields &field, Grid &) override;
     void enforce_fg(Fields &field, Grid &) override;
     void enforce_p(Fields &field, Grid &) override;
 
   private:
     std::vector<Cell *> _cells;
-    std::map<int, double> _wall_temperature;
+    std::unordered_map<int, double> _wall_temperature;
 };
 
 /**
@@ -51,13 +50,13 @@ class FixedWallBoundary : public Boundary {
 class MovingWallBoundary : public Boundary {
   public:
     MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity);
-    MovingWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_velocity,
-                       std::map<int, double> wall_temperature);
+    MovingWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_velocity,
+                       std::unordered_map<int, double> wall_temperature);
     virtual ~MovingWallBoundary() = default;
-    void enforce_uv(Fields&, Grid&);
+    void enforce_uv(Fields &, Grid &);
 
   private:
     std::vector<Cell *> _cells;
-    std::map<int, double> _wall_velocity;
-    std::map<int, double> _wall_temperature;
+    std::unordered_map<int, double> _wall_velocity;
+    std::unordered_map<int, double> _wall_temperature;
 };
