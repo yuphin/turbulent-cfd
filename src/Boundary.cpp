@@ -59,11 +59,10 @@ MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, std::unordered
     : _cells(cells), _wall_velocity(wall_velocity), _wall_temperature(wall_temperature) {}
 
 void MovingWallBoundary::enforce_uv(Fields &field, Grid &grid) {
-    // imax and jmax here include the ghost cells.
     int imax = grid.imax();
     int jmax = grid.jmax();
     double wall_vel = _wall_velocity[LidDrivenCavity::moving_wall_id];
-    for (int i = 0; i <= imax; i++) {
-        field.u(i, jmax + 1) = 2 * wall_vel - field.u(i, jmax); // 1;
+    for (int i = 1; i <= imax; i++) {
+        field.u(i, jmax + 1) = 2 * wall_vel - field.u(i, jmax);
     }
 }
