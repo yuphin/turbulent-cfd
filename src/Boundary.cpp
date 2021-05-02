@@ -9,8 +9,8 @@ FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells, std::map<int, do
     : _cells(cells), _wall_temperature(wall_temperature) {}
 
 void FixedWallBoundary::enforce_uv(Fields &field, Grid &grid) {
-    int imax = field.u_matrix().imax() - 2;
-    int jmax = field.u_matrix().jmax() - 2;
+    int imax = grid.imax();
+    int jmax = grid.jmax();
     for (int i = 0; i <= imax; i++) {
         field.u(i, 0) = -field.u(i, 1);
         field.v(i, 0) = 0;
