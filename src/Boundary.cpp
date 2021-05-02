@@ -11,7 +11,7 @@ FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells, std::unordered_m
 void FixedWallBoundary::enforce_uv(Fields &field, Grid &grid) {
     int imax = grid.imax();
     int jmax = grid.jmax();
-    for (int i = 0; i <= imax; i++) {
+    for (int i = 1; i <= imax; i++) {
         field.u(i, 0) = -field.u(i, 1);
         field.v(i, 0) = 0;
         field.v(i, jmax) = 0;
@@ -27,11 +27,11 @@ void FixedWallBoundary::enforce_uv(Fields &field, Grid &grid) {
 void FixedWallBoundary::enforce_fg(Fields &field, Grid &grid) {
     int imax = grid.imax();
     int jmax = grid.jmax();
-    for (int i = 0; i <= imax; i++) {
+    for (int i = 1; i <= imax; i++) {
         field.g(i, 0) = field.v(i, 0);
         field.g(i, jmax) = field.v(i, jmax);
     }
-    for (int j = 0; j <= jmax; j++) {
+    for (int j = 1; j <= jmax; j++) {
         field.f(0, j) = field.u(0, j);
         field.f(imax, j) = field.u(imax, j);
     }
