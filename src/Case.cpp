@@ -18,14 +18,8 @@ namespace filesystem = std::filesystem;
 #include <vtkStructuredGrid.h>
 #include <vtkStructuredGridWriter.h>
 #include <vtkTuple.h>
-<<<<<<< HEAD
-#define LOG 1
-#define TEST 1
-=======
 #define LOG 0
-
-
->>>>>>> Change Boundary implementation
+#define TEST 1
 Case::Case(std::string file_name, int argn, char **args) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
