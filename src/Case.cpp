@@ -18,8 +18,14 @@ namespace filesystem = std::filesystem;
 #include <vtkStructuredGrid.h>
 #include <vtkStructuredGridWriter.h>
 #include <vtkTuple.h>
+<<<<<<< HEAD
 #define LOG 1
 #define TEST 1
+=======
+#define LOG 0
+
+
+>>>>>>> Change Boundary implementation
 Case::Case(std::string file_name, int argn, char **args) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
@@ -197,12 +203,12 @@ void Case::simulate() {
 #endif
         // Enforce velocity boundary conditions
         for (auto &boundary : _boundaries) {
-            boundary->enforce_uv(_field, _grid);
+            boundary->enforce_uv(_field);
         }
         // Compute F & G and enforce boundary conditions
         _field.calculate_fluxes(_grid);
         for (const auto &boundary : _boundaries) {
-            boundary->enforce_fg(_field, _grid);
+            boundary->enforce_fg(_field);
         }
         // Set RHS of PPE
         _field.calculate_rs(_grid);
@@ -213,7 +219,7 @@ void Case::simulate() {
             res = _pressure_solver->solve(_field, _grid, _boundaries);
             // Enforce boundary conditions
             for (const auto &boundary : _boundaries) {
-                boundary->enforce_p(_field, _grid);
+                boundary->enforce_p(_field);
             }
             it++;
         }

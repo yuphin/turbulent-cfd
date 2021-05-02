@@ -18,9 +18,9 @@ class Boundary {
      *
      * @param[in] Field to be applied
      */
-    virtual void enforce_uv(Fields &field, Grid &) = 0;
-    virtual void enforce_fg(Fields &field, Grid &) {}
-    virtual void enforce_p(Fields &field, Grid &) {}
+    virtual void enforce_uv(Fields &field) = 0;
+    virtual void enforce_fg(Fields &field) = 0;
+    virtual void enforce_p(Fields &field) = 0;
     virtual ~Boundary() = default;
 };
 
@@ -33,9 +33,9 @@ class FixedWallBoundary : public Boundary {
     FixedWallBoundary(std::vector<Cell *> cells);
     FixedWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_temperature);
     virtual ~FixedWallBoundary() = default;
-    void enforce_uv(Fields &field, Grid &) override;
-    void enforce_fg(Fields &field, Grid &) override;
-    void enforce_p(Fields &field, Grid &) override;
+    void enforce_uv(Fields &field) override;
+    void enforce_fg(Fields &field) override;
+    void enforce_p(Fields &field) override;
 
   private:
     std::vector<Cell *> _cells;
@@ -53,7 +53,9 @@ class MovingWallBoundary : public Boundary {
     MovingWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_velocity,
                        std::unordered_map<int, double> wall_temperature);
     virtual ~MovingWallBoundary() = default;
-    void enforce_uv(Fields &, Grid &);
+    void enforce_uv(Fields &field) override;
+    void enforce_fg(Fields &field) override;
+    void enforce_p(Fields &field) override;    
 
   private:
     std::vector<Cell *> _cells;

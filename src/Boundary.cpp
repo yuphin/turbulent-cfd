@@ -8,45 +8,64 @@ FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : _cells(cells) 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_temperature)
     : _cells(cells), _wall_temperature(wall_temperature) {}
 
-void FixedWallBoundary::enforce_uv(Fields &field, Grid &grid) {
-    int imax = grid.imax();
-    int jmax = grid.jmax();
-    for (int i = 1; i <= imax; i++) {
-        field.u(i, 0) = -field.u(i, 1);
-        field.v(i, 0) = 0;
-        field.v(i, jmax) = 0;
-    }
-    for (int j = 1; j <= jmax; j++) {
-        field.u(0, j) = 0;
-        field.u(imax, j) = 0;
-        field.v(0, j) = -field.v(1, j);
-        field.v(imax + 1, j) = -field.v(imax, j);
-    }
-}
-
-void FixedWallBoundary::enforce_fg(Fields &field, Grid &grid) {
-    int imax = grid.imax();
-    int jmax = grid.jmax();
-    for (int i = 1; i <= imax; i++) {
-        field.g(i, 0) = field.v(i, 0);
-        field.g(i, jmax) = field.v(i, jmax);
-    }
-    for (int j = 1; j <= jmax; j++) {
-        field.f(0, j) = field.u(0, j);
-        field.f(imax, j) = field.u(imax, j);
+void FixedWallBoundary::enforce_uv(Fields &field) {
+    for (auto &cell : _cells) {
+        int i = cell->i();
+        int j = cell->j();        
+        if (cell->is_border(border_position::RIGHT)) {
+            field.u(i, j) = 0;
+            field.v(i, j) = -field.v(i + 1, j);
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.u(i - 1, j) = 0;
+            field.v(i, j) = -field.v(i - 1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.v(i, j) = 0;
+            field.u(i, j) = -field.u(i, j + 1);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.v(i, j - 1) = 0;
+            field.u(i, j) = -field.u(i, j - 1);
+        }
     }
 }
 
-void FixedWallBoundary::enforce_p(Fields &field, Grid &grid) {
-    int imax = grid.imax();
-    int jmax = grid.jmax();
-    for (int i = 1; i <= imax; i++) {
-        field.p(i, 0) = field.p(i, 1);
-        field.p(i, jmax + 1) = field.p(i, jmax);
+void FixedWallBoundary::enforce_fg(Fields &field) {
+    for (auto &cell : _cells) {
+        int i = cell->i();
+        int j = cell->j();        
+        if (cell->is_border(border_position::RIGHT)) {
+            field.f(i, j) = field.u(i, j);            
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.f(i - 1, j) = field.u(i - 1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.g(i, j) = field.v(i, j);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.g(i, j - 1) = field.v(i, j - 1);
+        }
     }
-    for (int j = 1; j <= jmax; j++) {
-        field.p(0, j) = field.p(1, j);
-        field.p(imax + 1, j) = field.p(imax, j);
+}
+
+void FixedWallBoundary::enforce_p(Fields &field) {
+    for (auto &cell : _cells) {
+        int i = cell->i();
+        int j = cell->j();        
+        if (cell->is_border(border_position::RIGHT)) {
+            field.p(i, j) = field.p(i + 1, j);
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.p(i, j) = field.p(i -1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.p(i, j) = field.p(i, j + 1);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.p(i, j) = field.p(i, j - 1);
+        }
     }
 }
 
@@ -58,11 +77,64 @@ MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, std::unordered
                                        std::unordered_map<int, double> wall_temperature)
     : _cells(cells), _wall_velocity(wall_velocity), _wall_temperature(wall_temperature) {}
 
-void MovingWallBoundary::enforce_uv(Fields &field, Grid &grid) {
-    int imax = grid.imax();
-    int jmax = grid.jmax();
-    double wall_vel = _wall_velocity[LidDrivenCavity::moving_wall_id];
-    for (int i = 1; i <= imax; i++) {
-        field.u(i, jmax + 1) = 2 * wall_vel - field.u(i, jmax);
+void MovingWallBoundary::enforce_uv(Fields &field) {
+    for (auto &cell : _cells) {
+        int i = cell->i();
+        int j = cell->j();
+        if (cell->is_border(border_position::RIGHT)) {
+            field.u(i, j) = 0;
+            field.v(i, j) = 2 * _wall_velocity[LidDrivenCavity::moving_wall_id] - field.v(i + 1, j);
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.u(i - 1, j) = 0;
+            field.v(i, j) = 2 * _wall_velocity[LidDrivenCavity::moving_wall_id] - field.v(i - 1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.v(i, j) = 0;
+            field.u(i, j) = 2 * _wall_velocity[LidDrivenCavity::moving_wall_id] - field.u(i, j + 1);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.v(i, j - 1) = 0;
+            field.u(i, j) = 2 * _wall_velocity[LidDrivenCavity::moving_wall_id] - field.u(i, j - 1);
+        }
+    }
+
+}
+
+void MovingWallBoundary::enforce_fg(Fields &field) {
+    for (auto &cell : _cells) {
+        int i = cell->i();
+        int j = cell->j();        
+        if (cell->is_border(border_position::RIGHT)) {
+            field.f(i, j) = field.u(i, j);            
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.f(i - 1, j) = field.u(i - 1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.g(i, j) = field.v(i, j);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.g(i, j - 1) = field.v(i, j - 1);
+        }
+    }
+}
+
+void MovingWallBoundary::enforce_p(Fields &field) {
+    for (auto &cell : _cells) {
+        int i = cell->i();
+        int j = cell->j();        
+        if (cell->is_border(border_position::RIGHT)) {
+            field.p(i, j) = field.p(i + 1, j);
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.p(i, j) = field.p(i -1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.p(i, j) = field.p(i, j + 1);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.p(i, j) = field.p(i, j - 1);
+        }
     }
 }
