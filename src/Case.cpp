@@ -18,7 +18,8 @@ namespace filesystem = std::filesystem;
 #include <vtkStructuredGrid.h>
 #include <vtkStructuredGridWriter.h>
 #include <vtkTuple.h>
-#define LOG 0
+#define LOG 1
+#define TEST 1
 Case::Case(std::string file_name, int argn, char **args) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
@@ -187,11 +188,13 @@ void Case::simulate() {
     uint32_t timestep = 0;
     double output_counter = 0.0;
     while (t < _t_end) {
-#if LOG
-        std::cout << "Progress: " << t << "/" << _t_end << "\n";
-#endif
+
         // Select dt
         dt = _field.calculate_dt(_grid);
+
+#if LOG
+        std::cout << "Progress: " << t << "/" << _t_end << ", dt: " << dt << "\n";
+#endif
         // Enforce velocity boundary conditions
         for (auto &boundary : _boundaries) {
             boundary->enforce_uv(_field, _grid);
@@ -214,6 +217,11 @@ void Case::simulate() {
             }
             it++;
         }
+#if LOG
+        if (it == _max_iter) {
+            std::cout << "Max iter count reached: " << it << "\n";
+        }
+#endif
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
         // Output u,v,p
@@ -225,6 +233,9 @@ void Case::simulate() {
     }
     // Output u,v,p
     output_vtk(timestep);
+#if TEST
+    std::cout << _field.u(_grid.imax() / 2, 7 * _grid.jmax() / 8) << "\n";
+#endif
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
