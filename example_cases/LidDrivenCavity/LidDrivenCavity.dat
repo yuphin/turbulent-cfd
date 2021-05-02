@@ -25,7 +25,7 @@ tau          0.5
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     0.05
+dt_value     0.5
 
 #--------------------------------------------
 #               pressure
