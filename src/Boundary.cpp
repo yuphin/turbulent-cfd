@@ -5,7 +5,7 @@
 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : _cells(cells) {}
 
-FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_temperature)
+FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_temperature)
     : _cells(cells), _wall_temperature(wall_temperature) {}
 
 void FixedWallBoundary::enforce_uv(Fields &field, Grid &grid) {
@@ -37,12 +37,25 @@ void FixedWallBoundary::enforce_fg(Fields &field, Grid &grid) {
     }
 }
 
+void FixedWallBoundary::enforce_p(Fields &field, Grid &grid) {
+    int imax = grid.imax();
+    int jmax = grid.jmax();
+    for (int i = 1; i <= imax; i++) {
+        field.p(i, 0) = field.p(i, 1);
+        field.p(i, jmax + 1) = field.p(i, jmax);
+    }
+    for (int j = 1; j <= jmax; j++) {
+        field.p(0, j) = field.p(1, j);
+        field.p(imax + 1, j) = field.p(imax, j);
+    }
+}
+
 MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity) : _cells(cells) {
     _wall_velocity.insert(std::pair(LidDrivenCavity::moving_wall_id, wall_velocity));
 }
 
-MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_velocity,
-                                       std::map<int, double> wall_temperature)
+MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_velocity,
+                                       std::unordered_map<int, double> wall_temperature)
     : _cells(cells), _wall_velocity(wall_velocity), _wall_temperature(wall_temperature) {}
 
 void MovingWallBoundary::enforce_uv(Fields &field, Grid &grid) {
