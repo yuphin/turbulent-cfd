@@ -18,10 +18,14 @@ class Boundary {
      *
      * @param[in] Field to be applied
      */
+    Boundary(std::vector<Cell *> *cells) : _cells(cells){};
     virtual void enforce_uv(Fields &field) = 0;
-    virtual void enforce_fg(Fields &field) = 0;
-    virtual void enforce_p(Fields &field) = 0;
+    virtual void enforce_fg(Fields &field);
+    virtual void enforce_p(Fields &field);
     virtual ~Boundary() = default;
+
+  protected:
+    std::vector<Cell *> *_cells;
 };
 
 /**
@@ -30,15 +34,12 @@ class Boundary {
  */
 class FixedWallBoundary : public Boundary {
   public:
-    FixedWallBoundary(std::vector<Cell *> cells);
-    FixedWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_temperature);
+    FixedWallBoundary(std::vector<Cell *> *cells);
+    FixedWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_temperature);
     virtual ~FixedWallBoundary() = default;
     void enforce_uv(Fields &field) override;
-    void enforce_fg(Fields &field) override;
-    void enforce_p(Fields &field) override;
 
   private:
-    std::vector<Cell *> _cells;
     std::unordered_map<int, double> _wall_temperature;
 };
 
@@ -49,16 +50,13 @@ class FixedWallBoundary : public Boundary {
  */
 class MovingWallBoundary : public Boundary {
   public:
-    MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity);
-    MovingWallBoundary(std::vector<Cell *> cells, std::unordered_map<int, double> wall_velocity,
+    MovingWallBoundary(std::vector<Cell *> *cells, double wall_velocity);
+    MovingWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
                        std::unordered_map<int, double> wall_temperature);
     virtual ~MovingWallBoundary() = default;
     void enforce_uv(Fields &field) override;
-    void enforce_fg(Fields &field) override;
-    void enforce_p(Fields &field) override;    
 
   private:
-    std::vector<Cell *> _cells;
     std::unordered_map<int, double> _wall_velocity;
     std::unordered_map<int, double> _wall_temperature;
 };

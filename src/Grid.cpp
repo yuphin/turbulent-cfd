@@ -262,6 +262,6 @@ const Domain &Grid::domain() const { return _domain; }
 
 const std::vector<Cell *> &Grid::fluid_cells() const { return _fluid_cells; }
 
-const std::vector<Cell *> &Grid::fixed_wall_cells() const { return _fixed_wall_cells; }
+std::vector<Cell *> &Grid::fixed_wall_cells() { return _fixed_wall_cells; }
 
-const std::vector<Cell *> &Grid::moving_wall_cells() const { return _moving_wall_cells; }
+std::vector<Cell *> &Grid::moving_wall_cells() { return _moving_wall_cells; }

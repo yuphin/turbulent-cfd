@@ -63,14 +63,14 @@ class Grid {
      *
      * @param[out] vector of moving wall cells
      */
-    const std::vector<Cell *> &moving_wall_cells() const;
+    std::vector<Cell *> &moving_wall_cells();
 
     /**
      * @brief Access fixed wall cells
      *
      * @param[out] vector of fixed wall cells
      */
-    const std::vector<Cell *> &fixed_wall_cells() const;
+    std::vector<Cell *> &fixed_wall_cells();
 
   private:
     /**@brief Default lid driven cavity case generator
