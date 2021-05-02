@@ -1,6 +1,6 @@
 #include "Boundary.hpp"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : _cells(cells) {}
@@ -8,73 +8,46 @@ FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells) : _cells(cells) 
 FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_temperature)
     : _cells(cells), _wall_temperature(wall_temperature) {}
 
-void FixedWallBoundary::apply(Fields &field) {
-    // imax and jmax here include the ghost cells.
-    int imax = field.u_matrix().imax()-2;
-    int jmax = field.u_matrix().jmax()-2;
+void FixedWallBoundary::enforce_uv(Fields &field, Grid &grid) {
+    int imax = grid.imax();
+    int jmax = grid.jmax();
+    for (int i = 0; i <= imax; i++) {
+        field.u(i, 0) = -field.u(i, 1);
+        field.v(i, 0) = 0;
+        field.v(i, jmax) = 0;
+    }
+    for (int j = 1; j <= jmax; j++) {
+        field.u(0, j) = 0;
+        field.u(imax, j) = 0;
+        field.v(0, j) = -field.v(1, j);
+        field.v(imax + 1, j) = -field.v(imax, j);
+    }
+}
 
+void FixedWallBoundary::enforce_fg(Fields& field, Grid& grid) {
+    int imax = grid.imax();
+    int jmax = grid.jmax();
+    for (int i = 0; i <= imax; i++) {
+        field.g(i, 0) = field.v(i, 0);
+        field.g(i, jmax) = field.v(i, jmax);
+    }
+    for (int j = 0; j <= jmax; j++) {
+        field.f(0, j) = field.u(0, j);
+        field.f(imax, j) = field.u(imax, j);
+    }
+}
 
-    // For left and right boundary.
-    std::vector<double> verticalBoundaryValue(jmax+2, 0);
-    // For bottom boundary.
-    std::vector<double> horizontalBoundaryValue(imax+2, 0);
-    
-    // ===== Set boundary value for x-velocity matrix. =====
-    // Vertical
-    std::fill(verticalBoundaryValue.begin(), verticalBoundaryValue.end(), 0);
-    // Left
-    field.u_matrix().set_col(verticalBoundaryValue, 0);
-    // Right
-    field.u_matrix().set_col(verticalBoundaryValue, imax);
-    
-    // Horizontal
-    // Bottom
-    horizontalBoundaryValue = field.u_matrix().get_row(1);
-    std::for_each(horizontalBoundaryValue.begin(), horizontalBoundaryValue.end(), [](double& x){x = -1.0*x;});
-    field.u_matrix().set_row(horizontalBoundaryValue, 0);
-
-    // ===== Set boundary value for y-velocity matrix. =====
-    // Horizontal
-    // Bottom
-    std::fill(horizontalBoundaryValue.begin(), horizontalBoundaryValue.end(), 0);
-    field.v_matrix().set_row(horizontalBoundaryValue, 0);
-    
-    // Vertical
-    // Left
-    verticalBoundaryValue = field.v_matrix().get_col(1);
-    std::for_each(verticalBoundaryValue.begin(), verticalBoundaryValue.end(), [](double& x){x = -1.0*x;});
-    field.v_matrix().set_col(verticalBoundaryValue, 0);
-    // Right
-    verticalBoundaryValue = field.v_matrix().get_col(imax);
-    std::for_each(verticalBoundaryValue.begin(), verticalBoundaryValue.end(), [](double& x){x = -1.0*x;});
-    field.v_matrix().set_col(verticalBoundaryValue, imax+1);
-
-    // ===== Set boundary value for pressure matrix. =====
-    // Horizontal
-    // Bottom
-    horizontalBoundaryValue = field.p_matrix().get_row(1);
-    field.p_matrix().set_row(horizontalBoundaryValue, 0);
-    
-    // Vertical
-    // Left
-    verticalBoundaryValue = field.p_matrix().get_col(1);
-    field.p_matrix().set_col(verticalBoundaryValue, 0);
-    // Right
-    verticalBoundaryValue = field.p_matrix().get_col(imax);
-    field.p_matrix().set_col(verticalBoundaryValue, imax+1);
-
-    // ===== Set boundary value for x-momentum flux matrix. =====
-    // Left
-    verticalBoundaryValue = field.u_matrix().get_col(0);
-    field.f_matrix().set_col(verticalBoundaryValue, 0);
-    // Right
-    verticalBoundaryValue = field.u_matrix().get_col(imax);
-    field.f_matrix().set_col(verticalBoundaryValue, imax);
-
-    // ===== Set boundary value for y-momentum flux matrix. =====
-    // Bottom
-    horizontalBoundaryValue = field.v_matrix().get_row(0);
-    field.g_matrix().set_row(horizontalBoundaryValue, 0);
+void FixedWallBoundary::enforce_p(Fields &field, Grid &grid) {
+    int imax = grid.imax();
+    int jmax = grid.jmax();
+    for (int i = 1; i <= imax; i++) {
+        field.p(i, 0) = field.p(i, 1);
+        field.p(i, jmax + 1) = field.p(i, jmax);
+    }
+    for (int j = 1; j <= jmax; j++) {
+        field.p(0, j) = field.p(1, j);
+        field.p(imax + 1, j) = field.p(imax, j);
+    }
 }
 
 MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, double wall_velocity) : _cells(cells) {
@@ -85,36 +58,12 @@ MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> cells, std::map<int, 
                                        std::map<int, double> wall_temperature)
     : _cells(cells), _wall_velocity(wall_velocity), _wall_temperature(wall_temperature) {}
 
-void MovingWallBoundary::apply(Fields &field) {
+void MovingWallBoundary::enforce_uv(Fields &field, Grid &grid) {
     // imax and jmax here include the ghost cells.
-    int imax = field.u_matrix().imax()-2;
-    int jmax = field.u_matrix().jmax()-2;
-
-    // For top boundary.
-    std::vector<double> horizontalBoundaryValue(imax+2, 0);
-    
-    // Set boundary value for x-velocity matrix.
-    // Horizontal
-    // Top
-    horizontalBoundaryValue = field.u_matrix().get_row(jmax);
+    int imax = grid.imax();
+    int jmax = grid.jmax();
     double wall_vel = _wall_velocity[LidDrivenCavity::moving_wall_id];
-    std::for_each(horizontalBoundaryValue.begin(), horizontalBoundaryValue.end(), [wall_vel](double& x){x = 2*wall_vel-x;});
-    field.u_matrix().set_row(horizontalBoundaryValue, jmax+1);
-
-    // Set boundary value for y-velocity matrix.
-    // Horizontal
-    // Top
-    std::fill(horizontalBoundaryValue.begin(), horizontalBoundaryValue.end(), 0);
-    field.v_matrix().set_row(horizontalBoundaryValue, jmax);
-
-    // Set boundary value for pressure matrix.
-    // Horizontal
-    // Top
-    horizontalBoundaryValue = field.p_matrix().get_row(jmax);
-    field.p_matrix().set_row(horizontalBoundaryValue, jmax+1);
-
-    // Set boundary value for y-momentum flux matrix.
-    // Top
-    horizontalBoundaryValue = field.v_matrix().get_row(jmax);
-    field.g_matrix().set_row(horizontalBoundaryValue, jmax);
+    for (int i = 0; i <= imax; i++) {
+        field.u(i, jmax + 1) = 2*wall_vel - field.u(i, jmax); // 1;
+    }
 }

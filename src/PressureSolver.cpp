@@ -34,6 +34,6 @@ double SOR::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<B
         res = rloc / (grid.fluid_cells().size());
         res = std::sqrt(res);
     }
-
+   
     return res;
 }

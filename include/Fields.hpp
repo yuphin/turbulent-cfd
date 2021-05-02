@@ -34,7 +34,7 @@ class Fields {
      * @param[in] grid in which the fluxes are calculated
      *
      */
-    void calculate_fluxes(Grid &grid);
+    void calculate_fluxes(Grid &);
 
     /**
      * @brief Right hand side calculations using the fluxes for the pressure

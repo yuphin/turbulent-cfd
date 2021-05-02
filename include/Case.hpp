@@ -63,7 +63,7 @@ class Case {
     double _tolerance;
 
     /// Maximum number of iterations for the solver
-    int _max_iter;
+    uint32_t _max_iter;
 
     /**
      * @brief Creating file names from given input data file

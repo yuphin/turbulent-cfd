@@ -18,28 +18,28 @@ namespace filesystem = std::filesystem;
 #include <vtkStructuredGrid.h>
 #include <vtkStructuredGridWriter.h>
 #include <vtkTuple.h>
-
+#define LOG 0
 Case::Case(std::string file_name, int argn, char **args) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
-    double nu = DBL_MAX;      /* viscosity   */
-    double UI;      /* velocity x-direction */
-    double VI;      /* velocity y-direction */
-    double PI;      /* pressure */
-    double GX;      /* gravitation x-direction */
-    double GY;      /* gravitation y-direction */
-    double xlength; /* length of the domain x-dir.*/
-    double ylength; /* length of the domain y-dir.*/
-    double dt;      /* time step */
-    int imax;       /* number of cells x-direction*/
-    int jmax;       /* number of cells y-direction*/
-    double gamma;   /* uppwind differencing factor*/
-    double omg;     /* relaxation factor */
-    double tau;     /* safety factor for time step*/
-    int itermax;    /* max. number of iterations for pressure per time step */
-    double eps;     /* accuracy bound for pressure*/
-    double re = DBL_MAX;      /* Reynolds number */
+    double nu = DBL_MAX; /* viscosity   */
+    double UI;           /* velocity x-direction */
+    double VI;           /* velocity y-direction */
+    double PI;           /* pressure */
+    double GX;           /* gravitation x-direction */
+    double GY;           /* gravitation y-direction */
+    double xlength;      /* length of the domain x-dir.*/
+    double ylength;      /* length of the domain y-dir.*/
+    double dt;           /* time step */
+    int imax;            /* number of cells x-direction*/
+    int jmax;            /* number of cells y-direction*/
+    double gamma;        /* uppwind differencing factor*/
+    double omg;          /* relaxation factor */
+    double tau;          /* safety factor for time step*/
+    int itermax;         /* max. number of iterations for pressure per time step */
+    double eps;          /* accuracy bound for pressure*/
+    double re = DBL_MAX; /* Reynolds number */
 
     if (file.is_open()) {
 
@@ -78,7 +78,7 @@ Case::Case(std::string file_name, int argn, char **args) {
     } else {
         std::cerr << "Viscosity or Reynolds number not specified, defaulting viscosity to 0\n";
         nu = 0.0;
-    } 
+    }
 
     std::map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
@@ -120,7 +120,7 @@ void Case::set_file_names(std::string file_name) {
     bool case_name_flag = true;
     bool prefix_flag = false;
 
-    for (int i = file_name.size() - 1; i > -1; --i) {
+    for (int i = static_cast<int>(file_name.size()) - 1; i > -1; --i) {
         if (file_name[i] == '/') {
             case_name_flag = false;
             prefix_flag = true;
@@ -133,7 +133,7 @@ void Case::set_file_names(std::string file_name) {
         }
     }
 
-    for (int i = file_name.size() - _case_name.size() - 1; i > -1; --i) {
+    for (int i = static_cast<int>(file_name.size() - _case_name.size() - 1); i > -1; --i) {
         temp_dir.push_back(file_name[i]);
     }
 
@@ -154,7 +154,7 @@ void Case::set_file_names(std::string file_name) {
     filesystem::path folder(_dict_name);
     try {
         filesystem::create_directory(folder);
-    } catch (const std::exception &e) {
+    } catch (const std::exception &) {
         std::cerr << "Output directory could not be created." << std::endl;
         std::cerr << "Make sure that you have write permissions to the "
                      "corresponding location"
@@ -165,7 +165,7 @@ void Case::set_file_names(std::string file_name) {
 /**
  * This function is the main simulation loop. In the simulation loop, following steps are required
  * - Calculate and apply boundary conditions for all the boundaries in _boundaries container
- *   using apply() member function of Boundary class
+ *   using enforce_*() member function of Boundary class
  * - Calculate fluxes (F and G) using calculate_fluxes() member function of Fields class.
  *   Flux consists of diffusion and convection part, which are located in Discretization class
  * - Calculate right-hand-side of PPE using calculate_rs() member function of Fields class
@@ -182,20 +182,25 @@ void Case::set_file_names(std::string file_name) {
  * For information about the classes and functions, you can check the header files.
  */
 void Case::simulate() {
-
     double t = 0.0;
     double dt = _field.dt();
     uint32_t timestep = 0;
     double output_counter = 0.0;
     while (t < _t_end) {
+#if LOG
+        std::cout << "Progress: " << t << "/" << _t_end << "\n";
+#endif
         // Select dt
         dt = _field.calculate_dt(_grid);
-        // Set boundary values
+        // Enforce velocity boundary conditions
         for (auto &boundary : _boundaries) {
-            boundary->apply(_field);
+            boundary->enforce_uv(_field, _grid);
         }
-        // Compute F & G
+        // Compute F & G and enforce boundary conditions
         _field.calculate_fluxes(_grid);
+        for (const auto &boundary : _boundaries) {
+            boundary->enforce_fg(_field, _grid);
+        }
         // Set RHS of PPE
         _field.calculate_rs(_grid);
         // Perform pressure solve
@@ -203,6 +208,10 @@ void Case::simulate() {
         double res = DBL_MAX;
         while (it < _max_iter && res > _tolerance) {
             res = _pressure_solver->solve(_field, _grid, _boundaries);
+            // Enforce boundary conditions
+            for (const auto &boundary : _boundaries) {
+                boundary->enforce_p(_field, _grid);
+            }
             it++;
         }
         // Compute u^(n+1) & v^(n+1)

@@ -4,6 +4,7 @@
 
 #include "Cell.hpp"
 #include "Fields.hpp"
+#include <map>
 
 /**
  * @brief Abstact of boundary conditions.
@@ -18,7 +19,9 @@ class Boundary {
      *
      * @param[in] Field to be applied
      */
-    virtual void apply(Fields &field) = 0;
+    virtual void enforce_uv(Fields &field, Grid &) = 0;
+    virtual void enforce_fg(Fields &field, Grid &) {}
+    virtual void enforce_p(Fields &field, Grid &) {}
     virtual ~Boundary() = default;
 };
 
@@ -31,7 +34,9 @@ class FixedWallBoundary : public Boundary {
     FixedWallBoundary(std::vector<Cell *> cells);
     FixedWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_temperature);
     virtual ~FixedWallBoundary() = default;
-    virtual void apply(Fields &field);
+    void enforce_uv(Fields&field, Grid &) override;
+    void enforce_fg(Fields &field, Grid &) override;
+    void enforce_p(Fields &field, Grid &) override;
 
   private:
     std::vector<Cell *> _cells;
@@ -49,7 +54,7 @@ class MovingWallBoundary : public Boundary {
     MovingWallBoundary(std::vector<Cell *> cells, std::map<int, double> wall_velocity,
                        std::map<int, double> wall_temperature);
     virtual ~MovingWallBoundary() = default;
-    virtual void apply(Fields &field);
+    void enforce_uv(Fields&, Grid&);
 
   private:
     std::vector<Cell *> _cells;
