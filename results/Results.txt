@@ -18,4 +18,4 @@ Q7:
  Judging by these results, only imax = jmax=16 leads to stable simulations. The rest are unphysical.
 Q8: (See respective screenshots)
  As we see in screenshots, as the viscosity decreases the fluid diffuses easier. Therefore pressure itself
- is also more uniform when fluid is more viscous.
+ is also more uniform when fluid is less viscous.
