@@ -225,9 +225,11 @@ void Case::simulate() {
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
         // Output u,v,p
+        if (t >= output_counter * _output_freq) {
+            output_vtk(timestep);
+            output_counter++;
+        }
 
-        // Note: Comment out for intermediate values
-        // output_vtk(timestep);
         t += dt;
         timestep++;
     }
