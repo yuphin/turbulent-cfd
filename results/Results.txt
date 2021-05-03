@@ -1,0 +1,21 @@
+Q5:
+We use SOR to have faster convergence than Gauss-Seidel. With omega < 1 we have a damped (slower) Gauss-Seidel. In this version, first timesteps need tens of thousands of iterations.
+When omega is 1, initially we exceed the iter count 100, after a while solver converges in less iterations.
+For omega > 0 we converge faster for the first timesteps up until omg ~= 1.96.
+When omega is closer or equal to 2, it takes a lot more iterations to converge. (At the beginning even 5000 iters aren't enough)
+For later timesteps when the solution becomes stationary, SOR with omg > 1 overdoes the relaxation, which is why we still need 3-7 iterations to converge, 
+while (damped) Gauss-Seidel (omg<=1) converges in 1 iteration.
+Q6:
+ dt = 0.01 is the ideal value as determined by the CFL condition. Applying our safety factor tau=0.5, dt becomes 0.005. Indeed, we can push our dt value up to 0.009 without a problem 
+ and the simulation crashes after dt >= 0.01 as expected. (Here Omega=1.7, Re= 100)
+Q7:
+ imax = jmax : 16, U = 0.183833
+ imax = jmax : 32, U = -nan(ind)
+ imax = jmax : 64, U = -nan(ind)
+ imax = jmax : 128, U = -nan(ind)
+ imax = jmax : 256, U = -nan(ind)
+ imax = jmax : 512, U = -nan(ind)
+ Judging by these results, only imax = jmax=16 leads to stable simulations. The rest are unphysical.
+Q8: (See respective screenshots)
+ As we see in screenshots, as the viscosity decreases the fluid diffuses easier. Therefore pressure itself
+ is also more uniform when fluid is more viscous.
