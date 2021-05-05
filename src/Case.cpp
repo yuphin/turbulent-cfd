@@ -19,7 +19,7 @@ namespace filesystem = std::filesystem;
 #include <vtkStructuredGridWriter.h>
 #include <vtkTuple.h>
 #define LOG 0
-#define TEST 1
+
 Case::Case(std::string file_name, int argn, char **args) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
@@ -235,9 +235,6 @@ void Case::simulate() {
     }
     // Output u,v,p
     output_vtk(timestep);
-#if TEST
-    std::cout << _field.u(_grid.imax() / 2, 7 * _grid.jmax() / 8) << "\n";
-#endif
 }
 
 void Case::output_vtk(int timestep, int my_rank) {

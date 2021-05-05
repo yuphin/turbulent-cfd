@@ -1,6 +1,7 @@
 #include "Discretization.hpp"
 
 #include <cmath>
+#include <assert.h>
 
 double Discretization::_dx = 0.0;
 double Discretization::_dy = 0.0;
@@ -18,8 +19,8 @@ double Discretization::convection_u(const Matrix<double> &U, const Matrix<double
     double result = 0.0;
 
     // dU^2/dx
-    double result_fd = (((U(i, j) + U(i + 1, j)) / 2) * ((U(i, j) + U(i + 1, j)) / 2) -
-                        ((U(i - 1, j) + U(i, j)) / 2) * ((U(i - 1, j) + U(i, j)) / 2)) /
+    double result_fd = (interpolate(U, i, j, 1, 0) * interpolate(U, i, j, 1, 0) -
+                        interpolate(U, i, j, -1, 0) * interpolate(U, i, j, -1, 0)) /
                        _dx;
     double result_dc = _gamma *
                        (std::abs(U(i, j) + U(i + 1, j)) / 2 * (U(i, j) - U(i + 1, j)) / 2 -
@@ -28,8 +29,8 @@ double Discretization::convection_u(const Matrix<double> &U, const Matrix<double
     result += result_fd + result_dc;
 
     // dUV/dy
-    result_fd = ((V(i, j) + V(i + 1, j)) / 2 * (U(i, j) + U(i, j + 1)) / 2 -
-                 (V(i, j - 1) + V(i + 1, j - 1)) / 2 * (U(i, j - 1) + U(i, j)) / 2) /
+    result_fd = (interpolate(V, i, j, 1, 0)* interpolate(U, i, j, 0, 1) -
+                 interpolate(V, i, j - 1, 1, 0) * interpolate(U, i, j, 0, -1)) /
                 _dy;
     result_dc = _gamma *
                 (std::abs(V(i, j) + V(i + 1, j)) / 2 * (U(i, j) - U(i, j + 1)) / 2 -
@@ -45,8 +46,8 @@ double Discretization::convection_v(const Matrix<double> &U, const Matrix<double
     double result = 0.0;
 
     // dV^2/dy
-    double result_fd = (((V(i, j) + V(i, j + 1)) / 2) * ((V(i, j) + V(i, j + 1)) / 2) -
-                        ((V(i, j - 1) + V(i, j)) / 2) * ((V(i, j - 1) + V(i, j)) / 2)) /
+    double result_fd = (interpolate(V, i, j, 0, 1) * interpolate(V, i, j, 0, 1) -
+                        interpolate(V, i, j, 0, -1) * interpolate(V, i, j, 0, -1)) /
                        _dy;
     double result_dc = _gamma *
                        (std::abs(V(i, j) + V(i, j + 1)) / 2 * (V(i, j) - V(i, j + 1)) / 2 -
@@ -55,8 +56,8 @@ double Discretization::convection_v(const Matrix<double> &U, const Matrix<double
     result += result_fd + result_dc;
 
     // dUV/dx
-    result_fd = ((U(i, j) + U(i, j + 1)) / 2 * (V(i, j) + V(i + 1, j)) / 2 -
-                 (U(i - 1, j) + U(i - 1, j + 1)) / 2 * (V(i - 1, j) + V(i, j)) / 2) /
+    result_fd = (interpolate(U, i, j, 0, 1) * interpolate(V, i, j, 1, 0) -
+                 interpolate(U, i - 1, j, 0, 1) * interpolate(V, i, j, -1, 0)) /
                 _dx;
     result_dc = _gamma *
                 (std::abs(U(i, j) + U(i, j + 1)) / 2 * (V(i, j) - V(i + 1, j)) / 2 -
@@ -85,4 +86,7 @@ double Discretization::sor_helper(const Matrix<double> &P, int i, int j) {
     return result;
 }
 
-double Discretization::interpolate(const Matrix<double> &A, int i, int j, int i_offset, int j_offset) { return 0; }
+double Discretization::interpolate(const Matrix<double> &A, int i, int j, int i_offset, int j_offset) { 
+    double result = (A(i, j) + A(i + i_offset, j + j_offset)) / 2;
+    return result;
+}
