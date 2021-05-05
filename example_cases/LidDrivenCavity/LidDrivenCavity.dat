@@ -18,14 +18,14 @@ jmax        50
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end        100
+t_end        50
 tau          0.5
 
 #--------------------------------------------
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     0.2
+dt_value     0.5
 
 #--------------------------------------------
 #               pressure
@@ -34,7 +34,7 @@ dt_value     0.2
 # omg: relaxation factor for SOR
 # gamma: upwind differencing factor
 #--------------------------------------------
-itermax      500
+itermax      100
 eps          0.001
 omg          1.7
 gamma        0.5
@@ -42,7 +42,7 @@ gamma        0.5
 #--------------------------------------------
 #     Reynolds number (here: 1 / nu)
 #--------------------------------------------
-Re        1000
+Re        100
 
 #--------------------------------------------
 #        gravity / external forces
