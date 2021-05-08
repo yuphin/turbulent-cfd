@@ -7,6 +7,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <vector>
+#include <string>
 
 namespace filesystem = std::filesystem;
 
@@ -18,9 +19,14 @@ namespace filesystem = std::filesystem;
 #include <vtkStructuredGrid.h>
 #include <vtkStructuredGridWriter.h>
 #include <vtkTuple.h>
-#define LOG 0
 
 Case::Case(std::string file_name, int argn, char **args) {
+
+    // Set up logging functionality
+    if (argn > 2) {
+        logger.parseFlag(args[2]);
+    }
+
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
@@ -88,6 +94,8 @@ Case::Case(std::string file_name, int argn, char **args) {
 
     // Set file names for geometry file and output directory
     set_file_names(file_name);
+    // Create log file in output dir
+    logger.createLog(_dict_name, _case_name);
 
     // Build up the domain
     Domain domain;
@@ -188,13 +196,12 @@ void Case::simulate() {
     uint32_t timestep = 0;
     double output_counter = 0.0;
     while (t < _t_end) {
-
+        // Print progress bar
+        logger.progressBar(t, _t_end);
         // Select dt
         dt = _field.calculate_dt(_grid);
 
-#if LOG
-        std::cout << "Progress: " << t << "/" << _t_end << ", dt: " << dt << "\n";
-#endif
+        
         // Enforce velocity boundary conditions
         for (auto &boundary : _boundaries) {
             boundary->enforce_uv(_field);
@@ -217,11 +224,14 @@ void Case::simulate() {
             }
             it++;
         }
-#if LOG
+
+        // Check if max_iter was reached
         if (it == _max_iter) {
-            std::cout << "Max iter count reached: " << it << "\n";
+            logger.maxIterWarning();
         }
-#endif
+        // Output current timestep information
+        logger.writeLog(timestep, t, it, _max_iter, res);
+
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
         // Output u,v,p
@@ -233,6 +243,8 @@ void Case::simulate() {
         t += dt;
         timestep++;
     }
+    // Print Summary
+    logger.finish();
     // Output u,v,p
     output_vtk(timestep);
 }

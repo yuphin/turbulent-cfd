@@ -10,6 +10,7 @@
 #include "Fields.hpp"
 #include "Grid.hpp"
 #include "PressureSolver.hpp"
+#include "Utilities.hpp"
 
 /**
  * @brief Class to hold and orchestrate the simulation flow.
@@ -65,6 +66,9 @@ class Case {
     /// Maximum number of iterations for the solver
     uint32_t _max_iter;
 
+    friend class Logger;
+    Logger logger = Logger();
+
     /**
      * @brief Creating file names from given input data file
      *
@@ -87,4 +91,5 @@ class Case {
     void output_vtk(int t, int my_rank = 0);
 
     void build_domain(Domain &domain, int imax_domain, int jmax_domain);
+
 };
