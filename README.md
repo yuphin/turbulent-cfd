@@ -56,10 +56,10 @@ In order to run **Fluidchen**, the case file should be given as input parameter.
 For Serial:
 
 ```shell
-fluidchen /path/to/fluidchen/example_cases/LidDrivenCavity/LidDrivenCavity.dat
+fluidchen /path/to/case/case_name.dat [-log]
 ```
 
-This will run the case file and create the output folder `/path/to/case/case_name_Output` which holds the `.vtk` files of the solution. The output folder is created in the same location as your case file. Note that this may require write permissions in the given directory.
+This will run the case file and create the output folder `/path/to/case/case_name_Output` which holds the `.vtk` files of the solution. If the `-log` flag is specified a log file will also be created in the output directory. The output folder is created in the same location as your case file. Note that this may require write permissions in the given directory.
 
 If input file does not contain a geometry file, fluidchen will run lid-driven cavity case with given parameters.
 
@@ -70,18 +70,6 @@ You can get you current version of GCC by running:
 ```shell
 g++ -v
 ```
-
-### Defining your GCC version
-
-If you have GCC 9 or newer, you can set in the `CMakeLists.txt` file:
-
-```cmake
-set(gpp9 True)
-```
-
-If you have a version lower than 9, then you don't have to modify the `CMakeLists.txt` file.
-
-This will affect how we are using the C++ filesystem library, which is available already in GCC 7 as an experimental feature.
 
 ### Setup of VTK and GCC 9 (Ubuntu **20.04**)
 
