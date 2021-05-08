@@ -18,7 +18,7 @@ jmax        50
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end        50
+t_end        5
 tau          0.5
 
 #--------------------------------------------
