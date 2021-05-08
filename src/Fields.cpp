@@ -4,11 +4,12 @@
 #include <iostream>
 #include <math.h>
 
-Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, double VI, double PI)
-    : _nu(nu), _dt(dt), _tau(tau) {
+Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, double VI, double PI, double TI, double alpha, double beta)
+    : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta) {
     _U = Matrix<double>(imax + 2, jmax + 2, UI);
     _V = Matrix<double>(imax + 2, jmax + 2, VI);
     _P = Matrix<double>(imax + 2, jmax + 2, PI);
+    _T = Matrix<double>(imax + 2, jmax + 2, TI);
 
     _F = Matrix<double>(imax + 2, jmax + 2, 0.0);
     _G = Matrix<double>(imax + 2, jmax + 2, 0.0);
@@ -53,8 +54,9 @@ void Fields::calculate_velocities(Grid &grid) {
 double Fields::calculate_dt(Grid &grid) {
     double dx2 = grid.dx() * grid.dx();
     double dy2 = grid.dy() * grid.dy();
-    double cond_1 = 1.0 / (2.0 * _nu) * ((dx2 * dy2) / (dx2 + dy2));
 
+
+    // CFL conditions
     double uMax = *std::max_element(_U.data(), _U.data() + _U.size());
     double uMin = *std::min_element(_U.data(), _U.data() + _U.size());
     double vMax = *std::max_element(_V.data(), _V.data() + _V.size());
@@ -64,8 +66,19 @@ double Fields::calculate_dt(Grid &grid) {
     double cond_2 = grid.dx() / maxAbsU;
     double cond_3 = grid.dy() / maxAbsV;
 
-    double minimum = std::min(cond_1, cond_2);
-    minimum = std::min(minimum, cond_3);
+    double minimum = std::min(cond_2, cond_3);
+
+    // viscosity limit
+    if (_nu != 0.0) {
+        double cond_1 = 1.0 / (2.0 * _nu) * ((dx2 * dy2) / (dx2 + dy2));
+        minimum = std::min(minimum, cond_1);
+    }
+
+    // thermal diffusitivity limit
+    if (_alpha != 0.0) {
+        double cond_4 = 1 / (2 * _alpha * (1 / dx2 + 1 / dy2));
+        minimum = std::min(minimum, cond_4);
+    }
     _dt = _tau * minimum;
 
     return _dt;
@@ -74,6 +87,7 @@ double Fields::calculate_dt(Grid &grid) {
 double &Fields::p(int i, int j) { return _P(i, j); }
 double &Fields::u(int i, int j) { return _U(i, j); }
 double &Fields::v(int i, int j) { return _V(i, j); }
+double &Fields::t(int i, int j) { return _T(i, j); }
 double &Fields::f(int i, int j) { return _F(i, j); }
 double &Fields::g(int i, int j) { return _G(i, j); }
 double &Fields::rs(int i, int j) { return _RS(i, j); }
@@ -81,6 +95,7 @@ double &Fields::rs(int i, int j) { return _RS(i, j); }
 Matrix<double> &Fields::p_matrix() { return _P; }
 Matrix<double> &Fields::u_matrix() { return _U; }
 Matrix<double> &Fields::v_matrix() { return _V; }
+Matrix<double> &Fields::t_matrix() { return _T; }
 Matrix<double> &Fields::f_matrix() { return _F; }
 Matrix<double> &Fields::g_matrix() { return _G; }
 

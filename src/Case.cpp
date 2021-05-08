@@ -47,6 +47,10 @@ Case::Case(std::string file_name, int argn, char **args) {
     int itermax;         /* max. number of iterations for pressure per time step */
     double eps;          /* accuracy bound for pressure*/
     double re = DBL_MAX; /* Reynolds number */
+    double pr = DBL_MAX;           /* Prandtl number */
+    double beta;         /* thermal expansion coefficient */
+    double TI;           /* Temperature */
+    double alpha = DBL_MAX; /* thermal diffusivity */
 
     if (file.is_open()) {
 
@@ -75,6 +79,10 @@ Case::Case(std::string file_name, int argn, char **args) {
                 if (var == "imax") file >> imax;
                 if (var == "jmax") file >> jmax;
                 if (var == "Re") file >> re;
+                if (var == "Pr") file >> pr;
+                if (var == "beta") file >> beta;
+                if (var == "TI") file >> TI;
+                if (var == "alpha") file >> alpha;
             }
         }
     }
@@ -85,6 +93,14 @@ Case::Case(std::string file_name, int argn, char **args) {
     } else {
         std::cerr << "Viscosity or Reynolds number not specified, defaulting viscosity to 0\n";
         nu = 0.0;
+    }
+
+    // Prandtl number = nu / alpha
+    if (pr != DBL_MAX && alpha == DBL_MAX) {
+        alpha = nu / pr;
+    } else {
+        std::cerr << "Prandtl number or alpha not set, defaulting alpha (thermal diffusivity) to 0\n";
+        alpha = 0.0;
     }
 
     std::unordered_map<int, double> wall_vel;
@@ -107,7 +123,7 @@ Case::Case(std::string file_name, int argn, char **args) {
     build_domain(domain, imax, jmax);
 
     _grid = Grid(_geom_name, domain);
-    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI);
+    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, alpha, beta);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     _pressure_solver = std::make_unique<SOR>(omg);
