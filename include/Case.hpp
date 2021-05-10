@@ -66,6 +66,9 @@ class Case {
     /// Maximum number of iterations for the solver
     uint32_t _max_iter;
 
+    /// Whether to include temperatures
+    bool _calc_temp = false;
+
     friend class Logger;
     Logger logger = Logger();
 

@@ -8,7 +8,6 @@
 #include <string>
 #include <filesystem>
 
-
 /**
  * @brief Class to handle logging functionality.
  *
@@ -31,30 +30,35 @@ class Logger
         }
 
         // Prepare the log file
-        void createLog(std::string dict, std::string name) {
+        void createLog(const std::string &dict, const std::string &name) {
             if (_log) {
-            std::string fileName = dict + std::filesystem::path::preferred_separator + name + ".log";
+                #ifdef WIN32
+                char sep = '\\';
+                #else 
+                char sep = '/';
+                #endif
+            std::string fileName = dict + sep + name + ".log";
             logFile.open(fileName);
- 
             logFile << "#### " << name << " ####\n" << std::endl;
             }
         }
         
-        // Print  a progress bar
+        // Print a progress bar
         void progressBar(double t, double t_end) 
         {
             double progress = t / t_end;
-            int pos = progress * _barWidth;
+            int pos = static_cast<int>(progress * _barWidth);
             std::cout << " Time: |";
             for (int i = 0; i < _barWidth; ++i) {
+                #ifdef not WIN32
                 if (i <= pos) std::cout << "\u25A0";
                 else std::cout << "\u25A1";
+                #endif
             }
             std::cout << "|";
             std::cout << std::setw(5) << std::fixed << std::setprecision(2) << t;
             std::cout << " / " << t_end << "\r";
             std::cout << std::flush;
-
         }
 
         // Set _maxItersReached 

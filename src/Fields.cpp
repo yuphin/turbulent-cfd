@@ -4,7 +4,8 @@
 #include <iostream>
 #include <math.h>
 
-Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, double VI, double PI, double TI, double alpha, double beta)
+Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, double VI, double PI, double TI,
+               double alpha, double beta)
     : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta) {
     _U = Matrix<double>(imax + 2, jmax + 2, UI);
     _V = Matrix<double>(imax + 2, jmax + 2, VI);
@@ -16,15 +17,20 @@ Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, 
     _RS = Matrix<double>(imax + 2, jmax + 2, 0.0);
 }
 
-void Fields::calculate_fluxes(Grid &grid) {
+void Fields::calculate_fluxes(Grid &grid, bool calc_temp) {
     // Note: external forces e.g gravity not yet included
-    for (const auto &currentCell : grid.fluid_cells()) {
-        int i = currentCell->i();
-        int j = currentCell->j();
+    for (const auto &current_cell : grid.fluid_cells()) {
+        int i = current_cell->i();
+        int j = current_cell->j();
         f(i, j) = u(i, j) + dt() * (_nu * Discretization::diffusion(u_matrix(), i, j) -
                                     Discretization::convection_u(u_matrix(), v_matrix(), i, j));
         g(i, j) = v(i, j) + dt() * (_nu * Discretization::diffusion(v_matrix(), i, j) -
                                     Discretization::convection_v(u_matrix(), v_matrix(), i, j));
+
+        if (calc_temp) {
+            f(i, j) -= _beta * _dt / 2 * (t(i, j) + t(i + 1, j)) * _gx;
+            g(i, j) -= _beta * _dt / 2 * (t(i, j) + t(i, j + 1)) * _gy;
+        }
     }
 }
 
@@ -42,19 +48,24 @@ void Fields::calculate_velocities(Grid &grid) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-        if (i <= grid.imax() - 1) {
-            u(i, j) = f(i, j) - dt() / grid.dx() * (p(i + 1, j) - p(i, j));
-        }
-        if (j <= grid.jmax() - 1) {
-            v(i, j) = g(i, j) - dt() / grid.dy() * (p(i, j + 1) - p(i, j));
-        }
+        u(i, j) = f(i, j) - dt() / grid.dx() * (p(i + 1, j) - p(i, j));
+        v(i, j) = g(i, j) - dt() / grid.dy() * (p(i, j + 1) - p(i, j));
     }
 }
 
-double Fields::calculate_dt(Grid &grid) {
+void Fields::calculate_temperatures(Grid &grid) {
+    for (const auto &current_cell : grid.fluid_cells()) {
+        int i = current_cell->i();
+        int j = current_cell->j();
+        t(i, j) = t(i, j) + _dt * (_alpha * Discretization::laplacian(_T, i, j) -
+                             Discretization::convection_uT(_U, _T, i, j) - 
+                             Discretization::convection_vT(_V, _T, i, j));
+    }
+}
+
+double Fields::calculate_dt(Grid &grid, bool calc_temp) {
     double dx2 = grid.dx() * grid.dx();
     double dy2 = grid.dy() * grid.dy();
-
 
     // CFL conditions
     double uMax = *std::max_element(_U.data(), _U.data() + _U.size());
@@ -75,7 +86,7 @@ double Fields::calculate_dt(Grid &grid) {
     }
 
     // thermal diffusitivity limit
-    if (_alpha != 0.0) {
+    if (calc_temp) {
         double cond_4 = 1 / (2 * _alpha * (1 / dx2 + 1 / dy2));
         minimum = std::min(minimum, cond_4);
     }

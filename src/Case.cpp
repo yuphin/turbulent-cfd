@@ -5,9 +5,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <string>
 #include <unordered_map>
 #include <vector>
-#include <string>
 
 namespace filesystem = std::filesystem;
 
@@ -30,26 +30,26 @@ Case::Case(std::string file_name, int argn, char **args) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
-    double nu = DBL_MAX; /* viscosity   */
-    double UI;           /* velocity x-direction */
-    double VI;           /* velocity y-direction */
-    double PI;           /* pressure */
-    double GX;           /* gravitation x-direction */
-    double GY;           /* gravitation y-direction */
-    double xlength;      /* length of the domain x-dir.*/
-    double ylength;      /* length of the domain y-dir.*/
-    double dt;           /* time step */
-    int imax;            /* number of cells x-direction*/
-    int jmax;            /* number of cells y-direction*/
-    double gamma;        /* uppwind differencing factor*/
-    double omg;          /* relaxation factor */
-    double tau;          /* safety factor for time step*/
-    int itermax;         /* max. number of iterations for pressure per time step */
-    double eps;          /* accuracy bound for pressure*/
-    double re = DBL_MAX; /* Reynolds number */
-    double pr = DBL_MAX;           /* Prandtl number */
-    double beta;         /* thermal expansion coefficient */
-    double TI;           /* Temperature */
+    double nu = DBL_MAX;    /* viscosity   */
+    double UI;              /* velocity x-direction */
+    double VI;              /* velocity y-direction */
+    double PI;              /* pressure */
+    double GX;              /* gravitation x-direction */
+    double GY;              /* gravitation y-direction */
+    double xlength;         /* length of the domain x-dir.*/
+    double ylength;         /* length of the domain y-dir.*/
+    double dt;              /* time step */
+    int imax;               /* number of cells x-direction*/
+    int jmax;               /* number of cells y-direction*/
+    double gamma;           /* uppwind differencing factor*/
+    double omg;             /* relaxation factor */
+    double tau;             /* safety factor for time step*/
+    int itermax;            /* max. number of iterations for pressure per time step */
+    double eps;             /* accuracy bound for pressure*/
+    double re = DBL_MAX;    /* Reynolds number */
+    double pr = DBL_MAX;    /* Prandtl number */
+    double beta;            /* thermal expansion coefficient */
+    double TI = DBL_MAX;    /* Temperature */
     double alpha = DBL_MAX; /* thermal diffusivity */
 
     if (file.is_open()) {
@@ -99,8 +99,13 @@ Case::Case(std::string file_name, int argn, char **args) {
     if (pr != DBL_MAX && alpha == DBL_MAX) {
         alpha = nu / pr;
     } else {
-        std::cerr << "Prandtl number or alpha not set, defaulting alpha (thermal diffusivity) to 0\n";
+        std::cerr << "Prandtl number, alpha or beta are not set, defaulting to 0\n";
         alpha = 0.0;
+        beta = 0.0;
+    }
+
+    if (TI != DBL_MAX) {
+        _calc_temp = false;
     }
 
     std::unordered_map<int, double> wall_vel;
@@ -215,15 +220,14 @@ void Case::simulate() {
         // Print progress bar
         logger.progressBar(t, _t_end);
         // Select dt
-        dt = _field.calculate_dt(_grid);
+        dt = _field.calculate_dt(_grid, _calc_temp);
 
-        
         // Enforce velocity boundary conditions
         for (auto &boundary : _boundaries) {
             boundary->enforce_uv(_field);
         }
         // Compute F & G and enforce boundary conditions
-        _field.calculate_fluxes(_grid);
+        _field.calculate_fluxes(_grid, _calc_temp);
         for (const auto &boundary : _boundaries) {
             boundary->enforce_fg(_field);
         }
@@ -250,6 +254,10 @@ void Case::simulate() {
 
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
+        if (_calc_temp) {
+            // Compute t^(n+1)
+            _field.calculate_temperatures(_grid);
+        }
         // Output u,v,p
         if (t >= output_counter * _output_freq) {
             output_vtk(timestep);

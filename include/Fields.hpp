@@ -33,9 +33,10 @@ class Fields {
      * direction based on explicit discretization of the momentum equations
      *
      * @param[in] grid in which the fluxes are calculated
+     * @param[in] whether to include temperature related terms
      *
      */
-    void calculate_fluxes(Grid &grid);
+    void calculate_fluxes(Grid &grid, bool calc_temp);
 
     /**
      * @brief Right hand side calculations using the fluxes for the pressure
@@ -54,14 +55,23 @@ class Fields {
      */
     void calculate_velocities(Grid &grid);
 
+    
+    /**
+     * @brief Velocity calculation using pressure values
+     *
+     * @param[in] grid in which the calculations are done
+     *
+     */
+    void calculate_temperatures(Grid &grid);
+
     /**
      * @brief Adaptive step size calculation using x-velocity condition,
      * y-velocity condition and CFL condition
      *
      * @param[in] grid in which the calculations are done
-     *
+     * @param[in] whether to include temperatures
      */
-    double calculate_dt(Grid &grid);
+    double calculate_dt(Grid &grid, bool calc_temp);
 
     /// x-velocity index based access and modify
     double &u(int i, int j);

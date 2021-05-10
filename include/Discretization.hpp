@@ -54,6 +54,30 @@ class Discretization {
     static double convection_v(const Matrix<double> &U, const Matrix<double> &V, int i, int j);
 
     /**
+     * @brief Convection of temperature in x direction using donor-cell scheme
+     *
+     * @param[in] x-velocity field
+     * @param[in] Temperature
+     * @param[in] x index
+     * @param[in] y index
+     * @param[out] result
+     *
+     */
+    static double convection_uT(const Matrix<double> &U, const Matrix<double> &T, int i, int j);
+
+     /**
+     * @brief Convection of temperature in y direction using donor-cell scheme
+     *
+     * @param[in] y-velocity field
+     * @param[in] Temperature
+     * @param[in] x index
+     * @param[in] y index
+     * @param[out] result
+     *
+     */
+    static double convection_vT(const Matrix<double> &V, const Matrix<double> &T, int i, int j);
+
+    /**
      * @brief Laplacian term discretization using central difference
      *
      * @param[in] data to be discretized
@@ -82,10 +106,24 @@ class Discretization {
      * @param[in] data to be interpolated
      * @param[in] x index
      * @param[in] y index
+     * @param[in] x offset
+     * @param[in] y offset
      * @param[out] result
      *
      */
     static double interpolate(const Matrix<double> &A, int i, int j, int i_offset, int j_offset);
+
+    /**
+     * @brief Difference with offsets
+     *
+     * @param[in] data
+    * @param[in] x index
+     * @param[in] y index
+     * @param[in] x offset
+     * @param[in] y offset
+     * @param[out] result
+     */
+    static double diff(const Matrix<double> &A, int i, int j, int i_offset, int j_offset);
 
   private:
     static double _dx;
