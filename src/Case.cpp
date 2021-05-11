@@ -105,7 +105,7 @@ Case::Case(std::string file_name, int argn, char **args) {
     }
 
     if (TI != DBL_MAX) {
-        _calc_temp = false;
+        _calc_temp = true;
     }
 
     std::unordered_map<int, double> wall_vel;
