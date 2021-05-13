@@ -2,19 +2,32 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <cassert>
 
-FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
-FixedWallBoundary::FixedWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_temperature)
-    : Boundary(cells), _wall_temperature(wall_temperature) {}
+InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
-MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> *cells, double wall_velocity) : Boundary(cells) {
-    _wall_velocity.insert(std::pair(LidDrivenCavity::moving_wall_id, wall_velocity));
-}
+InletBoundary::InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> inlet_U,
+                                        std::unordered_map<int, double> inlet_V,
+                                        std::unordered_map<int, double> inlet_T)
+    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T) {}
 
-MovingWallBoundary::MovingWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
+NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+
+NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity, 
+                                        std::unordered_map<int, double> wall_temperature)
+    : Boundary(cells), _wall_temperature(wall_temperature), _wall_velocity(wall_velocity) {}
+
+FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+
+FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
                                        std::unordered_map<int, double> wall_temperature)
     : Boundary(cells), _wall_velocity(wall_velocity), _wall_temperature(wall_temperature) {}
+
+
+void OutletBoundary::enforce_uv(Fields &field) {assert(false);}
+void InletBoundary::enforce_uv(Fields &field) {assert(false);}
 
 void Boundary::enforce_fg(Fields &field) {
     for (auto &cell : *_cells) {
@@ -54,7 +67,7 @@ void Boundary::enforce_p(Fields &field) {
     }
 }
 
-void FixedWallBoundary::enforce_uv(Fields &field) {
+void NoSlipWallBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();
@@ -77,7 +90,7 @@ void FixedWallBoundary::enforce_uv(Fields &field) {
     }
 }
 
-void MovingWallBoundary::enforce_uv(Fields &field) {
+void FreeSlipWallBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();

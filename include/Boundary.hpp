@@ -32,14 +32,47 @@ class Boundary {
  * @brief Fixed wall boundary condition for the outer boundaries of the domain.
  * Dirichlet for velocities, which is zero, Neumann for pressure
  */
-class FixedWallBoundary : public Boundary {
+class OutletBoundary : public Boundary {
   public:
-    FixedWallBoundary(std::vector<Cell *> *cells);
-    FixedWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_temperature);
-    virtual ~FixedWallBoundary() = default;
+    OutletBoundary(std::vector<Cell *> *cells);
+    virtual ~OutletBoundary() = default;
+    void enforce_uv(Fields &field) override;
+
+};
+
+/**
+ * @brief Fixed wall boundary condition for the outer boundaries of the domain.
+ * Dirichlet for velocities, which is zero, Neumann for pressure
+ */
+class InletBoundary : public Boundary {
+  public:
+    InletBoundary(std::vector<Cell *> *cells);
+    InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> inlet_U,
+                      std::unordered_map<int, double> inlet_V,
+                      std::unordered_map<int, double> inlet_T);
+    virtual ~InletBoundary() = default;
     void enforce_uv(Fields &field) override;
 
   private:
+    std::unordered_map<int, double> _inlet_U;
+    std::unordered_map<int, double> _inlet_V;
+    std::unordered_map<int, double> _inlet_T;    
+};
+
+/**
+ * @brief Fixed wall boundary condition for the outer boundaries of the domain.
+ * Dirichlet for velocities, which is zero, Neumann for pressure
+ */
+class NoSlipWallBoundary : public Boundary {
+  public:
+    NoSlipWallBoundary(std::vector<Cell *> *cells);
+    NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
+                      std::unordered_map<int, double> wall_temperature);
+    virtual ~NoSlipWallBoundary() = default;
+    void enforce_uv(Fields &field) override;
+
+  private:
+    std::unordered_map<int, double> _wall_velocity;
     std::unordered_map<int, double> _wall_temperature;
 };
 
@@ -48,12 +81,12 @@ class FixedWallBoundary : public Boundary {
  * Dirichlet for velocities for the given velocity parallel to the fluid,
  * Neumann for pressure
  */
-class MovingWallBoundary : public Boundary {
+class FreeSlipWallBoundary : public Boundary {
   public:
-    MovingWallBoundary(std::vector<Cell *> *cells, double wall_velocity);
-    MovingWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
+    FreeSlipWallBoundary(std::vector<Cell *> *cells);
+    FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
                        std::unordered_map<int, double> wall_temperature);
-    virtual ~MovingWallBoundary() = default;
+    virtual ~FreeSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
 
   private:

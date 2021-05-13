@@ -1,0 +1,99 @@
+#--------------------------------------------
+#           geometry file            
+#--------------------------------------------
+geo_file    FluidTrap.pgm
+
+#--------------------------------------------
+#            size of the domain             
+#--------------------------------------------
+xlength      2
+ylength      1
+
+#--------------------------------------------
+#            number of cells
+#--------------------------------------------
+imax        100
+jmax        50
+
+#--------------------------------------------
+#               time steps
+# dt: time step size
+# t_end: final time
+# tau: safety factor for time step size control
+#--------------------------------------------
+dt           0.05
+t_end        2000
+tau          0.5
+
+#--------------------------------------------
+#               output
+# dt_value: time interval for writing files
+#--------------------------------------------
+dt_value     10.0
+
+#--------------------------------------------
+#               pressure
+# itermax: maximum number of pressure iterations
+# eps: tolerance for pressure iteration (residual < eps)
+# omg: relaxation factor for SOR
+# gamma: upwind differencing factor
+#--------------------------------------------
+itermax      1000
+eps          0.001
+omg          1.7
+gamma        0.5
+
+#--------------------------------------------
+#       kinematic viscosity
+#--------------------------------------------
+nu        0.0001
+
+#--------------------------------------------
+#        gravity / external forces
+#--------------------------------------------
+GX          0
+GY          -9.81
+
+#--------------------------------------------
+#         initial pressure
+#--------------------------------------------
+PI          0
+
+#--------------------------------------------
+#       initial velocity
+#--------------------------------------------
+UI          0
+VI          0
+
+#--------------------------------------------
+#       inlet velocity
+#--------------------------------------------
+UIN          0
+VIN          0
+
+#--------------------------------------------
+#          energy
+# TI:     initial temperature
+# beta:   thermal expansion coefficient
+# alpha:  thermal diffusivity
+#--------------------------------------------
+energy_eq   on
+TI          0
+TIN         0
+beta        0.00063
+alpha       0.00001429
+
+#--------------------------------------------
+#          wall clusterss
+# num_of_walls:     number of walls
+# wall_temp<num>    wall temperature
+# - enter -1 for adiabatic wall
+#--------------------------------------------
+num_walls        3
+wall_temp_3         -1
+wall_temp_4         0.5
+wall_temp_5         -0.5
+
+wall_vel_3            0
+wall_vel_4            0
+wall_vel_5			 0

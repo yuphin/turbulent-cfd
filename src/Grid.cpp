@@ -53,15 +53,18 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
             if (geometry_data.at(i_geom).at(j_geom) == 0) {
                 _cells(i, j) = Cell(i, j, cell_type::FLUID);
                 _fluid_cells.push_back(&_cells(i, j));
-            } else if (geometry_data.at(i_geom).at(j_geom) == LidDrivenCavity::moving_wall_id) {
-                _cells(i, j) = Cell(i, j, cell_type::MOVING_WALL, geometry_data.at(i_geom).at(j_geom));
-                _moving_wall_cells.push_back(&_cells(i, j));
-            } else {
-                if (i == 0 || j == 0 || i == _domain.size_x + 1 || j == _domain.size_y + 1) {
-                    // Outer walls
-                    _cells(i, j) = Cell(i, j, cell_type::FIXED_WALL, geometry_data.at(i_geom).at(j_geom));
-                    _fixed_wall_cells.push_back(&_cells(i, j));
-                }
+            } else if (geometry_data.at(i_geom).at(j_geom) == 1) {
+                _cells(i, j) = Cell(i, j, cell_type::OUTLET);
+                _outlet_cells.push_back(&_cells(i, j));
+            } else if (geometry_data.at(i_geom).at(j_geom) >= 2 && geometry_data.at(i_geom).at(j_geom) <= 99) {
+                _cells(i, j) = Cell(i, j, cell_type::INLET, geometry_data.at(i_geom).at(j_geom));
+                _inlet_cells.push_back(&_cells(i, j));
+            } else if (geometry_data.at(i_geom).at(j_geom) >= 100 && geometry_data.at(i_geom).at(j_geom) <= 199) {
+                _cells(i, j) = Cell(i, j, cell_type::NOSLIP_WALL, geometry_data.at(i_geom).at(j_geom));
+                _noslip_wall_cells.push_back(&_cells(i, j));
+            } else if (geometry_data.at(i_geom).at(j_geom) >= 200){
+                _cells(i, j) = Cell(i, j, cell_type::FREESLIP_WALL, geometry_data.at(i_geom).at(j_geom));
+                _freeslip_wall_cells.push_back(&_cells(i, j));
             }
 
             ++i;
@@ -240,7 +243,6 @@ void Grid::parse_geometry_file(std::string filedoc, std::vector<std::vector<int>
             ss >> geometry_data[row][col];
         }
     }
-
     infile.close();
 }
 
@@ -260,6 +262,10 @@ const Domain &Grid::domain() const { return _domain; }
 
 const std::vector<Cell *> &Grid::fluid_cells() const { return _fluid_cells; }
 
-std::vector<Cell *> &Grid::fixed_wall_cells() { return _fixed_wall_cells; }
+std::vector<Cell *> &Grid::inlet_cells() { return _inlet_cells; }
 
-std::vector<Cell *> &Grid::moving_wall_cells() { return _moving_wall_cells; }
+std::vector<Cell *> &Grid::outlet_cells() { return _outlet_cells; }
+
+std::vector<Cell *> &Grid::freeslip_wall_cells() { return _freeslip_wall_cells; }
+
+std::vector<Cell *> &Grid::noslip_wall_cells() { return _noslip_wall_cells; }
