@@ -113,11 +113,12 @@ Case::Case(std::string file_name, int argn, char **args) {
         }
     }
     file.close();
+
     // We assume Reynolds number = 1 / nu for now
     if (re != DBL_MAX && nu == DBL_MAX) {
         nu = 1 / re;
-    } else {
-        std::cerr << "Viscosity or Reynolds number not specified, defaulting viscosity to 0\n";
+    } else if (re == DBL_MAX && nu == DBL_MAX) {
+        std::cerr << "Viscosity and Reynolds number not specified, defaulting viscosity to 0\n";
         nu = 0.0;
     }
 
@@ -158,10 +159,10 @@ Case::Case(std::string file_name, int argn, char **args) {
     // Construct boundaries
     if (!_grid.noslip_wall_cells().empty()) {
         _boundaries.push_back(
-            std::make_unique<NoSlipWallBoundary>(&_grid.noslip_wall_cells(), wall_temps, wall_vels));
+            std::make_unique<NoSlipWallBoundary>(&_grid.noslip_wall_cells(), wall_vels, wall_temps));
     }
     if (!_grid.freeslip_wall_cells().empty()) {
-        _boundaries.push_back(std::make_unique<FreeSlipWallBoundary>(&_grid.freeslip_wall_cells(), wall_temps, wall_vels));
+        _boundaries.push_back(std::make_unique<FreeSlipWallBoundary>(&_grid.freeslip_wall_cells(), wall_vels, wall_temps));
     }
     if (!_grid.outlet_cells().empty()) {
         _boundaries.push_back(std::make_unique<OutletBoundary>(&_grid.outlet_cells()));

@@ -1,22 +1,19 @@
 #--------------------------------------------
 #           geometry file            
 #--------------------------------------------
-geo_file    ChannelWithObstacle.pgm
-
-iproc       1
-jproc       1
+geo_file    NaturalConvection.pgm
 
 #--------------------------------------------
 #            size of the domain             
 #--------------------------------------------
-xlength      10
-ylength      2
+xlength      1
+ylength      1
 
 #--------------------------------------------
 #            number of cells
 #--------------------------------------------
-imax        100
-jmax        20
+imax        50
+jmax        50
 
 #--------------------------------------------
 #               time steps
@@ -25,14 +22,14 @@ jmax        20
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end        30
+t_end        1000
 tau          0.5
 
 #--------------------------------------------
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     5.0
+dt_value     10.0
 
 #--------------------------------------------
 #               pressure
@@ -41,13 +38,13 @@ dt_value     5.0
 # omg: relaxation factor for SOR
 # gamma: upwind differencing factor
 #--------------------------------------------
-itermax      500
-eps          0.001
+itermax      100
+eps          0.00001
 omg          1.7
 gamma        0.5
 
 #--------------------------------------------
-#     kinematic viscosity
+#       kinematic viscosity
 #--------------------------------------------
 nu        0.001
 
@@ -55,7 +52,7 @@ nu        0.001
 #        gravity / external forces
 #--------------------------------------------
 GX          0
-GY          0
+GY          -1.1
 
 #--------------------------------------------
 #         initial pressure
@@ -69,16 +66,21 @@ UI          0
 VI          0
 
 #--------------------------------------------
-#       inlet velocity
+#          energy
+# TI:     initial temperature
+# Pr:     Prandtl number
+# beta:   thermal expansion coefficient
+# alpha:  thermal diffusivity
 #--------------------------------------------
-UIN          1.0
-VIN          0
+TI          0
+Pr:         7
+beta:       0.00021
 
 #--------------------------------------------
 #          wall clusterss
-# num_of_walls:     number of walls
 # wall_temp<num>    wall temperature
 # - enter -1 for adiabatic wall
 #--------------------------------------------
-num_of_walls            1
-wall_vel_3              0
+wall_temp_10        -1
+wall_temp_11        1.0
+wall_temp_12        0.0

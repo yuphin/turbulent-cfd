@@ -71,21 +71,23 @@ void NoSlipWallBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();
+        int id = cell->id();
         if (cell->is_border(border_position::RIGHT)) {
             field.u(i, j) = 0;
-            field.v(i, j) = -field.v(i + 1, j);
+            field.v(i, j) = 2 * _wall_velocity[id] - field.v(i + 1, j);
         }
         if (cell->is_border(border_position::LEFT)) {
             field.u(i - 1, j) = 0;
-            field.v(i, j) = -field.v(i - 1, j);
+            field.v(i, j) = 2 * _wall_velocity[id] - field.v(i - 1, j);
         }
         if (cell->is_border(border_position::TOP)) {
             field.v(i, j) = 0;
-            field.u(i, j) = -field.u(i, j + 1);
+            field.u(i, j) = 2 * _wall_velocity[id] - field.u(i, j + 1);
         }
         if (cell->is_border(border_position::BOTTOM)) {
             field.v(i, j - 1) = 0;
-            field.u(i, j) = -field.u(i, j - 1);
+            // std::cout << _wall_velocity[id] << std::endl;
+            field.u(i, j) = 2 * _wall_velocity[id] - field.u(i, j - 1);
         }
     }
 }

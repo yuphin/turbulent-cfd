@@ -1,19 +1,19 @@
 #--------------------------------------------
 #           geometry file            
 #--------------------------------------------
-geo_file   RayleighBenard.pgm
+geo_file    ExampleCase.pgm
 
 #--------------------------------------------
 #            size of the domain             
 #--------------------------------------------
-xlength      8.5
-ylength      1.0
+xlength      2
+ylength      1
 
 #--------------------------------------------
 #            number of cells
 #--------------------------------------------
-imax        85
-jmax        18
+imax        100
+jmax        50
 
 #--------------------------------------------
 #               time steps
@@ -22,33 +22,41 @@ jmax        18
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end       45000
+t_end        1000
 tau          0.5
 
 #--------------------------------------------
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     100
+dt_value     10.0
 
 #--------------------------------------------
 #               pressure
+# itermax: maximum number of pressure iterations
+# eps: tolerance for pressure iteration (residual < eps)
+# omg: relaxation factor for SOR
+# gamma: upwind differencing factor
 #--------------------------------------------
 itermax      100
-eps          0.00001
+eps          0.001
 omg          1.7
 gamma        0.5
 
 #--------------------------------------------
-#         kinematic viscosity
+#               viscosity
+# - define either nu or Re
+# nu: kinematic viscosity
+# Re: simplified Reynolds number
 #--------------------------------------------
-nu        0.0296
+nu        0.01
+# Re        100
 
 #--------------------------------------------
-#        gravity
+#        gravity / external forces
 #--------------------------------------------
 GX          0
-GY          -0.3924
+GY          -1.0
 
 #--------------------------------------------
 #         initial pressure
@@ -62,29 +70,42 @@ UI          0
 VI          0
 
 #--------------------------------------------
-#       inlet velocity
+#       inlet properties
+# UIN_<num>     Inlet velocity
+# VIN_<num>     Inlet velocity
+# TIN_<num>     Inlet temperature
 #--------------------------------------------
-UIN          0
-VIN          0
+UIN_2        1.0
+VIN_2        0
+# TIN_2      1.0
 
 #--------------------------------------------
-#          energy equation
+#          energy
+# - only needed for energy equation
+# - define either alpha or Pr
+# TI:     initial temperature
+# beta:   thermal expansion coefficient
+# Pr:     Prandtl number
+# alpha:  thermal diffusivity
 #--------------------------------------------
-energy_eq   on
-TI          293
-TIN         0
-beta        0.00179
-alpha       0.00000237
+TI          0
+beta:       0.00021
+Pr:         7
+# alpha:    0.0003
+
 
 #--------------------------------------------
-#          wall clusterss
+#          walls
+# wall_temp_<num>    wall temperature
+# wall_vel_<num>     wall velocity
+# - enter -1 for adiabatic wall
 #--------------------------------------------
-num_walls       3
+wall_temp_10        -1
+wall_temp_11        2.0
+wall_temp_12        1.0
+...
 
-wall_temp_3    	291.20
-wall_temp_4    	294.78
-wall_temp_5     -1  
-
-wall_vel_3      0
-wall_vel_4      0
-wall_vel_5      0  
+wall_vel_10         0.0
+wall_vel_11         1.0
+wall_vel_12         0.0
+...

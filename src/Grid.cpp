@@ -56,13 +56,13 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
             } else if (geometry_data.at(i_geom).at(j_geom) == 1) {
                 _cells(i, j) = Cell(i, j, cell_type::OUTLET);
                 _outlet_cells.push_back(&_cells(i, j));
-            } else if (geometry_data.at(i_geom).at(j_geom) >= 2 && geometry_data.at(i_geom).at(j_geom) <= 99) {
+            } else if (geometry_data.at(i_geom).at(j_geom) >= 2 && geometry_data.at(i_geom).at(j_geom) <= 9) {
                 _cells(i, j) = Cell(i, j, cell_type::INLET, geometry_data.at(i_geom).at(j_geom));
                 _inlet_cells.push_back(&_cells(i, j));
-            } else if (geometry_data.at(i_geom).at(j_geom) >= 100 && geometry_data.at(i_geom).at(j_geom) <= 199) {
+            } else if (geometry_data.at(i_geom).at(j_geom) >= 10 && geometry_data.at(i_geom).at(j_geom) <= 19) {
                 _cells(i, j) = Cell(i, j, cell_type::NOSLIP_WALL, geometry_data.at(i_geom).at(j_geom));
                 _noslip_wall_cells.push_back(&_cells(i, j));
-            } else if (geometry_data.at(i_geom).at(j_geom) >= 200){
+            } else if (geometry_data.at(i_geom).at(j_geom) >= 20){
                 _cells(i, j) = Cell(i, j, cell_type::FREESLIP_WALL, geometry_data.at(i_geom).at(j_geom));
                 _freeslip_wall_cells.push_back(&_cells(i, j));
             }
