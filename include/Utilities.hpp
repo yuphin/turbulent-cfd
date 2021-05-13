@@ -53,6 +53,9 @@ class Logger
                 #ifdef not WIN32
                 if (i <= pos) std::cout << "\u25A0";
                 else std::cout << "\u25A1";
+                #else
+                if (i <= pos) std::cout << "=";
+                else std::cout << "-";
                 #endif
             }
             std::cout << "|";
