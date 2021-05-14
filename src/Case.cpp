@@ -51,6 +51,11 @@ Case::Case(std::string file_name, int argn, char **args) {
     double beta;            /* thermal expansion coefficient */
     double TI = DBL_MAX;    /* Temperature */
     double alpha = DBL_MAX; /* thermal diffusivity */
+    std::unordered_map<int, double> wall_temps;
+    std::unordered_map<int, double> wall_vels;
+    std::unordered_map<int, double> inlet_Us;
+    std::unordered_map<int, double> inlet_Vs;
+    std::unordered_map<int, double> inlet_Ts;
 
     if (file.is_open()) {
 
@@ -60,6 +65,7 @@ Case::Case(std::string file_name, int argn, char **args) {
             if (var[0] == '#') { /* ignore comment line*/
                 file.ignore(MAX_LINE_LENGTH, '\n');
             } else {
+                if (var == "geo_file") file >> _geom_name;
                 if (var == "xlength") file >> xlength;
                 if (var == "ylength") file >> ylength;
                 if (var == "nu") file >> nu;
@@ -83,15 +89,36 @@ Case::Case(std::string file_name, int argn, char **args) {
                 if (var == "beta") file >> beta;
                 if (var == "TI") file >> TI;
                 if (var == "alpha") file >> alpha;
+                if (!var.compare(0, 10, "wall_temp_")) {
+                    double temp;
+                    file >> temp;
+                    wall_temps.insert({std::stoi(var.substr(10)), temp}); }
+                if (!var.compare(0, 9, "wall_vel_")) {
+                    double vel;
+                    file >> vel;
+                    wall_vels.insert({std::stoi(var.substr(9)), vel}); }
+                if (!var.compare(0, 4, "UIN_")) {
+                    double u;
+                    file >> u;
+                    inlet_Us.insert({std::stoi(var.substr(4)), u}); }
+                if (!var.compare(0, 4, "VIN_")) {
+                    double v;
+                    file >> v;
+                    inlet_Vs.insert({std::stoi(var.substr(4)), v}); }
+                if (!var.compare(0, 4, "TIN_")) {
+                    double t;
+                    file >> t;
+                    inlet_Ts.insert({std::stoi(var.substr(4)), t}); }                    
             }
         }
     }
     file.close();
+
     // We assume Reynolds number = 1 / nu for now
     if (re != DBL_MAX && nu == DBL_MAX) {
         nu = 1 / re;
-    } else {
-        std::cerr << "Viscosity or Reynolds number not specified, defaulting viscosity to 0\n";
+    } else if (re == DBL_MAX && nu == DBL_MAX) {
+        std::cerr << "Viscosity and Reynolds number not specified, defaulting viscosity to 0\n";
         nu = 0.0;
     }
 
@@ -108,9 +135,8 @@ Case::Case(std::string file_name, int argn, char **args) {
         _calc_temp = true;
     }
 
-    std::unordered_map<int, double> wall_vel;
     if (_geom_name.compare("NONE") == 0) {
-        wall_vel.insert(std::pair<int, double>(LidDrivenCavity::moving_wall_id, LidDrivenCavity::wall_velocity));
+        wall_vels.insert(std::pair<int, double>(LidDrivenCavity::moving_wall_id, LidDrivenCavity::wall_velocity));
     }
 
     // Set file names for geometry file and output directory
@@ -136,13 +162,19 @@ Case::Case(std::string file_name, int argn, char **args) {
     _tolerance = eps;
 
     // Construct boundaries
-    if (!_grid.moving_wall_cells().empty()) {
+    if (!_grid.noslip_wall_cells().empty()) {
         _boundaries.push_back(
-            std::make_unique<MovingWallBoundary>(&_grid.moving_wall_cells(), LidDrivenCavity::wall_velocity));
+            std::make_unique<NoSlipWallBoundary>(&_grid.noslip_wall_cells(), wall_vels, wall_temps));
     }
-    if (!_grid.fixed_wall_cells().empty()) {
-        _boundaries.push_back(std::make_unique<FixedWallBoundary>(&_grid.fixed_wall_cells()));
+    if (!_grid.freeslip_wall_cells().empty()) {
+        _boundaries.push_back(std::make_unique<FreeSlipWallBoundary>(&_grid.freeslip_wall_cells(), wall_vels, wall_temps));
     }
+    if (!_grid.outlet_cells().empty()) {
+        _boundaries.push_back(std::make_unique<OutletBoundary>(&_grid.outlet_cells()));
+    }
+    if (!_grid.inlet_cells().empty()) {
+        _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts));
+    }    
 }
 
 void Case::set_file_names(std::string file_name) {

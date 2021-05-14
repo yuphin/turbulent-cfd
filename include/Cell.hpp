@@ -79,7 +79,7 @@ class Cell {
     /// Getter of cell type
     cell_type type() const;
     /// Getter of cell id
-    int wall_id() const;
+    int id() const;
 
   private:
     /// x index
