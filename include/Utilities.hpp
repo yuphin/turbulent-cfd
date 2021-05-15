@@ -50,7 +50,7 @@ class Logger
             int pos = static_cast<int>(progress * _barWidth);
             std::cout << " Time: |";
             for (int i = 0; i < _barWidth; ++i) {
-                #ifdef not WIN32
+                #ifndef WIN32
                 if (i <= pos) std::cout << "\u25A0";
                 else std::cout << "\u25A1";
                 #else

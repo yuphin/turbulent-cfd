@@ -25,6 +25,8 @@ class Boundary {
     virtual ~Boundary() = default;
 
   protected:
+    virtual void enforce_p1(Fields &field, Cell* cell);
+    virtual void enforce_p2(Fields &field, Cell* cell);
     std::vector<Cell *> *_cells;
 };
 
@@ -72,6 +74,8 @@ class NoSlipWallBoundary : public Boundary {
     void enforce_uv(Fields &field) override;
 
   private:
+    void enforce_uv1(Fields &field, Cell* cell);
+    void enforce_uv2(Fields &field, Cell* cell);
     std::unordered_map<int, double> _wall_velocity;
     std::unordered_map<int, double> _wall_temperature;
 };
