@@ -32,6 +32,12 @@ class Boundary {
     std::vector<Cell *> *_cells;
     std::unordered_map<int, double> _wall_temperature;
   private:
+	void enforce_t_drichlet_main(Fields &field, Cell *cell);
+	void enforce_t_drichlet_diag(Fields &field, Cell *cell);
+	void enforce_t_outflow_main(Fields &field, Cell *cell);
+	void enforce_t_outflow_diag(Fields &field, Cell *cell);
+	  
+
 };
 
 /**

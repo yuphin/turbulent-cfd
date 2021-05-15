@@ -29,78 +29,96 @@ FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unor
 }
 
 
-void OutletBoundary::enforce_uv(Fields &field) {assert(false);}
-
-void InletBoundary::enforce_uv(Fields &field) {
-        for(auto &cell : *_cells) {
-            int i = cell->i();
-            int j = cell->j();
-            int id = cell->id();
-            field.u(i, j) = _inlet_U[id];
-            field.v(i, j) = _inlet_V[id];
-            field.t(i, j) = _inlet_T[id];
-        }
+void Boundary::enforce_t_drichlet_main(Fields& field, Cell* cell) {
+    int i = cell->i();
+    int j = cell->j();
+    auto wt = _wall_temperature[cell->id()];
+    if (cell->is_border(border_position::RIGHT)) {
+        field.t(i, j) = 2 * wt - field.t(i + 1, j);
+    }
+    if (cell->is_border(border_position::LEFT)) {
+        field.t(i, j) = 2 * wt - field.t(i - 1, j);
+    }
+    if (cell->is_border(border_position::TOP)) {
+        field.t(i, j) = 2 * wt - field.t(i, j + 1);
+    }
+    if (cell->is_border(border_position::BOTTOM)) {
+        field.t(i, j) = 2 * wt - field.t(i, j - 1);
+    }
 }
 
-void Boundary::enforce_t(Fields &field) {
-    for (auto &cell : *_cells) {
-        int i = cell->i();
-        int j = cell->j();
-        int id = cell->id();
-        auto wt = _wall_temperature[id];
-        if (wt != -1) {
-            if (cell->is_border(border_position::RIGHT)) {
-                field.t(i, j) = 2 * wt - field.t(i + 1, j);
-            }
-            if (cell->is_border(border_position::LEFT)) {
-                field.t(i, j) = 2 * wt - field.t(i - 1, j);
-            }
-            if (cell->is_border(border_position::TOP)) {
-                field.t(i, j) = 2 * wt - field.t(i, j + 1);
-            }
-            if (cell->is_border(border_position::BOTTOM)) {
-                field.t(i, j) = 2 * wt - field.t(i, j - 1);
-            }
-            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
-                field.t(i, j) = 3 * wt - (field.t(i + 1, j) + field.t(i, j + 1));
-            }
-            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
-                field.t(i, j) = 3 * wt - (field.t(i + 1, j) + field.t(i, j - 1));
-            }
-            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
-                field.t(i, j) = 3 * wt - (field.t(i - 1, j) + field.t(i, j + 1));
-            }
-            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
-                field.t(i, j) = 3 * wt - (field.t(i - 1, j) + field.t(i, j - 1));
-            }
-        } else {
-            // Neumann boundary condition (Assume outflow for temperature)
-            if (cell->is_border(border_position::RIGHT)) {
-                field.t(i, j) = field.t(i + 1, j);
-            }
-            if (cell->is_border(border_position::LEFT)) {
-                field.t(i, j) = field.t(i - 1, j);
-            }
-            if (cell->is_border(border_position::TOP)) {
-                field.t(i, j) = field.t(i, j + 1);
-            }
-            if (cell->is_border(border_position::BOTTOM)) {
-                field.t(i, j) = field.t(i, j - 1);
-            }
-            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
-                field.t(i, j) = (field.t(i + 1, j) + field.t(i, j + 1)) / 2.0;
-            }
-            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
-                field.t(i, j) = (field.t(i + 1, j) + field.t(i, j - 1)) / 2.0;
-            }
-            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
-                field.t(i, j) = (field.t(i - 1, j) + field.t(i, j + 1)) / 2.0;
-            }
-            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
-                field.t(i, j) = (field.t(i - 1, j) + field.t(i, j - 1)) / 2.0;
-            }
-        }
+void Boundary::enforce_t_drichlet_diag(Fields &field, Cell *cell) {
+    int i = cell->i();
+    int j = cell->j();
+    auto wt = _wall_temperature[cell->id()];
+    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+        field.t(i, j) = 3 * wt - (field.t(i + 1, j) + field.t(i, j + 1));
+    } else if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+        field.t(i, j) = 3 * wt - (field.t(i + 1, j) + field.t(i, j - 1));
     }
+    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+        field.t(i, j) = 3 * wt - (field.t(i - 1, j) + field.t(i, j + 1));
+    }
+    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+        field.t(i, j) = 3 * wt - (field.t(i - 1, j) + field.t(i, j - 1));
+    }
+}
+
+
+void Boundary::enforce_t_outflow_main(Fields &field, Cell *cell) {
+    int i = cell->i();
+    int j = cell->j();
+    if (cell->is_border(border_position::RIGHT)) {
+        field.t(i, j) = field.t(i + 1, j);
+    }
+    if (cell->is_border(border_position::LEFT)) {
+        field.t(i, j) = field.t(i - 1, j);
+    }
+    if (cell->is_border(border_position::TOP)) {
+        field.t(i, j) = field.t(i, j + 1);
+    }
+    if (cell->is_border(border_position::BOTTOM)) {
+        field.t(i, j) = field.t(i, j - 1);
+    }
+}
+
+void Boundary::enforce_t_outflow_diag(Fields &field, Cell *cell) {
+    int i = cell->i();
+    int j = cell->j();
+    if (cell->is_border(border_position::RIGHT)) {
+        field.t(i, j) = field.t(i + 1, j);
+    }
+    if (cell->is_border(border_position::LEFT)) {
+        field.t(i, j) = field.t(i - 1, j);
+    }
+    if (cell->is_border(border_position::TOP)) {
+        field.t(i, j) = field.t(i, j + 1);
+    }
+    if (cell->is_border(border_position::BOTTOM)) {
+        field.t(i, j) = field.t(i, j - 1);
+    }
+   
+
+}
+void Boundary::enforce_t(Fields &field) {
+	for (auto &cell : *_cells) {
+		size_t num_borders = cell->borders().size();
+		assert(num_borders <= 2);
+        auto wt = _wall_temperature[cell->id()];
+        if (num_borders == 1) {
+			if (wt != -1) {
+				enforce_t_drichlet_main(field, cell);
+			} else {
+                enforce_t_outflow_main(field, cell);
+			}
+        } else {
+            if (wt != -1) {
+                enforce_t_drichlet_diag(field, cell);
+            } else {
+                enforce_t_outflow_diag(field, cell);
+            }
+		}
+	}
 }
 
 void Boundary::enforce_fg(Fields &field) {
@@ -170,6 +188,20 @@ void Boundary::enforce_p2(Fields &field, Cell* cell) {
             field.p(i, j) = (field.p(i - 1, j) + field.p(i, j - 1)) / 2.0;
         }
 }
+
+void OutletBoundary::enforce_uv(Fields &field) { assert(false); }
+
+void InletBoundary::enforce_uv(Fields &field) {
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        int id = cell->id();
+        field.u(i, j) = _inlet_U[id];
+        field.v(i, j) = _inlet_V[id];
+        field.t(i, j) = _inlet_T[id];
+    }
+}
+
 
 void NoSlipWallBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
