@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <cassert>
 
 OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
@@ -17,13 +16,17 @@ NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(ce
 
 NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity, 
                                         std::unordered_map<int, double> wall_temperature)
-    : Boundary(cells), _wall_temperature(wall_temperature), _wall_velocity(wall_velocity) {}
+    : Boundary(cells),  _wall_velocity(wall_velocity) {
+   _wall_temperature = wall_temperature;
+}
 
 FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
 FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
                                        std::unordered_map<int, double> wall_temperature)
-    : Boundary(cells), _wall_velocity(wall_velocity), _wall_temperature(wall_temperature) {}
+    : Boundary(cells), _wall_velocity(wall_velocity) {
+    _wall_temperature = wall_temperature;
+}
 
 
 void OutletBoundary::enforce_uv(Fields &field) {assert(false);}
@@ -37,6 +40,67 @@ void InletBoundary::enforce_uv(Fields &field) {
             field.v(i, j) = _inlet_V[id];
             field.t(i, j) = _inlet_T[id];
         }
+}
+
+void Boundary::enforce_t(Fields &field) {
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        int id = cell->id();
+        auto wt = _wall_temperature[id];
+        if (wt != -1) {
+            if (cell->is_border(border_position::RIGHT)) {
+                field.t(i, j) = 2 * wt - field.t(i + 1, j);
+            }
+            if (cell->is_border(border_position::LEFT)) {
+                field.t(i, j) = 2 * wt - field.t(i - 1, j);
+            }
+            if (cell->is_border(border_position::TOP)) {
+                field.t(i, j) = 2 * wt - field.t(i, j + 1);
+            }
+            if (cell->is_border(border_position::BOTTOM)) {
+                field.t(i, j) = 2 * wt - field.t(i, j - 1);
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                field.t(i, j) = 3 * wt - (field.t(i + 1, j) + field.t(i, j + 1));
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                field.t(i, j) = 3 * wt - (field.t(i + 1, j) + field.t(i, j - 1));
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                field.t(i, j) = 3 * wt - (field.t(i - 1, j) + field.t(i, j + 1));
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                field.t(i, j) = 3 * wt - (field.t(i - 1, j) + field.t(i, j - 1));
+            }
+        } else {
+            // Neumann boundary condition (Assume outflow for temperature)
+            if (cell->is_border(border_position::RIGHT)) {
+                field.t(i, j) = field.t(i + 1, j);
+            }
+            if (cell->is_border(border_position::LEFT)) {
+                field.t(i, j) = field.t(i - 1, j);
+            }
+            if (cell->is_border(border_position::TOP)) {
+                field.t(i, j) = field.t(i, j + 1);
+            }
+            if (cell->is_border(border_position::BOTTOM)) {
+                field.t(i, j) = field.t(i, j - 1);
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                field.t(i, j) = (field.t(i + 1, j) + field.t(i, j + 1)) / 2.0;
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                field.t(i, j) = (field.t(i + 1, j) + field.t(i, j - 1)) / 2.0;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                field.t(i, j) = (field.t(i - 1, j) + field.t(i, j + 1)) / 2.0;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                field.t(i, j) = (field.t(i - 1, j) + field.t(i, j - 1)) / 2.0;
+            }
+        }
+    }
 }
 
 void Boundary::enforce_fg(Fields &field) {

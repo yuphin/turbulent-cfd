@@ -4,6 +4,7 @@
 #include "Fields.hpp"
 #include <unordered_map>
 #include <vector>
+#include <cassert>
 
 /**
  * @brief Abstact of boundary conditions.
@@ -22,12 +23,15 @@ class Boundary {
     virtual void enforce_uv(Fields &field) = 0;
     virtual void enforce_fg(Fields &field);
     virtual void enforce_p(Fields &field);
+    virtual void enforce_t(Fields &field);
     virtual ~Boundary() = default;
 
   protected:
     virtual void enforce_p1(Fields &field, Cell* cell);
     virtual void enforce_p2(Fields &field, Cell* cell);
     std::vector<Cell *> *_cells;
+    std::unordered_map<int, double> _wall_temperature;
+  private:
 };
 
 /**
@@ -39,7 +43,7 @@ class OutletBoundary : public Boundary {
     OutletBoundary(std::vector<Cell *> *cells);
     virtual ~OutletBoundary() = default;
     void enforce_uv(Fields &field) override;
-
+    void enforce_t(Fields &field) override { assert(false); }
 };
 
 /**
@@ -54,12 +58,14 @@ class InletBoundary : public Boundary {
                       std::unordered_map<int, double> inlet_T);
     virtual ~InletBoundary() = default;
     void enforce_uv(Fields &field) override;
+    void enforce_t(Fields &field) override { assert(false); }
 
   private:
     std::unordered_map<int, double> _inlet_U;
     std::unordered_map<int, double> _inlet_V;
     std::unordered_map<int, double> _inlet_T;    
 };
+
 
 /**
  * @brief Fixed wall boundary condition for the outer boundaries of the domain.
@@ -72,12 +78,11 @@ class NoSlipWallBoundary : public Boundary {
                       std::unordered_map<int, double> wall_temperature);
     virtual ~NoSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
-
+   
   private:
     void enforce_uv1(Fields &field, Cell* cell);
     void enforce_uv2(Fields &field, Cell* cell);
     std::unordered_map<int, double> _wall_velocity;
-    std::unordered_map<int, double> _wall_temperature;
 };
 
 /**
@@ -95,5 +100,4 @@ class FreeSlipWallBoundary : public Boundary {
 
   private:
     std::unordered_map<int, double> _wall_velocity;
-    std::unordered_map<int, double> _wall_temperature;
 };
