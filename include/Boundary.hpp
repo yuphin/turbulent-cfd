@@ -20,7 +20,7 @@ class Boundary {
      * @param[in] Field to be applied
      */
     Boundary(std::vector<Cell *> *cells) : _cells(cells){};
-    virtual void enforce_uv(Fields &field) = 0;
+    virtual void enforce_uv(Fields &field){}; // Don't handle by default
     virtual void enforce_fg(Fields &field);
     virtual void enforce_p(Fields &field);
     virtual void enforce_t(Fields &field);
@@ -47,7 +47,6 @@ class OutletBoundary : public Boundary {
   public:
     OutletBoundary(std::vector<Cell *> *cells);
     virtual ~OutletBoundary() = default;
-    void enforce_uv(Fields &field) override;
     void enforce_t(Fields &field) override { assert(false); }
 };
 

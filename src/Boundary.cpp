@@ -28,7 +28,6 @@ FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unor
     _wall_temperature = wall_temperature;
 }
 
-
 void Boundary::enforce_t_drichlet_main(Fields& field, Cell* cell) {
     int i = cell->i();
     int j = cell->j();
@@ -64,7 +63,6 @@ void Boundary::enforce_t_drichlet_diag(Fields &field, Cell *cell) {
     }
 }
 
-
 void Boundary::enforce_t_outflow_main(Fields &field, Cell *cell) {
     int i = cell->i();
     int j = cell->j();
@@ -97,8 +95,6 @@ void Boundary::enforce_t_outflow_diag(Fields &field, Cell *cell) {
     if (cell->is_border(border_position::BOTTOM)) {
         field.t(i, j) = field.t(i, j - 1);
     }
-   
-
 }
 void Boundary::enforce_t(Fields &field) {
 	for (auto &cell : *_cells) {
@@ -189,8 +185,6 @@ void Boundary::enforce_p2(Fields &field, Cell* cell) {
         }
 }
 
-void OutletBoundary::enforce_uv(Fields &field) { assert(false); }
-
 void InletBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
         int i = cell->i();
@@ -201,7 +195,6 @@ void InletBoundary::enforce_uv(Fields &field) {
         field.t(i, j) = _inlet_T[id];
     }
 }
-
 
 void NoSlipWallBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
