@@ -25,12 +25,11 @@ class Boundary {
     virtual void enforce_p(Fields &field);
     virtual void enforce_t(Fields &field);
     virtual ~Boundary() = default;
-
+    std::vector<Cell *> *_cells;
+    std::unordered_map<int, double> _wall_temperature;
   protected:
     virtual void enforce_p1(Fields &field, Cell* cell);
     virtual void enforce_p2(Fields &field, Cell* cell);
-    std::vector<Cell *> *_cells;
-    std::unordered_map<int, double> _wall_temperature;
   private:
 	void enforce_t_drichlet_main(Fields &field, Cell *cell);
 	void enforce_t_drichlet_diag(Fields &field, Cell *cell);
