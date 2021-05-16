@@ -270,24 +270,5 @@ void NoSlipWallBoundary::enforce_uv1(Fields &field, Cell* cell) {
 }
 
 void FreeSlipWallBoundary::enforce_uv(Fields &field) {
-    for (auto &cell : *_cells) {
-        int i = cell->i();
-        int j = cell->j();
-        if (cell->is_border(border_position::RIGHT)) {
-            field.u(i, j) = 0;
-            field.v(i, j) = 2 * _wall_velocity[LidDrivenCavity::moving_wall_id] - field.v(i + 1, j);
-        }
-        if (cell->is_border(border_position::LEFT)) {
-            field.u(i - 1, j) = 0;
-            field.v(i, j) = 2 * _wall_velocity[LidDrivenCavity::moving_wall_id] - field.v(i - 1, j);
-        }
-        if (cell->is_border(border_position::TOP)) {
-            field.v(i, j) = 0;
-            field.u(i, j) = 2 * _wall_velocity[LidDrivenCavity::moving_wall_id] - field.u(i, j + 1);
-        }
-        if (cell->is_border(border_position::BOTTOM)) {
-            field.v(i, j - 1) = 0;
-            field.u(i, j) = 2 * _wall_velocity[LidDrivenCavity::moving_wall_id] - field.u(i, j - 1);
-        }
-    }
+    reinterpret_cast<NoSlipWallBoundary*>(this)->enforce_uv(field);
 }
