@@ -179,25 +179,6 @@ Case::Case(std::string file_name, int argn, char **args) {
         _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts));
     }    
 
-    // Construct Temperature matrix
-    // Boundaries
-    for (auto &boundary : _boundaries) {
-        for (auto &cell : *boundary->_cells) {
-            int i = cell->i();
-            int j = cell->j();
-            auto wt = boundary->_wall_temperature[cell->id()];
-            if (wt == -1) {
-                wt = TI;
-            }
-            _field.t(i, j) = wt;
-        }
-    }
-    // Fluid cells
-    for (auto &cell : _grid.fluid_cells()) {
-        int i = cell->i();
-        int j = cell->j();
-        _field.t(i, j) = TI;
-    }
 }
 
 void Case::set_file_names(std::string file_name) {
@@ -238,6 +219,7 @@ void Case::set_file_names(std::string file_name) {
     // Create output directory
     filesystem::path folder(_dict_name);
     try {
+        filesystem::remove_all(folder);
         filesystem::create_directory(folder);
     } catch (const std::exception &) {
         std::cerr << "Output directory could not be created." << std::endl;
@@ -281,6 +263,15 @@ void Case::simulate() {
         for (auto &boundary : _boundaries) {
             boundary->enforce_uv(_field);
         }
+
+
+        if (_calc_temp) {
+            for (const auto &boundary : _boundaries) {
+                boundary->enforce_t(_field);
+            }
+            _field.calculate_temperatures(_grid);
+        }
+
         // Compute F & G and enforce boundary conditions
         _field.calculate_fluxes(_grid, _calc_temp);
         for (const auto &boundary : _boundaries) {
@@ -309,13 +300,7 @@ void Case::simulate() {
 
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
-        if (_calc_temp) {
-            // Compute t^(n+1)
-            _field.calculate_temperatures(_grid);
-            for (const auto &boundary : _boundaries) {
-                boundary->enforce_t(_field);
-            }
-        }
+
         // Output u,v,p
         if (t >= output_counter * _output_freq) {
             output_vtk(timestep);
