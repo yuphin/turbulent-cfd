@@ -92,6 +92,9 @@ Case::Case(std::string file_name, int argn, char **args) {
                 if (!var.compare(0, 10, "wall_temp_")) {
                     double temp;
                     file >> temp;
+                    if (temp == -1.0) {
+                    
+                    }
                     wall_temps.insert({std::stoi(var.substr(10)), temp}); }
                 if (!var.compare(0, 9, "wall_vel_")) {
                     double vel;
@@ -154,7 +157,7 @@ Case::Case(std::string file_name, int argn, char **args) {
     build_domain(domain, imax, jmax);
 
     _grid = Grid(_geom_name, domain);
-    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, alpha, beta);
+    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, alpha, beta, GX, GY);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     _pressure_solver = std::make_unique<SOR>(omg);
@@ -175,6 +178,26 @@ Case::Case(std::string file_name, int argn, char **args) {
     if (!_grid.inlet_cells().empty()) {
         _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts));
     }    
+
+    // Construct Temperature matrix
+    // Boundaries
+    for (auto &boundary : _boundaries) {
+        for (auto &cell : *boundary->_cells) {
+            int i = cell->i();
+            int j = cell->j();
+            auto wt = boundary->_wall_temperature[cell->id()];
+            if (wt == -1) {
+                wt = TI;
+            }
+            _field.t(i, j) = wt;
+        }
+    }
+    // Fluid cells
+    for (auto &cell : _grid.fluid_cells()) {
+        int i = cell->i();
+        int j = cell->j();
+        _field.t(i, j) = TI;
+    }
 }
 
 void Case::set_file_names(std::string file_name) {
@@ -289,6 +312,9 @@ void Case::simulate() {
         if (_calc_temp) {
             // Compute t^(n+1)
             _field.calculate_temperatures(_grid);
+            for (const auto &boundary : _boundaries) {
+                boundary->enforce_t(_field);
+            }
         }
         // Output u,v,p
         if (t >= output_counter * _output_freq) {

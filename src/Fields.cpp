@@ -5,8 +5,8 @@
 #include <math.h>
 
 Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, double VI, double PI, double TI,
-               double alpha, double beta)
-    : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta) {
+               double alpha, double beta, double gx, double gy)
+    : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta), _gx(gx), _gy(gy) {
     _U = Matrix<double>(imax + 2, jmax + 2, UI);
     _V = Matrix<double>(imax + 2, jmax + 2, VI);
     _P = Matrix<double>(imax + 2, jmax + 2, PI);

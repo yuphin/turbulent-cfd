@@ -26,7 +26,8 @@ class Fields {
      *
      */
     Fields(double _nu, double _dt, double _tau, int imax, int jmax, 
-          double UI, double VI, double PI, double TI, double _alpha, double _beta);
+           double UI, double VI, double PI, double TI, double _alpha, double _beta,
+           double _gx, double _gy);
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
