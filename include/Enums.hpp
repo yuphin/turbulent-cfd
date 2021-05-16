@@ -5,7 +5,7 @@
 // PGM convention, which is:
 // 0: fluid, 3: fixed wall, 4: moving wall
 namespace LidDrivenCavity {
-const int moving_wall_id = 20;
+const int moving_wall_id = 11;
 const int fixed_wall_id = 10;
 const double wall_velocity = 1.0;
 } // namespace LidDrivenCavity

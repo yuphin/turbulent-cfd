@@ -372,11 +372,16 @@ void Case::output_vtk(int timestep, int my_rank) {
     Velocity->SetName("velocity");
     Velocity->SetNumberOfComponents(3);
 
-    // Print pressure and temperature from bottom to top
+    // Print pressure and place ghost cells
     for (int j = 1; j < _grid.domain().size_y + 1; j++) {
         for (int i = 1; i < _grid.domain().size_x + 1; i++) {
             double pressure = _field.p(i, j);
             Pressure->InsertNextTuple(&pressure);
+
+            // Insert blank cells at obstacles
+            if (_grid.cell(i, j).type() != cell_type::FLUID) {
+                structuredGrid->BlankCell((i-1) * _grid.domain().size_x + (j-1));
+            }
         }
     }
 
@@ -398,6 +403,22 @@ void Case::output_vtk(int timestep, int my_rank) {
 
     // Add Velocity to Structured Grid
     structuredGrid->GetPointData()->AddArray(Velocity);
+
+    // Add Temperature to Structured Grid
+    if (_calc_temp) {
+        vtkDoubleArray *Temperature = vtkDoubleArray::New();
+        Temperature->SetName("temperature");
+        Temperature->SetNumberOfComponents(1);
+
+        for (int j = 1; j < _grid.domain().size_y + 1; j++) {
+            for (int i = 1; i < _grid.domain().size_x + 1; i++) {
+
+                    double temperature = _field.t(i, j);
+                    Temperature->InsertNextTuple(&temperature);
+            }
+        }
+        structuredGrid->GetCellData()->AddArray(Temperature);
+    }
 
     // Write Grid
     vtkSmartPointer<vtkStructuredGridWriter> writer = vtkSmartPointer<vtkStructuredGridWriter>::New();
