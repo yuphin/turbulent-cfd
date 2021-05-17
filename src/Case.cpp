@@ -50,7 +50,8 @@ Case::Case(std::string file_name, int argn, char **args) {
     double pr = DBL_MAX;    /* Prandtl number */
     double beta;            /* thermal expansion coefficient */
     double TI = DBL_MAX;    /* Temperature */
-    double alpha = DBL_MAX; /* thermal diffusivity */
+    double alpha = DBL_MAX; /* Thermal diffusivity */
+    double DP = DBL_MAX;    /* Pressure differential between the two ends */
     std::unordered_map<int, double> wall_temps;
     std::unordered_map<int, double> wall_vels;
     std::unordered_map<int, double> inlet_Us;
@@ -89,6 +90,7 @@ Case::Case(std::string file_name, int argn, char **args) {
                 if (var == "beta") file >> beta;
                 if (var == "TI") file >> TI;
                 if (var == "alpha") file >> alpha;
+                if (var == "DELTA_P") file >> DP;
                 if (!var.compare(0, 10, "wall_temp_")) {
                     double temp;
                     file >> temp;
@@ -178,7 +180,6 @@ Case::Case(std::string file_name, int argn, char **args) {
     if (!_grid.inlet_cells().empty()) {
         _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts));
     }    
-
 }
 
 void Case::set_file_names(std::string file_name) {
@@ -239,7 +240,7 @@ void Case::set_file_names(std::string file_name) {
  * - Iterate the pressure poisson equation until the residual becomes smaller than the desired tolerance
  *   or the maximum number of the iterations are performed using solve() member function of PressureSolver class
  * - Calculate the velocities u and v using calculate_velocities() member function of Fields class
- * - Calculat the maximal timestep size for the next iteration using calculate_dt() member function of Fields class
+ * - Calculate the maximal timestep size for the next iteration using calculate_dt() member function of Fields class
  * - Write vtk files using output_vtk() function
  *
  * Please note that some classes such as PressureSolver, Boundary are abstract classes which means they only provide the
@@ -264,11 +265,12 @@ void Case::simulate() {
             boundary->enforce_uv(_field);
         }
 
-
         if (_calc_temp) {
+            // Enforce temperature boundary conditions
             for (const auto &boundary : _boundaries) {
                 boundary->enforce_t(_field);
             }
+            // Compute temperatures
             _field.calculate_temperatures(_grid);
         }
 

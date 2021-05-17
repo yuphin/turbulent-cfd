@@ -270,5 +270,22 @@ void NoSlipWallBoundary::enforce_uv1(Fields &field, Cell* cell) {
 }
 
 void FreeSlipWallBoundary::enforce_uv(Fields &field) {
-    reinterpret_cast<NoSlipWallBoundary*>(this)->enforce_uv(field);
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        int id = cell->id();
+        if (cell->borders().size() > 2) {
+            std::cerr << "Forbidden cells!!" << std::endl;
+            assert(false);
+        }
+        if (cell->is_border(border_position::RIGHT)) {
+            field.u(i, j) = 0;
+        } else if (cell->is_border(border_position::LEFT)) {
+            field.u(i - 1, j) = 0;
+        } else if (cell->is_border(border_position::TOP)) {
+            field.v(i, j) = 0;
+        } else if (cell->is_border(border_position::BOTTOM)) {
+            field.v(i, j - 1) = 0;
+        }
+    }
 }
