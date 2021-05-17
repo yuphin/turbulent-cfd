@@ -274,17 +274,17 @@ void FreeSlipWallBoundary::enforce_uv(Fields &field) {
         int i = cell->i();
         int j = cell->j();
         int id = cell->id();
-        if (cell->borders().size() > 2) {
-            std::cerr << "Forbidden cells!!" << std::endl;
-            assert(false);
-        }
+        assert(cell->borders().size() <= 2);
         if (cell->is_border(border_position::RIGHT)) {
             field.u(i, j) = 0;
-        } else if (cell->is_border(border_position::LEFT)) {
+        }
+        if (cell->is_border(border_position::LEFT)) {
             field.u(i - 1, j) = 0;
-        } else if (cell->is_border(border_position::TOP)) {
+        }
+        if (cell->is_border(border_position::TOP)) {
             field.v(i, j) = 0;
-        } else if (cell->is_border(border_position::BOTTOM)) {
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
             field.v(i, j - 1) = 0;
         }
     }
