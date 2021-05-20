@@ -35,8 +35,6 @@ class Boundary {
 	void enforce_t_drichlet_diag(Fields &field, Cell *cell);
 	void enforce_t_outflow_main(Fields &field, Cell *cell);
 	void enforce_t_outflow_diag(Fields &field, Cell *cell);
-	  
-
 };
 
 /**
@@ -47,7 +45,8 @@ class OutletBoundary : public Boundary {
   public:
     OutletBoundary(std::vector<Cell *> *cells);
     virtual ~OutletBoundary() = default;
-    void enforce_t(Fields &field) override { assert(false); }
+    void enforce_t(Fields &field) override {}
+    void enforce_p(Fields &field) override;
 };
 
 /**
@@ -57,17 +56,21 @@ class OutletBoundary : public Boundary {
 class InletBoundary : public Boundary {
   public:
     InletBoundary(std::vector<Cell *> *cells);
-    InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> inlet_U,
-                      std::unordered_map<int, double> inlet_V,
-                      std::unordered_map<int, double> inlet_T);
+    InletBoundary(std::vector<Cell *> *cells, 
+                  std::unordered_map<int, double> inlet_U,
+                  std::unordered_map<int, double> inlet_V, 
+                  std::unordered_map<int, double> inlet_T, 
+                  double DP);
     virtual ~InletBoundary() = default;
     void enforce_uv(Fields &field) override;
-    void enforce_t(Fields &field) override { assert(false); }
+    void enforce_t(Fields &field) override {}
+    void enforce_p(Fields &field) override;
 
   private:
     std::unordered_map<int, double> _inlet_U;
     std::unordered_map<int, double> _inlet_V;
     std::unordered_map<int, double> _inlet_T;    
+    double _inlet_DP;
 };
 
 

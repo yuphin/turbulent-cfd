@@ -15,6 +15,10 @@ Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, 
     _F = Matrix<double>(imax + 2, jmax + 2, 0.0);
     _G = Matrix<double>(imax + 2, jmax + 2, 0.0);
     _RS = Matrix<double>(imax + 2, jmax + 2, 0.0);
+
+    this->PI = PI;
+    this->TI = TI;
+
 }
 
 void Fields::calculate_fluxes(Grid &grid, bool calc_temp) {

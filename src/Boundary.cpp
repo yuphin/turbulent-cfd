@@ -3,14 +3,15 @@
 #include <cmath>
 #include <iostream>
 
-OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells){}
 
 InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
 InletBoundary::InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> inlet_U,
                                         std::unordered_map<int, double> inlet_V,
-                                        std::unordered_map<int, double> inlet_T)
-    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T) {}
+                                        std::unordered_map<int, double> inlet_T, 
+                                        double DP)
+    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_DP(DP) {}
 
 NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
@@ -193,6 +194,28 @@ void InletBoundary::enforce_uv(Fields &field) {
         field.u(i, j) = _inlet_U[id];
         field.v(i, j) = _inlet_V[id];
         field.t(i, j) = _inlet_T[id];
+    }
+}
+
+void InletBoundary::enforce_p(Fields &field) {
+    if (_inlet_DP == DBL_MAX) { // Inlet BC isn't specified, apply default
+        Boundary::enforce_p(field);
+        return;
+    }
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        int id = cell->id();
+        field.p(i, j) = _inlet_DP + field.PI;
+    }
+}
+
+void OutletBoundary::enforce_p(Fields &field) {
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        int id = cell->id();
+        field.p(i, j) = field.PI;
     }
 }
 

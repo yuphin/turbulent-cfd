@@ -128,9 +128,9 @@ Case::Case(std::string file_name, int argn, char **args) {
     }
 
     // Prandtl number = nu / alpha
-    if (pr != DBL_MAX && alpha == DBL_MAX) {
+    if (pr != DBL_MAX) {
         alpha = nu / pr;
-    } else {
+    } else if(alpha == DBL_MAX) {
         std::cerr << "Prandtl number, alpha or beta are not set, defaulting to 0\n";
         alpha = 0.0;
         beta = 0.0;
@@ -178,7 +178,7 @@ Case::Case(std::string file_name, int argn, char **args) {
         _boundaries.push_back(std::make_unique<OutletBoundary>(&_grid.outlet_cells()));
     }
     if (!_grid.inlet_cells().empty()) {
-        _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts));
+        _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts, DP));
     }    
 }
 
@@ -367,7 +367,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
             // Insert blank cells at obstacles
             if (_grid.cell(i, j).type() != cell_type::FLUID) {
-                structuredGrid->BlankCell((i-1) * _grid.domain().size_x + (j-1));
+                structuredGrid->BlankCell(j * _grid.domain().domain_size_x + i);
             }
         }
     }

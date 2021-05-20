@@ -98,6 +98,12 @@ class Fields {
     /// get timestep size
     double dt() const;
 
+    /// initial pressure
+    double PI;
+
+    /// initial temperature
+    double TI;
+
     /// pressure matrix access and modify
     Matrix<double> &p_matrix();
 

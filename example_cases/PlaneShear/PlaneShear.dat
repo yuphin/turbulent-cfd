@@ -6,8 +6,8 @@ geo_file    PlaneShear.pgm
 #--------------------------------------------
 #            size of the domain             
 #--------------------------------------------
-xlength      100
-ylength      20
+xlength      10
+ylength      2
 
 #--------------------------------------------
 #            number of cells
@@ -38,7 +38,7 @@ dt_value     0.05
 # omg: relaxation factor for SOR
 # gamma: upwind differencing factor
 #--------------------------------------------
-itermax      1000
+itermax      500
 eps          0.001
 omg          1.7
 gamma        0.5
@@ -75,4 +75,4 @@ VIN_2        0
 #       pressure differential
 #--------------------------------------------
 
-DELTA_P      4.0
+#DELTA_P      4.0
