@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include <filesystem>
+#include <cfloat>
 
 #define USE_FLOATS 0
 
