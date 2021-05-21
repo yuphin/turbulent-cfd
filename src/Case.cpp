@@ -25,32 +25,32 @@ Case::Case(std::string file_name, int argn, char **args) {
 
     // Set up logging functionality
     if (argn > 2) {
-        logger.parseFlag(args[2]);
+        logger.parse_flag(args[2]);
     }
 
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
-    Real nu = REAL_MAX;   /* viscosity   */
-    Real UI;              /* velocity x-direction */
-    Real VI;              /* velocity y-direction */
-    Real PI;              /* pressure */
-    Real GX;              /* gravitation x-direction */
-    Real GY;              /* gravitation y-direction */
-    Real xlength;         /* length of the domain x-dir.*/
-    Real ylength;         /* length of the domain y-dir.*/
-    Real dt;              /* time step */
-    int imax;               /* number of cells x-direction*/
-    int jmax;               /* number of cells y-direction*/
-    Real gamma;           /* uppwind differencing factor*/
-    Real omg;             /* relaxation factor */
-    Real tau;             /* safety factor for time step*/
-    int itermax;            /* max. number of iterations for pressure per time step */
-    Real eps;             /* accuracy bound for pressure*/
-    Real re = REAL_MAX;     /* Reynolds number */
-    Real pr = REAL_MAX;   /* Prandtl number */
-    Real beta;            /* thermal expansion coefficient */
-    Real TI = REAL_MAX;   /* Temperature */
+    Real nu = REAL_MAX;    /* viscosity   */
+    Real UI;               /* velocity x-direction */
+    Real VI;               /* velocity y-direction */
+    Real PI;               /* pressure */
+    Real GX;               /* gravitation x-direction */
+    Real GY;               /* gravitation y-direction */
+    Real xlength;          /* length of the domain x-dir.*/
+    Real ylength;          /* length of the domain y-dir.*/
+    Real dt;               /* time step */
+    int imax;              /* number of cells x-direction*/
+    int jmax;              /* number of cells y-direction*/
+    Real gamma;            /* uppwind differencing factor*/
+    Real omg;              /* relaxation factor */
+    Real tau;              /* safety factor for time step*/
+    int itermax;           /* max. number of iterations for pressure per time step */
+    Real eps;              /* accuracy bound for pressure*/
+    Real re = REAL_MAX;    /* Reynolds number */
+    Real pr = REAL_MAX;    /* Prandtl number */
+    Real beta;             /* thermal expansion coefficient */
+    Real TI = REAL_MAX;    /* Temperature */
     Real alpha = REAL_MAX; /* Thermal diffusivity */
     Real DP = REAL_MAX;    /* Pressure differential between the two ends */
     std::unordered_map<int, Real> wall_temps;
@@ -96,25 +96,29 @@ Case::Case(std::string file_name, int argn, char **args) {
                     Real temp;
                     file >> temp;
                     if (temp == -1.0) {
-                    
                     }
-                    wall_temps.insert({std::stoi(var.substr(10)), temp}); }
+                    wall_temps.insert({std::stoi(var.substr(10)), temp});
+                }
                 if (!var.compare(0, 9, "wall_vel_")) {
                     Real vel;
                     file >> vel;
-                    wall_vels.insert({std::stoi(var.substr(9)), vel}); }
+                    wall_vels.insert({std::stoi(var.substr(9)), vel});
+                }
                 if (!var.compare(0, 4, "UIN_")) {
                     Real u;
                     file >> u;
-                    inlet_Us.insert({std::stoi(var.substr(4)), u}); }
+                    inlet_Us.insert({std::stoi(var.substr(4)), u});
+                }
                 if (!var.compare(0, 4, "VIN_")) {
                     Real v;
                     file >> v;
-                    inlet_Vs.insert({std::stoi(var.substr(4)), v}); }
+                    inlet_Vs.insert({std::stoi(var.substr(4)), v});
+                }
                 if (!var.compare(0, 4, "TIN_")) {
                     Real t;
                     file >> t;
-                    inlet_Ts.insert({std::stoi(var.substr(4)), t}); }                    
+                    inlet_Ts.insert({std::stoi(var.substr(4)), t});
+                }
             }
         }
     }
@@ -131,7 +135,7 @@ Case::Case(std::string file_name, int argn, char **args) {
     // Prandtl number = nu / alpha
     if (pr != REAL_MAX) {
         alpha = nu / pr;
-    } else if(alpha == REAL_MAX) {
+    } else if (alpha == REAL_MAX) {
         std::cerr << "Prandtl number, alpha or beta are not set, defaulting to 0\n";
         alpha = 0.0;
         beta = 0.0;
@@ -148,7 +152,7 @@ Case::Case(std::string file_name, int argn, char **args) {
     // Set file names for geometry file and output directory
     set_file_names(file_name);
     // Create log file in output dir
-    logger.createLog(_dict_name, _case_name);
+    logger.create_log(_dict_name, _case_name);
 
     // Build up the domain
     Domain domain;
@@ -169,18 +173,18 @@ Case::Case(std::string file_name, int argn, char **args) {
 
     // Construct boundaries
     if (!_grid.noslip_wall_cells().empty()) {
-        _boundaries.push_back(
-            std::make_unique<NoSlipWallBoundary>(&_grid.noslip_wall_cells(), wall_vels, wall_temps));
+        _boundaries.push_back(std::make_unique<NoSlipWallBoundary>(&_grid.noslip_wall_cells(), wall_vels, wall_temps));
     }
     if (!_grid.freeslip_wall_cells().empty()) {
-        _boundaries.push_back(std::make_unique<FreeSlipWallBoundary>(&_grid.freeslip_wall_cells(), wall_vels, wall_temps));
+        _boundaries.push_back(
+            std::make_unique<FreeSlipWallBoundary>(&_grid.freeslip_wall_cells(), wall_vels, wall_temps));
     }
     if (!_grid.outlet_cells().empty()) {
         _boundaries.push_back(std::make_unique<OutletBoundary>(&_grid.outlet_cells()));
     }
     if (!_grid.inlet_cells().empty()) {
         _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts, DP));
-    }    
+    }
 }
 
 void Case::set_file_names(std::string file_name) {
@@ -257,7 +261,7 @@ void Case::simulate() {
     Real output_counter = 0.0;
     while (t < _t_end) {
         // Print progress bar
-        logger.progressBar(t, _t_end);
+        logger.progress_bar(t, _t_end);
         // Select dt
         dt = _field.calculate_dt(_grid, _calc_temp);
 
@@ -296,10 +300,10 @@ void Case::simulate() {
 
         // Check if max_iter was reached
         if (it == _max_iter) {
-            logger.maxIterWarning();
+            logger.max_iter_warning();
         }
         // Output current timestep information
-        logger.writeLog(timestep, t, it, _max_iter, res);
+        logger.write_log(timestep, t, it, _max_iter, res);
 
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
@@ -350,12 +354,12 @@ void Case::output_vtk(int timestep, int my_rank) {
     structuredGrid->SetDimensions(_grid.domain().size_x + 1, _grid.domain().size_y + 1, 1);
     structuredGrid->SetPoints(points);
 
-    // Pressure Array
-    #if USE_FLOATS 
+// Pressure Array
+#if USE_FLOATS
     typedef vtkFloatArray VTK_Array;
-    #else
+#else
     typedef vtkDoubleArray VTK_Array;
-    #endif
+#endif
     VTK_Array *Pressure = VTK_Array::New();
     Pressure->SetName("pressure");
     Pressure->SetNumberOfComponents(1);
@@ -406,8 +410,8 @@ void Case::output_vtk(int timestep, int my_rank) {
         for (int j = 1; j < _grid.domain().size_y + 1; j++) {
             for (int i = 1; i < _grid.domain().size_x + 1; i++) {
 
-                    Real temperature = _field.t(i, j);
-                    Temperature->InsertNextTuple(&temperature);
+                Real temperature = _field.t(i, j);
+                Temperature->InsertNextTuple(&temperature);
             }
         }
         structuredGrid->GetCellData()->AddArray(Temperature);

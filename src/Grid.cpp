@@ -62,7 +62,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
             } else if (geometry_data.at(i_geom).at(j_geom) >= 10 && geometry_data.at(i_geom).at(j_geom) <= 19) {
                 _cells(i, j) = Cell(i, j, cell_type::NOSLIP_WALL, geometry_data.at(i_geom).at(j_geom));
                 _noslip_wall_cells.push_back(&_cells(i, j));
-            } else if (geometry_data.at(i_geom).at(j_geom) >= 20){
+            } else if (geometry_data.at(i_geom).at(j_geom) >= 20) {
                 _cells(i, j) = Cell(i, j, cell_type::FREESLIP_WALL, geometry_data.at(i_geom).at(j_geom));
                 _freeslip_wall_cells.push_back(&_cells(i, j));
             }

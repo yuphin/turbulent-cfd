@@ -19,12 +19,12 @@ Real Discretization::convection_u(const Matrix<Real> &U, const Matrix<Real> &V, 
 
     // dU^2/dx
     Real result_fd = (interpolate(U, i, j, 1, 0) * interpolate(U, i, j, 1, 0) -
-                        interpolate(U, i, j, -1, 0) * interpolate(U, i, j, -1, 0)) /
-                       _dx;
+                      interpolate(U, i, j, -1, 0) * interpolate(U, i, j, -1, 0)) /
+                     _dx;
     Real result_dc = _gamma *
-                       (std::abs(U(i, j) + U(i + 1, j)) / 2 * (U(i, j) - U(i + 1, j)) / 2 -
-                        std::abs(U(i - 1, j) + U(i, j)) / 2 * (U(i - 1, j) - U(i, j)) / 2) /
-                       _dx;
+                     (std::abs(U(i, j) + U(i + 1, j)) / 2 * (U(i, j) - U(i + 1, j)) / 2 -
+                      std::abs(U(i - 1, j) + U(i, j)) / 2 * (U(i - 1, j) - U(i, j)) / 2) /
+                     _dx;
     result += result_fd + result_dc;
 
     // dUV/dy
@@ -46,12 +46,12 @@ Real Discretization::convection_v(const Matrix<Real> &U, const Matrix<Real> &V, 
 
     // dV^2/dy
     Real result_fd = (interpolate(V, i, j, 0, 1) * interpolate(V, i, j, 0, 1) -
-                        interpolate(V, i, j, 0, -1) * interpolate(V, i, j, 0, -1)) /
-                       _dy;
+                      interpolate(V, i, j, 0, -1) * interpolate(V, i, j, 0, -1)) /
+                     _dy;
     Real result_dc = _gamma *
-                       (std::abs(V(i, j) + V(i, j + 1)) / 2 * (V(i, j) - V(i, j + 1)) / 2 -
-                        std::abs(V(i, j - 1) + V(i, j)) / 2 * (V(i, j - 1) - V(i, j)) / 2) /
-                       _dy;
+                     (std::abs(V(i, j) + V(i, j + 1)) / 2 * (V(i, j) - V(i, j + 1)) / 2 -
+                      std::abs(V(i, j - 1) + V(i, j)) / 2 * (V(i, j - 1) - V(i, j)) / 2) /
+                     _dy;
     result += result_fd + result_dc;
 
     // dUV/dx
@@ -92,13 +92,13 @@ Real Discretization::convection_vT(const Matrix<Real> &V, const Matrix<Real> &T,
 Real Discretization::diffusion(const Matrix<Real> &A, int i, int j) {
     // Same as laplacian?
     Real result = (A(i + 1, j) - 2.0 * A(i, j) + A(i - 1, j)) / (_dx * _dx) +
-                    (A(i, j + 1) - 2.0 * A(i, j) + A(i, j - 1)) / (_dy * _dy);
+                  (A(i, j + 1) - 2.0 * A(i, j) + A(i, j - 1)) / (_dy * _dy);
     return result;
 }
 
 Real Discretization::laplacian(const Matrix<Real> &P, int i, int j) {
     Real result = (P(i + 1, j) - 2.0 * P(i, j) + P(i - 1, j)) / (_dx * _dx) +
-                    (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) / (_dy * _dy);
+                  (P(i, j + 1) - 2.0 * P(i, j) + P(i, j - 1)) / (_dy * _dy);
     return result;
 }
 

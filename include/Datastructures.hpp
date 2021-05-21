@@ -1,7 +1,7 @@
 #pragma once
 
-#include <vector>
 #include "Utilities.hpp"
+#include <vector>
 /**
  * @brief General 2D data structure around std::vector, in column
  * major format.

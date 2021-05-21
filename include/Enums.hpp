@@ -27,8 +27,8 @@ const int RIGHT = 3;
 enum class cell_type {
 
     FLUID,
-    OUTLET,  
-    INLET,      
+    OUTLET,
+    INLET,
     NOSLIP_WALL,
     FREESLIP_WALL,
     DEFAULT

@@ -1,10 +1,10 @@
 #pragma once
-#include "Utilities.hpp"
 #include "Cell.hpp"
 #include "Fields.hpp"
+#include "Utilities.hpp"
+#include <cassert>
 #include <unordered_map>
 #include <vector>
-#include <cassert>
 
 /**
  * @brief Abstact of boundary conditions.
@@ -27,14 +27,16 @@ class Boundary {
     virtual ~Boundary() = default;
     std::vector<Cell *> *_cells;
     std::unordered_map<int, Real> _wall_temperature;
+
   protected:
-    virtual void enforce_p_main(Fields &field, Cell* cell);
-    virtual void enforce_p_diagonal(Fields &field, Cell* cell);
+    virtual void enforce_p_main(Fields &field, Cell *cell);
+    virtual void enforce_p_diagonal(Fields &field, Cell *cell);
+
   private:
-	void enforce_t_drichlet_main(Fields &field, Cell *cell);
-	void enforce_t_drichlet_diag(Fields &field, Cell *cell);
-	void enforce_t_outflow_main(Fields &field, Cell *cell);
-	void enforce_t_outflow_diag(Fields &field, Cell *cell);
+    void enforce_t_drichlet_main(Fields &field, Cell *cell);
+    void enforce_t_drichlet_diag(Fields &field, Cell *cell);
+    void enforce_t_outflow_main(Fields &field, Cell *cell);
+    void enforce_t_outflow_diag(Fields &field, Cell *cell);
 };
 
 /**
@@ -56,11 +58,8 @@ class OutletBoundary : public Boundary {
 class InletBoundary : public Boundary {
   public:
     InletBoundary(std::vector<Cell *> *cells);
-    InletBoundary(std::vector<Cell *> *cells, 
-                  std::unordered_map<int, Real> inlet_U,
-                  std::unordered_map<int, Real> inlet_V, 
-                  std::unordered_map<int, Real> inlet_T, 
-                  Real DP);
+    InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> inlet_U,
+                  std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, Real DP);
     virtual ~InletBoundary() = default;
     void enforce_uv(Fields &field) override;
     void enforce_t(Fields &field) override {}
@@ -69,10 +68,9 @@ class InletBoundary : public Boundary {
   private:
     std::unordered_map<int, Real> _inlet_U;
     std::unordered_map<int, Real> _inlet_V;
-    std::unordered_map<int, Real> _inlet_T;    
-    Real _inlet_DP;
+    std::unordered_map<int, Real> _inlet_T;
+    Real _inlet_DP = REAL_MAX;
 };
-
 
 /**
  * @brief Fixed wall boundary condition for the outer boundaries of the domain.
@@ -82,13 +80,13 @@ class NoSlipWallBoundary : public Boundary {
   public:
     NoSlipWallBoundary(std::vector<Cell *> *cells);
     NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
-                      std::unordered_map<int, Real> wall_temperature);
+                       std::unordered_map<int, Real> wall_temperature);
     virtual ~NoSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
-   
+
   private:
-    void enforce_uv_main(Fields &field, Cell* cell);
-    void enforce_uv_diagonal(Fields &field, Cell* cell);
+    void enforce_uv_main(Fields &field, Cell *cell);
+    void enforce_uv_diagonal(Fields &field, Cell *cell);
     std::unordered_map<int, Real> _wall_velocity;
 };
 
@@ -101,7 +99,7 @@ class FreeSlipWallBoundary : public Boundary {
   public:
     FreeSlipWallBoundary(std::vector<Cell *> *cells);
     FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
-                       std::unordered_map<int, Real> wall_temperature);
+                         std::unordered_map<int, Real> wall_temperature);
     virtual ~FreeSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
 

@@ -25,9 +25,8 @@ class Fields {
      * @param[in] initial pressure
      *
      */
-    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, 
-           Real UI, Real VI, Real PI, Real TI, Real _alpha, Real _beta,
-           Real _gx, Real _gy);
+    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real _alpha,
+           Real _beta, Real _gx, Real _gy);
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
@@ -56,7 +55,6 @@ class Fields {
      */
     void calculate_velocities(Grid &grid);
 
-    
     /**
      * @brief Velocity calculation using pressure values
      *
@@ -98,12 +96,6 @@ class Fields {
     /// get timestep size
     Real dt() const;
 
-    /// initial pressure
-    Real PI;
-
-    /// initial temperature
-    Real TI;
-
     /// pressure matrix access and modify
     Matrix<Real> &p_matrix();
 
@@ -121,6 +113,12 @@ class Fields {
 
     /// y-momentum flux matrix
     Matrix<Real> &g_matrix();
+
+    /// initial pressure
+    Real _PI;
+
+    /// initial temperature
+    Real _TI;
 
   private:
     /// x-velocity matrix

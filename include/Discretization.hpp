@@ -65,7 +65,7 @@ class Discretization {
      */
     static Real convection_uT(const Matrix<Real> &U, const Matrix<Real> &T, int i, int j);
 
-     /**
+    /**
      * @brief Convection of temperature in y direction using donor-cell scheme
      *
      * @param[in] y-velocity field
@@ -117,7 +117,7 @@ class Discretization {
      * @brief Difference with offsets
      *
      * @param[in] data
-    * @param[in] x index
+     * @param[in] x index
      * @param[in] y index
      * @param[in] x offset
      * @param[in] y offset
