@@ -1,12 +1,20 @@
 #pragma once
 
-#include "Case.hpp"
-
 #include <iostream>
 #include <iomanip>
 #include <fstream>
 #include <string>
 #include <filesystem>
+
+#define USE_FLOATS 0
+
+#if USE_FLOATS 
+const float REAL_MAX = FLT_MAX;
+typedef float Real;
+#else
+const double REAL_MAX = DBL_MAX;
+typedef double Real;
+#endif
 
 /**
  * @brief Class to handle logging functionality.
@@ -70,7 +78,7 @@ class Logger
         }
 
         // Write information of current timestep into logFile 
-        void writeLog(uint32_t timestep, double t, int it, int max_iter, double res) {
+        void writeLog(uint32_t timestep, Real t, int it, int max_iter, Real res) {
             if (_log){
                 logFile << "Timestep " << timestep << ": " << std::endl;
                 logFile << "Simulation time: t = " << t << std::endl;

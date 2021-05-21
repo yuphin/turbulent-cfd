@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Utilities.hpp"
 #include "Cell.hpp"
 #include "Fields.hpp"
 #include <unordered_map>
@@ -26,7 +26,7 @@ class Boundary {
     virtual void enforce_t(Fields &field);
     virtual ~Boundary() = default;
     std::vector<Cell *> *_cells;
-    std::unordered_map<int, double> _wall_temperature;
+    std::unordered_map<int, Real> _wall_temperature;
   protected:
     virtual void enforce_p1(Fields &field, Cell* cell);
     virtual void enforce_p2(Fields &field, Cell* cell);
@@ -57,20 +57,20 @@ class InletBoundary : public Boundary {
   public:
     InletBoundary(std::vector<Cell *> *cells);
     InletBoundary(std::vector<Cell *> *cells, 
-                  std::unordered_map<int, double> inlet_U,
-                  std::unordered_map<int, double> inlet_V, 
-                  std::unordered_map<int, double> inlet_T, 
-                  double DP);
+                  std::unordered_map<int, Real> inlet_U,
+                  std::unordered_map<int, Real> inlet_V, 
+                  std::unordered_map<int, Real> inlet_T, 
+                  Real DP);
     virtual ~InletBoundary() = default;
     void enforce_uv(Fields &field) override;
     void enforce_t(Fields &field) override {}
     void enforce_p(Fields &field) override;
 
   private:
-    std::unordered_map<int, double> _inlet_U;
-    std::unordered_map<int, double> _inlet_V;
-    std::unordered_map<int, double> _inlet_T;    
-    double _inlet_DP;
+    std::unordered_map<int, Real> _inlet_U;
+    std::unordered_map<int, Real> _inlet_V;
+    std::unordered_map<int, Real> _inlet_T;    
+    Real _inlet_DP;
 };
 
 
@@ -81,15 +81,15 @@ class InletBoundary : public Boundary {
 class NoSlipWallBoundary : public Boundary {
   public:
     NoSlipWallBoundary(std::vector<Cell *> *cells);
-    NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
-                      std::unordered_map<int, double> wall_temperature);
+    NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
+                      std::unordered_map<int, Real> wall_temperature);
     virtual ~NoSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
    
   private:
     void enforce_uv1(Fields &field, Cell* cell);
     void enforce_uv2(Fields &field, Cell* cell);
-    std::unordered_map<int, double> _wall_velocity;
+    std::unordered_map<int, Real> _wall_velocity;
 };
 
 /**
@@ -100,11 +100,11 @@ class NoSlipWallBoundary : public Boundary {
 class FreeSlipWallBoundary : public Boundary {
   public:
     FreeSlipWallBoundary(std::vector<Cell *> *cells);
-    FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
-                       std::unordered_map<int, double> wall_temperature);
+    FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
+                       std::unordered_map<int, Real> wall_temperature);
     virtual ~FreeSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
 
   private:
-    std::unordered_map<int, double> _wall_velocity;
+    std::unordered_map<int, Real> _wall_velocity;
 };

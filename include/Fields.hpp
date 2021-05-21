@@ -25,9 +25,9 @@ class Fields {
      * @param[in] initial pressure
      *
      */
-    Fields(double _nu, double _dt, double _tau, int imax, int jmax, 
-           double UI, double VI, double PI, double TI, double _alpha, double _beta,
-           double _gx, double _gy);
+    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, 
+           Real UI, Real VI, Real PI, Real TI, Real _alpha, Real _beta,
+           Real _gx, Real _gy);
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
@@ -72,84 +72,84 @@ class Fields {
      * @param[in] grid in which the calculations are done
      * @param[in] whether to include temperatures
      */
-    double calculate_dt(Grid &grid, bool calc_temp);
+    Real calculate_dt(Grid &grid, bool calc_temp);
 
     /// x-velocity index based access and modify
-    double &u(int i, int j);
+    Real &u(int i, int j);
 
     /// y-velocity index based access and modify
-    double &v(int i, int j);
+    Real &v(int i, int j);
 
     /// pressre index based access and modify
-    double &p(int i, int j);
+    Real &p(int i, int j);
 
     /// temperature index based acccess and modify
-    double &t(int i, int j);
+    Real &t(int i, int j);
 
     /// RHS index based access and modify
-    double &rs(int i, int j);
+    Real &rs(int i, int j);
 
     /// x-momentum flux index based access and modify
-    double &f(int i, int j);
+    Real &f(int i, int j);
 
     /// y-momentum flux index based access and modify
-    double &g(int i, int j);
+    Real &g(int i, int j);
 
     /// get timestep size
-    double dt() const;
+    Real dt() const;
 
     /// initial pressure
-    double PI;
+    Real PI;
 
     /// initial temperature
-    double TI;
+    Real TI;
 
     /// pressure matrix access and modify
-    Matrix<double> &p_matrix();
+    Matrix<Real> &p_matrix();
 
     /// velocity u matrix access and modify
-    Matrix<double> &u_matrix();
+    Matrix<Real> &u_matrix();
 
     /// velocity v matrix access and modify
-    Matrix<double> &v_matrix();
+    Matrix<Real> &v_matrix();
 
     /// temperature t matrix access and modify
-    Matrix<double> &t_matrix();
+    Matrix<Real> &t_matrix();
 
     /// x-momentum flux matrix
-    Matrix<double> &f_matrix();
+    Matrix<Real> &f_matrix();
 
     /// y-momentum flux matrix
-    Matrix<double> &g_matrix();
+    Matrix<Real> &g_matrix();
 
   private:
     /// x-velocity matrix
-    Matrix<double> _U;
+    Matrix<Real> _U;
     /// y-velocity matrix
-    Matrix<double> _V;
+    Matrix<Real> _V;
     /// pressure matrix
-    Matrix<double> _P;
+    Matrix<Real> _P;
     /// temperature matrix
-    Matrix<double> _T;
+    Matrix<Real> _T;
     /// x-momentum flux matrix
-    Matrix<double> _F;
+    Matrix<Real> _F;
     /// y-momentum flux matrix
-    Matrix<double> _G;
+    Matrix<Real> _G;
     /// right hand side matrix
-    Matrix<double> _RS;
+    Matrix<Real> _RS;
 
     /// kinematic viscosity
-    double _nu;
+    Real _nu;
     /// gravitional accelearation in x direction
-    double _gx{0.0};
+    Real _gx{0.0};
     /// gravitional accelearation in y direction
-    double _gy{0.0};
+    Real _gy{0.0};
     /// timestep size
-    double _dt;
+    Real _dt;
     /// adaptive timestep coefficient
-    double _tau;
+    Real _tau;
     /// thermal expansion coefficient
-    double _beta;
+    Real _beta;
     /// thermal diffusivity
-    double _alpha;
+    Real _alpha;
 };

@@ -4,17 +4,17 @@
 #include <iostream>
 #include <math.h>
 
-Fields::Fields(double nu, double dt, double tau, int imax, int jmax, double UI, double VI, double PI, double TI,
-               double alpha, double beta, double gx, double gy)
+Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI,
+               Real alpha, Real beta, Real gx, Real gy)
     : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta), _gx(gx), _gy(gy) {
-    _U = Matrix<double>(imax + 2, jmax + 2, UI);
-    _V = Matrix<double>(imax + 2, jmax + 2, VI);
-    _P = Matrix<double>(imax + 2, jmax + 2, PI);
-    _T = Matrix<double>(imax + 2, jmax + 2, TI);
+    _U = Matrix<Real>(imax + 2, jmax + 2, UI);
+    _V = Matrix<Real>(imax + 2, jmax + 2, VI);
+    _P = Matrix<Real>(imax + 2, jmax + 2, PI);
+    _T = Matrix<Real>(imax + 2, jmax + 2, TI);
 
-    _F = Matrix<double>(imax + 2, jmax + 2, 0.0);
-    _G = Matrix<double>(imax + 2, jmax + 2, 0.0);
-    _RS = Matrix<double>(imax + 2, jmax + 2, 0.0);
+    _F = Matrix<Real>(imax + 2, jmax + 2, 0.0);
+    _G = Matrix<Real>(imax + 2, jmax + 2, 0.0);
+    _RS = Matrix<Real>(imax + 2, jmax + 2, 0.0);
 
     this->PI = PI;
     this->TI = TI;
@@ -42,8 +42,8 @@ void Fields::calculate_rs(Grid &grid) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-        double f_diff = 1 / grid.dx() * (f(i, j) - f(i - 1, j));
-        double g_diff = 1 / grid.dy() * (g(i, j) - g(i, j - 1));
+        Real f_diff = 1 / grid.dx() * (f(i, j) - f(i - 1, j));
+        Real g_diff = 1 / grid.dy() * (g(i, j) - g(i, j - 1));
         rs(i, j) = 1 / dt() * (f_diff + g_diff);
     }
 }
@@ -67,31 +67,31 @@ void Fields::calculate_temperatures(Grid &grid) {
     }
 }
 
-double Fields::calculate_dt(Grid &grid, bool calc_temp) {
-    double dx2 = grid.dx() * grid.dx();
-    double dy2 = grid.dy() * grid.dy();
+Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
+    Real dx2 = grid.dx() * grid.dx();
+    Real dy2 = grid.dy() * grid.dy();
 
     // CFL conditions
-    double uMax = *std::max_element(_U.data(), _U.data() + _U.size());
-    double uMin = *std::min_element(_U.data(), _U.data() + _U.size());
-    double vMax = *std::max_element(_V.data(), _V.data() + _V.size());
-    double vMin = *std::min_element(_V.data(), _V.data() + _V.size());
-    double maxAbsU = fabs(uMax) > fabs(uMin) ? fabs(uMax) : fabs(uMin);
-    double maxAbsV = fabs(vMax) > fabs(vMin) ? fabs(vMax) : fabs(vMin);
-    double cond_2 = grid.dx() / maxAbsU;
-    double cond_3 = grid.dy() / maxAbsV;
+    Real uMax = *std::max_element(_U.data(), _U.data() + _U.size());
+    Real uMin = *std::min_element(_U.data(), _U.data() + _U.size());
+    Real vMax = *std::max_element(_V.data(), _V.data() + _V.size());
+    Real vMin = *std::min_element(_V.data(), _V.data() + _V.size());
+    Real maxAbsU = fabs(uMax) > fabs(uMin) ? fabs(uMax) : fabs(uMin);
+    Real maxAbsV = fabs(vMax) > fabs(vMin) ? fabs(vMax) : fabs(vMin);
+    Real cond_2 = grid.dx() / maxAbsU;
+    Real cond_3 = grid.dy() / maxAbsV;
 
-    double minimum = std::min(cond_2, cond_3);
+    Real minimum = std::min(cond_2, cond_3);
 
     // viscosity limit
     if (_nu != 0.0) {
-        double cond_1 = 1.0 / (2.0 * _nu) * ((dx2 * dy2) / (dx2 + dy2));
+        Real cond_1 = 1.0 / (2.0 * _nu) * ((dx2 * dy2) / (dx2 + dy2));
         minimum = std::min(minimum, cond_1);
     }
 
     // thermal diffusitivity limit
     if (calc_temp) {
-        double cond_4 = 1 / (2 * _alpha * (1 / dx2 + 1 / dy2));
+        Real cond_4 = 1 / (2 * _alpha * (1 / dx2 + 1 / dy2));
         minimum = std::min(minimum, cond_4);
     }
     _dt = _tau * minimum;
@@ -99,19 +99,19 @@ double Fields::calculate_dt(Grid &grid, bool calc_temp) {
     return _dt;
 }
 
-double &Fields::p(int i, int j) { return _P(i, j); }
-double &Fields::u(int i, int j) { return _U(i, j); }
-double &Fields::v(int i, int j) { return _V(i, j); }
-double &Fields::t(int i, int j) { return _T(i, j); }
-double &Fields::f(int i, int j) { return _F(i, j); }
-double &Fields::g(int i, int j) { return _G(i, j); }
-double &Fields::rs(int i, int j) { return _RS(i, j); }
+Real &Fields::p(int i, int j) { return _P(i, j); }
+Real &Fields::u(int i, int j) { return _U(i, j); }
+Real &Fields::v(int i, int j) { return _V(i, j); }
+Real &Fields::t(int i, int j) { return _T(i, j); }
+Real &Fields::f(int i, int j) { return _F(i, j); }
+Real &Fields::g(int i, int j) { return _G(i, j); }
+Real &Fields::rs(int i, int j) { return _RS(i, j); }
 
-Matrix<double> &Fields::p_matrix() { return _P; }
-Matrix<double> &Fields::u_matrix() { return _U; }
-Matrix<double> &Fields::v_matrix() { return _V; }
-Matrix<double> &Fields::t_matrix() { return _T; }
-Matrix<double> &Fields::f_matrix() { return _F; }
-Matrix<double> &Fields::g_matrix() { return _G; }
+Matrix<Real> &Fields::p_matrix() { return _P; }
+Matrix<Real> &Fields::u_matrix() { return _U; }
+Matrix<Real> &Fields::v_matrix() { return _V; }
+Matrix<Real> &Fields::t_matrix() { return _T; }
+Matrix<Real> &Fields::f_matrix() { return _F; }
+Matrix<Real> &Fields::g_matrix() { return _G; }
 
-double Fields::dt() const { return _dt; }
+Real Fields::dt() const { return _dt; }

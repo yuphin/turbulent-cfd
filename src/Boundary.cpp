@@ -7,24 +7,24 @@ OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells){}
 
 InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
-InletBoundary::InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> inlet_U,
-                                        std::unordered_map<int, double> inlet_V,
-                                        std::unordered_map<int, double> inlet_T, 
-                                        double DP)
+InletBoundary::InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> inlet_U,
+                                        std::unordered_map<int, Real> inlet_V,
+                                        std::unordered_map<int, Real> inlet_T, 
+                                        Real DP)
     : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_DP(DP) {}
 
 NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
-NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity, 
-                                        std::unordered_map<int, double> wall_temperature)
+NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity, 
+                                        std::unordered_map<int, Real> wall_temperature)
     : Boundary(cells),  _wall_velocity(wall_velocity) {
    _wall_temperature = wall_temperature;
 }
 
 FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
-FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, double> wall_velocity,
-                                       std::unordered_map<int, double> wall_temperature)
+FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
+                                       std::unordered_map<int, Real> wall_temperature)
     : Boundary(cells), _wall_velocity(wall_velocity) {
     _wall_temperature = wall_temperature;
 }
@@ -198,7 +198,7 @@ void InletBoundary::enforce_uv(Fields &field) {
 }
 
 void InletBoundary::enforce_p(Fields &field) {
-    if (_inlet_DP == DBL_MAX) { // Inlet BC isn't specified, apply default
+    if (_inlet_DP == REAL_MAX) { // Inlet BC isn't specified, apply default
         Boundary::enforce_p(field);
         return;
     }

@@ -50,9 +50,9 @@ class Case {
     std::string _prefix;
 
     /// Simulation time
-    double _t_end;
+    Real _t_end;
     /// Solution file outputting frequency
-    double _output_freq;
+    Real _output_freq;
 
     Fields _field;
     Grid _grid;
@@ -61,7 +61,7 @@ class Case {
     std::vector<std::unique_ptr<Boundary>> _boundaries;
 
     /// Solver convergence tolerance
-    double _tolerance;
+    Real _tolerance;
 
     /// Maximum number of iterations for the solver
     uint32_t _max_iter;

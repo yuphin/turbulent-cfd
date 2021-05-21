@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Utilities.hpp"
 // If no geometry file is provided in the input file, lid driven cavity case
 // will run by default. In the Grid.cpp, geometry will be created following
 // PGM convention, which is:
@@ -7,7 +7,7 @@
 namespace LidDrivenCavity {
 const int moving_wall_id = 11;
 const int fixed_wall_id = 10;
-const double wall_velocity = 1.0;
+const Real wall_velocity = 1.0;
 } // namespace LidDrivenCavity
 
 enum class border_position {

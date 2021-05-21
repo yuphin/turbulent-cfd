@@ -13,6 +13,7 @@ namespace filesystem = std::filesystem;
 
 #include <vtkCellData.h>
 #include <vtkDoubleArray.h>
+#include <vtkFloatArray.h>
 #include <vtkPointData.h>
 #include <vtkPoints.h>
 #include <vtkSmartPointer.h>
@@ -30,33 +31,33 @@ Case::Case(std::string file_name, int argn, char **args) {
     // Read input parameters
     const int MAX_LINE_LENGTH = 1024;
     std::ifstream file(file_name);
-    double nu = DBL_MAX;    /* viscosity   */
-    double UI;              /* velocity x-direction */
-    double VI;              /* velocity y-direction */
-    double PI;              /* pressure */
-    double GX;              /* gravitation x-direction */
-    double GY;              /* gravitation y-direction */
-    double xlength;         /* length of the domain x-dir.*/
-    double ylength;         /* length of the domain y-dir.*/
-    double dt;              /* time step */
+    Real nu = REAL_MAX;   /* viscosity   */
+    Real UI;              /* velocity x-direction */
+    Real VI;              /* velocity y-direction */
+    Real PI;              /* pressure */
+    Real GX;              /* gravitation x-direction */
+    Real GY;              /* gravitation y-direction */
+    Real xlength;         /* length of the domain x-dir.*/
+    Real ylength;         /* length of the domain y-dir.*/
+    Real dt;              /* time step */
     int imax;               /* number of cells x-direction*/
     int jmax;               /* number of cells y-direction*/
-    double gamma;           /* uppwind differencing factor*/
-    double omg;             /* relaxation factor */
-    double tau;             /* safety factor for time step*/
+    Real gamma;           /* uppwind differencing factor*/
+    Real omg;             /* relaxation factor */
+    Real tau;             /* safety factor for time step*/
     int itermax;            /* max. number of iterations for pressure per time step */
-    double eps;             /* accuracy bound for pressure*/
-    double re = DBL_MAX;    /* Reynolds number */
-    double pr = DBL_MAX;    /* Prandtl number */
-    double beta;            /* thermal expansion coefficient */
-    double TI = DBL_MAX;    /* Temperature */
-    double alpha = DBL_MAX; /* Thermal diffusivity */
-    double DP = DBL_MAX;    /* Pressure differential between the two ends */
-    std::unordered_map<int, double> wall_temps;
-    std::unordered_map<int, double> wall_vels;
-    std::unordered_map<int, double> inlet_Us;
-    std::unordered_map<int, double> inlet_Vs;
-    std::unordered_map<int, double> inlet_Ts;
+    Real eps;             /* accuracy bound for pressure*/
+    Real re = REAL_MAX;     /* Reynolds number */
+    Real pr = REAL_MAX;   /* Prandtl number */
+    Real beta;            /* thermal expansion coefficient */
+    Real TI = REAL_MAX;   /* Temperature */
+    Real alpha = REAL_MAX; /* Thermal diffusivity */
+    Real DP = REAL_MAX;    /* Pressure differential between the two ends */
+    std::unordered_map<int, Real> wall_temps;
+    std::unordered_map<int, Real> wall_vels;
+    std::unordered_map<int, Real> inlet_Us;
+    std::unordered_map<int, Real> inlet_Vs;
+    std::unordered_map<int, Real> inlet_Ts;
 
     if (file.is_open()) {
 
@@ -92,26 +93,26 @@ Case::Case(std::string file_name, int argn, char **args) {
                 if (var == "alpha") file >> alpha;
                 if (var == "DELTA_P") file >> DP;
                 if (!var.compare(0, 10, "wall_temp_")) {
-                    double temp;
+                    Real temp;
                     file >> temp;
                     if (temp == -1.0) {
                     
                     }
                     wall_temps.insert({std::stoi(var.substr(10)), temp}); }
                 if (!var.compare(0, 9, "wall_vel_")) {
-                    double vel;
+                    Real vel;
                     file >> vel;
                     wall_vels.insert({std::stoi(var.substr(9)), vel}); }
                 if (!var.compare(0, 4, "UIN_")) {
-                    double u;
+                    Real u;
                     file >> u;
                     inlet_Us.insert({std::stoi(var.substr(4)), u}); }
                 if (!var.compare(0, 4, "VIN_")) {
-                    double v;
+                    Real v;
                     file >> v;
                     inlet_Vs.insert({std::stoi(var.substr(4)), v}); }
                 if (!var.compare(0, 4, "TIN_")) {
-                    double t;
+                    Real t;
                     file >> t;
                     inlet_Ts.insert({std::stoi(var.substr(4)), t}); }                    
             }
@@ -120,28 +121,28 @@ Case::Case(std::string file_name, int argn, char **args) {
     file.close();
 
     // We assume Reynolds number = 1 / nu for now
-    if (re != DBL_MAX && nu == DBL_MAX) {
+    if (re != REAL_MAX && nu == REAL_MAX) {
         nu = 1 / re;
-    } else if (re == DBL_MAX && nu == DBL_MAX) {
+    } else if (re == REAL_MAX && nu == REAL_MAX) {
         std::cerr << "Viscosity and Reynolds number not specified, defaulting viscosity to 0\n";
         nu = 0.0;
     }
 
     // Prandtl number = nu / alpha
-    if (pr != DBL_MAX) {
+    if (pr != REAL_MAX) {
         alpha = nu / pr;
-    } else if(alpha == DBL_MAX) {
+    } else if(alpha == REAL_MAX) {
         std::cerr << "Prandtl number, alpha or beta are not set, defaulting to 0\n";
         alpha = 0.0;
         beta = 0.0;
     }
 
-    if (TI != DBL_MAX) {
+    if (TI != REAL_MAX) {
         _calc_temp = true;
     }
 
     if (_geom_name.compare("NONE") == 0) {
-        wall_vels.insert(std::pair<int, double>(LidDrivenCavity::moving_wall_id, LidDrivenCavity::wall_velocity));
+        wall_vels.insert(std::pair<int, Real>(LidDrivenCavity::moving_wall_id, LidDrivenCavity::wall_velocity));
     }
 
     // Set file names for geometry file and output directory
@@ -151,8 +152,8 @@ Case::Case(std::string file_name, int argn, char **args) {
 
     // Build up the domain
     Domain domain;
-    domain.dx = xlength / (double)imax;
-    domain.dy = ylength / (double)jmax;
+    domain.dx = xlength / (Real)imax;
+    domain.dy = ylength / (Real)jmax;
     domain.domain_size_x = imax;
     domain.domain_size_y = jmax;
 
@@ -250,10 +251,10 @@ void Case::set_file_names(std::string file_name) {
  * For information about the classes and functions, you can check the header files.
  */
 void Case::simulate() {
-    double t = 0.0;
-    double dt = _field.dt();
+    Real t = 0.0;
+    Real dt = _field.dt();
     uint32_t timestep = 0;
-    double output_counter = 0.0;
+    Real output_counter = 0.0;
     while (t < _t_end) {
         // Print progress bar
         logger.progressBar(t, _t_end);
@@ -283,7 +284,7 @@ void Case::simulate() {
         _field.calculate_rs(_grid);
         // Perform pressure solve
         uint32_t it = 0;
-        double res = DBL_MAX;
+        Real res = REAL_MAX;
         while (it < _max_iter && res > _tolerance) {
             res = _pressure_solver->solve(_field, _grid, _boundaries);
             // Enforce boundary conditions
@@ -325,16 +326,16 @@ void Case::output_vtk(int timestep, int my_rank) {
     // Create grid
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
 
-    double dx = _grid.dx();
-    double dy = _grid.dy();
+    Real dx = _grid.dx();
+    Real dy = _grid.dy();
 
-    double x = _grid.domain().imin * dx;
-    double y = _grid.domain().jmin * dy;
+    Real x = _grid.domain().imin * dx;
+    Real y = _grid.domain().jmin * dy;
 
     { y += dy; }
     { x += dx; }
 
-    double z = 0;
+    Real z = 0;
     for (int col = 0; col < _grid.domain().size_y + 1; col++) {
         x = _grid.domain().imin * dx;
         { x += dx; }
@@ -350,19 +351,24 @@ void Case::output_vtk(int timestep, int my_rank) {
     structuredGrid->SetPoints(points);
 
     // Pressure Array
-    vtkDoubleArray *Pressure = vtkDoubleArray::New();
+    #if USE_FLOATS 
+    typedef vtkFloatArray VTK_Array;
+    #else
+    typedef vtkDoubleArray VTK_Array;
+    #endif
+    VTK_Array *Pressure = VTK_Array::New();
     Pressure->SetName("pressure");
     Pressure->SetNumberOfComponents(1);
 
     // Velocity Array
-    vtkDoubleArray *Velocity = vtkDoubleArray::New();
+    VTK_Array *Velocity = VTK_Array::New();
     Velocity->SetName("velocity");
     Velocity->SetNumberOfComponents(3);
 
     // Print pressure and place ghost cells
     for (int j = 1; j < _grid.domain().size_y + 1; j++) {
         for (int i = 1; i < _grid.domain().size_x + 1; i++) {
-            double pressure = _field.p(i, j);
+            Real pressure = _field.p(i, j);
             Pressure->InsertNextTuple(&pressure);
 
             // Insert blank cells at obstacles
@@ -393,14 +399,14 @@ void Case::output_vtk(int timestep, int my_rank) {
 
     // Add Temperature to Structured Grid
     if (_calc_temp) {
-        vtkDoubleArray *Temperature = vtkDoubleArray::New();
+        VTK_Array *Temperature = VTK_Array::New();
         Temperature->SetName("temperature");
         Temperature->SetNumberOfComponents(1);
 
         for (int j = 1; j < _grid.domain().size_y + 1; j++) {
             for (int i = 1; i < _grid.domain().size_x + 1; i++) {
 
-                    double temperature = _field.t(i, j);
+                    Real temperature = _field.t(i, j);
                     Temperature->InsertNextTuple(&temperature);
             }
         }

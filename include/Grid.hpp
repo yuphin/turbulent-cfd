@@ -47,9 +47,9 @@ class Grid {
     const Domain &domain() const;
 
     /// access cell size in x-direction
-    double dx() const;
+    Real dx() const;
     /// access cell size in y-direction
-    double dy() const;
+    Real dy() const;
 
     /**
      * @brief Access inflow cells
@@ -109,6 +109,6 @@ class Grid {
 
     Domain _domain;
 
-    double _dx;
-    double _dy;
+    Real _dx;
+    Real _dy;
 };

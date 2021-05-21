@@ -17,7 +17,7 @@ class Discretization {
      * @param[in] cell size in y direction
      * @param[in] upwinding coefficient
      */
-    Discretization(double dx, double dy, double gamma);
+    Discretization(Real dx, Real dy, Real gamma);
 
     /**
      * @brief Diffusion discretization in 2D using central differences
@@ -27,7 +27,7 @@ class Discretization {
      * @param[in] y index
      *
      */
-    static double diffusion(const Matrix<double> &A, int i, int j);
+    static Real diffusion(const Matrix<Real> &A, int i, int j);
 
     /**
      * @brief Convection in x direction using donor-cell scheme
@@ -39,7 +39,7 @@ class Discretization {
      * @param[out] result
      *
      */
-    static double convection_u(const Matrix<double> &U, const Matrix<double> &V, int i, int j);
+    static Real convection_u(const Matrix<Real> &U, const Matrix<Real> &V, int i, int j);
 
     /**
      * @brief Convection in y direction using donor-cell scheme
@@ -51,7 +51,7 @@ class Discretization {
      * @param[out] result
      *
      */
-    static double convection_v(const Matrix<double> &U, const Matrix<double> &V, int i, int j);
+    static Real convection_v(const Matrix<Real> &U, const Matrix<Real> &V, int i, int j);
 
     /**
      * @brief Convection of temperature in x direction using donor-cell scheme
@@ -63,7 +63,7 @@ class Discretization {
      * @param[out] result
      *
      */
-    static double convection_uT(const Matrix<double> &U, const Matrix<double> &T, int i, int j);
+    static Real convection_uT(const Matrix<Real> &U, const Matrix<Real> &T, int i, int j);
 
      /**
      * @brief Convection of temperature in y direction using donor-cell scheme
@@ -75,7 +75,7 @@ class Discretization {
      * @param[out] result
      *
      */
-    static double convection_vT(const Matrix<double> &V, const Matrix<double> &T, int i, int j);
+    static Real convection_vT(const Matrix<Real> &V, const Matrix<Real> &T, int i, int j);
 
     /**
      * @brief Laplacian term discretization using central difference
@@ -86,7 +86,7 @@ class Discretization {
      * @param[out] result
      *
      */
-    static double laplacian(const Matrix<double> &P, int i, int j);
+    static Real laplacian(const Matrix<Real> &P, int i, int j);
 
     /**
      * @brief Terms of laplacian needed for SOR, i.e. excluding unknown value at
@@ -98,7 +98,7 @@ class Discretization {
      * @param[out] result
      *
      */
-    static double sor_helper(const Matrix<double> &P, int i, int j);
+    static Real sor_helper(const Matrix<Real> &P, int i, int j);
 
     /**
      * @brief Linear interpolation
@@ -111,7 +111,7 @@ class Discretization {
      * @param[out] result
      *
      */
-    static double interpolate(const Matrix<double> &A, int i, int j, int i_offset, int j_offset);
+    static Real interpolate(const Matrix<Real> &A, int i, int j, int i_offset, int j_offset);
 
     /**
      * @brief Difference with offsets
@@ -123,10 +123,10 @@ class Discretization {
      * @param[in] y offset
      * @param[out] result
      */
-    static double diff(const Matrix<double> &A, int i, int j, int i_offset, int j_offset);
+    static Real diff(const Matrix<Real> &A, int i, int j, int i_offset, int j_offset);
 
   private:
-    static double _dx;
-    static double _dy;
-    static double _gamma;
+    static Real _dx;
+    static Real _dy;
+    static Real _gamma;
 };

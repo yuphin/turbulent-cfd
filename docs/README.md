@@ -40,3 +40,11 @@ While iterating over the cells use the cells id to get information on velocity a
         double v_velocity = _inlet_V[Id];
         double v_velocity = _inlet_V[Id];
 ```
+
+## Single vs Double Precision
+
+By default, we use double precision floating point numbers. If you want to switch to single precision, use the macro 
+```C++
+   #define USE_FLOATS 1
+```
+in `include\Utilities.hpp`

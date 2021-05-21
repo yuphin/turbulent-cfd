@@ -20,7 +20,7 @@ class PressureSolver {
      * @param[in] grid to be used
      * @param[in] boundary to be used
      */
-    virtual double solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries) = 0;
+    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries) = 0;
 };
 
 /**
@@ -37,7 +37,7 @@ class SOR : public PressureSolver {
      *
      * @param[in] relaxation factor
      */
-    SOR(double omega);
+    SOR(Real omega);
 
     virtual ~SOR() = default;
 
@@ -48,8 +48,8 @@ class SOR : public PressureSolver {
      * @param[in] grid to be used
      * @param[in] boundary to be used
      */
-    virtual double solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries);
+    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries);
 
   private:
-    double _omega;
+    Real _omega;
 };

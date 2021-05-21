@@ -19,9 +19,9 @@ struct Domain {
     int jmax{-1};
 
     /// Cell length
-    double dx{-1.0};
+    Real dx{-1.0};
     /// Cell height
-    double dy{-1.0};
+    Real dy{-1.0};
 
     /// Number of cells in x direction
     int size_x{-1};
