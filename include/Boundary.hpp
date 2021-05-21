@@ -28,8 +28,8 @@ class Boundary {
     std::vector<Cell *> *_cells;
     std::unordered_map<int, Real> _wall_temperature;
   protected:
-    virtual void enforce_p1(Fields &field, Cell* cell);
-    virtual void enforce_p2(Fields &field, Cell* cell);
+    virtual void enforce_p_main(Fields &field, Cell* cell);
+    virtual void enforce_p_diagonal(Fields &field, Cell* cell);
   private:
 	void enforce_t_drichlet_main(Fields &field, Cell *cell);
 	void enforce_t_drichlet_diag(Fields &field, Cell *cell);
@@ -87,8 +87,8 @@ class NoSlipWallBoundary : public Boundary {
     void enforce_uv(Fields &field) override;
    
   private:
-    void enforce_uv1(Fields &field, Cell* cell);
-    void enforce_uv2(Fields &field, Cell* cell);
+    void enforce_uv_main(Fields &field, Cell* cell);
+    void enforce_uv_diagonal(Fields &field, Cell* cell);
     std::unordered_map<int, Real> _wall_velocity;
 };
 

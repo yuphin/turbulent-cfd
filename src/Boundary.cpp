@@ -144,15 +144,15 @@ void Boundary::enforce_p(Fields &field) {
             assert(false);
         }
         else if(cell->borders().size() == 2) {
-            enforce_p2(field, cell);
+            enforce_p_diagonal(field, cell);
         }
         else if(cell->borders().size() == 1) {
-            enforce_p1(field, cell);
+            enforce_p_main(field, cell);
         }           
     }
 }
 
-void Boundary::enforce_p1(Fields &field, Cell* cell) {
+void Boundary::enforce_p_main(Fields &field, Cell* cell) {
         int i = cell->i();
         int j = cell->j();
         if (cell->is_border(border_position::RIGHT)) {
@@ -169,7 +169,7 @@ void Boundary::enforce_p1(Fields &field, Cell* cell) {
         }
 }
 
-void Boundary::enforce_p2(Fields &field, Cell* cell) {
+void Boundary::enforce_p_diagonal(Fields &field, Cell* cell) {
         int i = cell->i();
         int j = cell->j();
         if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
@@ -226,15 +226,15 @@ void NoSlipWallBoundary::enforce_uv(Fields &field) {
             assert(false);
         }
         else if(cell->borders().size() == 2) {
-            enforce_uv2(field, cell);
+            enforce_uv_diagonal(field, cell);
         }
         else if(cell->borders().size() == 1) {
-            enforce_uv1(field, cell);
+            enforce_uv_main(field, cell);
         }           
     }
 }
 
-void NoSlipWallBoundary::enforce_uv2(Fields &field, Cell* cell) {
+void NoSlipWallBoundary::enforce_uv_diagonal(Fields &field, Cell* cell) {
     int i = cell->i();
     int j = cell->j();
     int id = cell->id();
@@ -265,7 +265,7 @@ void NoSlipWallBoundary::enforce_uv2(Fields &field, Cell* cell) {
     }
 }
 
-void NoSlipWallBoundary::enforce_uv1(Fields &field, Cell* cell) {
+void NoSlipWallBoundary::enforce_uv_main(Fields &field, Cell* cell) {
     int i = cell->i();
     int j = cell->j();
     int id = cell->id();
