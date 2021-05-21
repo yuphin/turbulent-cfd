@@ -52,15 +52,15 @@ void Boundary::enforce_t_drichlet_diag(Fields &field, Cell *cell) {
     int j = cell->j();
     auto wt = _wall_temperature[cell->id()];
     if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
-        field.t(i, j) = 3 * wt - (field.t(i + 1, j) + field.t(i, j + 1));
+        field.t(i, j) = 2 * wt - (field.t(i + 1, j) + field.t(i, j + 1) / 2);
     } else if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
-        field.t(i, j) = 3 * wt - (field.t(i + 1, j) + field.t(i, j - 1));
+        field.t(i, j) = 2 * wt - (field.t(i + 1, j) + field.t(i, j - 1) / 2);
     }
     if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
-        field.t(i, j) = 3 * wt - (field.t(i - 1, j) + field.t(i, j + 1));
+        field.t(i, j) = 2 * wt - (field.t(i - 1, j) + field.t(i, j + 1) / 2);
     }
     if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
-        field.t(i, j) = 3 * wt - (field.t(i - 1, j) + field.t(i, j - 1));
+        field.t(i, j) = 2 * wt - (field.t(i - 1, j) + field.t(i, j - 1) / 2);
     }
 }
 
