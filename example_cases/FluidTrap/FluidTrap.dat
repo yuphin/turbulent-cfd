@@ -39,7 +39,7 @@ dt_value     10.0
 # gamma: upwind differencing factor
 #--------------------------------------------
 itermax      1000
-eps          0.001
+eps          0.00001
 omg          1.7
 gamma        0.5
 
@@ -66,34 +66,24 @@ UI          0
 VI          0
 
 #--------------------------------------------
-#       inlet velocity
-#--------------------------------------------
-UIN          0
-VIN          0
-
-#--------------------------------------------
 #          energy
+# - only needed for energy equation
+# - define either alpha or Pr
 # TI:     initial temperature
 # beta:   thermal expansion coefficient
+# Pr:     Prandtl number
 # alpha:  thermal diffusivity
 #--------------------------------------------
-energy_eq   on
 TI          0
-TIN         0
 beta        0.00063
-alpha       0.00001429
+Pr          7
 
 #--------------------------------------------
-#          wall clusters
-# num_of_walls:     number of walls
-# wall_temp<num>    wall temperature
+#          walls
+# wall_temp_<num>    wall temperature
+# wall_vel_<num>     wall velocity
 # - enter -1 for adiabatic wall
 #--------------------------------------------
-num_walls        3
 wall_temp_10         -1
 wall_temp_11         0.5
 wall_temp_12         -0.5
-
-wall_vel_10          0
-wall_vel_11          0
-wall_vel_12			 0

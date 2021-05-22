@@ -377,7 +377,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
             // Insert blank cells at obstacles
             if (_grid.cell(i, j).type() != cell_type::FLUID) {
-                structuredGrid->BlankCell(j * _grid.domain().domain_size_x + i);
+                structuredGrid->BlankCell((j-1) * _grid.domain().domain_size_x + (i-1));
             }
         }
     }
