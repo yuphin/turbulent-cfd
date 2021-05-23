@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 
+/////////// Constructors ///////////
 OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
 InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
@@ -25,6 +26,91 @@ FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unor
                                            std::unordered_map<int, Real> wall_temperature)
     : Boundary(cells), _wall_velocity(wall_velocity) {
     _wall_temperature = wall_temperature;
+}
+
+/////////// Main Boundary ///////////
+void Boundary::enforce_fg(Fields &field) {
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        if (cell->is_border(border_position::RIGHT)) {
+            field.f(i, j) = field.u(i, j);
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.f(i - 1, j) = field.u(i - 1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.g(i, j) = field.v(i, j);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.g(i, j - 1) = field.v(i, j - 1);
+        }
+    }
+}
+
+void Boundary::enforce_p(Fields &field) {
+    for (auto &cell : *_cells) {
+        if (cell->borders().size() > 2) {
+            std::cerr << "Forbidden cells!!" << std::endl;
+            assert(false);
+        } else if (cell->borders().size() == 2) {
+            enforce_p_diagonal(field, cell);
+        } else if (cell->borders().size() == 1) {
+            enforce_p_main(field, cell);
+        }
+    }
+}
+
+void Boundary::enforce_p_main(Fields &field, Cell *cell) {
+    int i = cell->i();
+    int j = cell->j();
+    if (cell->is_border(border_position::RIGHT)) {
+        field.p(i, j) = field.p(i + 1, j);
+    } else if (cell->is_border(border_position::LEFT)) {
+        field.p(i, j) = field.p(i - 1, j);
+    } else if (cell->is_border(border_position::TOP)) {
+        field.p(i, j) = field.p(i, j + 1);
+    } else if (cell->is_border(border_position::BOTTOM)) {
+        field.p(i, j) = field.p(i, j - 1);
+    }
+}
+
+void Boundary::enforce_p_diagonal(Fields &field, Cell *cell) {
+    int i = cell->i();
+    int j = cell->j();
+    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+        field.p(i, j) = (field.p(i + 1, j) + field.p(i, j + 1)) / 2.0;
+    }
+    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+        field.p(i, j) = (field.p(i + 1, j) + field.p(i, j - 1)) / 2.0;
+    }
+    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+        field.p(i, j) = (field.p(i - 1, j) + field.p(i, j + 1)) / 2.0;
+    }
+    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+        field.p(i, j) = (field.p(i - 1, j) + field.p(i, j - 1)) / 2.0;
+    }
+}
+
+void Boundary::enforce_t(Fields &field) {
+    for (auto &cell : *_cells) {
+        size_t num_borders = cell->borders().size();
+        assert(num_borders <= 2);
+        auto wt = _wall_temperature[cell->id()];
+        if (num_borders == 1) {
+            if (wt != -1) {
+                enforce_t_drichlet_main(field, cell);
+            } else {
+                enforce_t_adiabatic_main(field, cell);
+            }
+        } else {
+            if (wt != -1) {
+                enforce_t_drichlet_diag(field, cell);
+            } else {
+                enforce_t_adiabatic_diag(field, cell);
+            }
+        }
+    }
 }
 
 void Boundary::enforce_t_drichlet_main(Fields &field, Cell *cell) {
@@ -95,90 +181,24 @@ void Boundary::enforce_t_adiabatic_diag(Fields &field, Cell *cell) {
         field.t(i, j) = field.t(i, j - 1);
     }
 }
-void Boundary::enforce_t(Fields &field) {
-    for (auto &cell : *_cells) {
-        size_t num_borders = cell->borders().size();
-        assert(num_borders <= 2);
-        auto wt = _wall_temperature[cell->id()];
-        if (num_borders == 1) {
-            if (wt != -1) {
-                enforce_t_drichlet_main(field, cell);
-            } else {
-                enforce_t_adiabatic_main(field, cell);
-            }
-        } else {
-            if (wt != -1) {
-                enforce_t_drichlet_diag(field, cell);
-            } else {
-                enforce_t_adiabatic_diag(field, cell);
-            }
-        }
-    }
-}
 
-void Boundary::enforce_fg(Fields &field) {
+/////////// Outlet ///////////
+void OutletBoundary::enforce_p(Fields &field) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();
-        if (cell->is_border(border_position::RIGHT)) {
-            field.f(i, j) = field.u(i, j);
-        }
-        if (cell->is_border(border_position::LEFT)) {
-            field.f(i - 1, j) = field.u(i - 1, j);
-        }
-        if (cell->is_border(border_position::TOP)) {
-            field.g(i, j) = field.v(i, j);
-        }
-        if (cell->is_border(border_position::BOTTOM)) {
-            field.g(i, j - 1) = field.v(i, j - 1);
-        }
+        int id = cell->id();
+        field.p(i, j) = field._PI;
     }
 }
 
-void Boundary::enforce_p(Fields &field) {
+void OutletBoundary::enforce_t(Fields &field) {
     for (auto &cell : *_cells) {
-        if (cell->borders().size() > 2) {
-            std::cerr << "Forbidden cells!!" << std::endl;
-            assert(false);
-        } else if (cell->borders().size() == 2) {
-            enforce_p_diagonal(field, cell);
-        } else if (cell->borders().size() == 1) {
-            enforce_p_main(field, cell);
-        }
+        enforce_t_adiabatic_main(field, cell);
     }
 }
 
-void Boundary::enforce_p_main(Fields &field, Cell *cell) {
-    int i = cell->i();
-    int j = cell->j();
-    if (cell->is_border(border_position::RIGHT)) {
-        field.p(i, j) = field.p(i + 1, j);
-    } else if (cell->is_border(border_position::LEFT)) {
-        field.p(i, j) = field.p(i - 1, j);
-    } else if (cell->is_border(border_position::TOP)) {
-        field.p(i, j) = field.p(i, j + 1);
-    } else if (cell->is_border(border_position::BOTTOM)) {
-        field.p(i, j) = field.p(i, j - 1);
-    }
-}
-
-void Boundary::enforce_p_diagonal(Fields &field, Cell *cell) {
-    int i = cell->i();
-    int j = cell->j();
-    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
-        field.p(i, j) = (field.p(i + 1, j) + field.p(i, j + 1)) / 2.0;
-    }
-    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
-        field.p(i, j) = (field.p(i + 1, j) + field.p(i, j - 1)) / 2.0;
-    }
-    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
-        field.p(i, j) = (field.p(i - 1, j) + field.p(i, j + 1)) / 2.0;
-    }
-    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
-        field.p(i, j) = (field.p(i - 1, j) + field.p(i, j - 1)) / 2.0;
-    }
-}
-
+/////////// Inlet ///////////
 void InletBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
         int i = cell->i();
@@ -214,21 +234,27 @@ void InletBoundary::enforce_p(Fields &field) {
     }
 }
 
-void OutletBoundary::enforce_p(Fields &field) {
+void InletBoundary::enforce_t(Fields &field) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();
-        int id = cell->id();
-        field.p(i, j) = field._PI;
+        auto wt = _inlet_T[cell->id()];
+        if (cell->is_border(border_position::RIGHT)) {
+            field.t(i, j) = 2 * wt - field.t(i + 1, j);
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.t(i, j) = 2 * wt - field.t(i - 1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.t(i, j) = 2 * wt - field.t(i, j + 1);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.t(i, j) = 2 * wt - field.t(i, j - 1);
+        }
     }
 }
 
-void OutletBoundary::enforce_t(Fields &field) {
-    for (auto &cell : *_cells) {
-        enforce_t_adiabatic_main(field, cell);
-    }
-}
-
+/////////// NoSlip Walls ///////////
 void NoSlipWallBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
         if (cell->borders().size() > 2) {
@@ -239,6 +265,30 @@ void NoSlipWallBoundary::enforce_uv(Fields &field) {
         } else if (cell->borders().size() == 1) {
             enforce_uv_main(field, cell);
         }
+    }
+}
+
+void NoSlipWallBoundary::enforce_uv_main(Fields &field, Cell *cell) {
+    int i = cell->i();
+    int j = cell->j();
+    int id = cell->id();
+
+    if (cell->is_border(border_position::RIGHT)) {
+        field.u(i, j) = 0;
+        field.v(i, j) = 2 * _wall_velocity[id] - field.v(i + 1, j);
+        field.v(i, j - 1) = 2 * _wall_velocity[id] - field.v(i + 1, j - 1);
+    } else if (cell->is_border(border_position::LEFT)) {
+        field.u(i - 1, j) = 0;
+        field.v(i, j) = 2 * _wall_velocity[id] - field.v(i - 1, j);
+        field.v(i, j - 1) = 2 * _wall_velocity[id] - field.v(i - 1, j - 1);
+    } else if (cell->is_border(border_position::TOP)) {
+        field.v(i, j) = 0;
+        field.u(i, j) = 2 * _wall_velocity[id] - field.u(i, j + 1);
+        field.u(i - 1, j) = 2 * _wall_velocity[id] - field.u(i - 1, j + 1);
+    } else if (cell->is_border(border_position::BOTTOM)) {
+        field.v(i, j - 1) = 0;
+        field.u(i, j) = 2 * _wall_velocity[id] - field.u(i, j - 1);
+        field.u(i - 1, j) = 2 * _wall_velocity[id] - field.u(i - 1, j - 1);
     }
 }
 
@@ -270,30 +320,7 @@ void NoSlipWallBoundary::enforce_uv_diagonal(Fields &field, Cell *cell) {
     }
 }
 
-void NoSlipWallBoundary::enforce_uv_main(Fields &field, Cell *cell) {
-    int i = cell->i();
-    int j = cell->j();
-    int id = cell->id();
-
-    if (cell->is_border(border_position::RIGHT)) {
-        field.u(i, j) = 0;
-        field.v(i, j) = 2 * _wall_velocity[id] - field.v(i + 1, j);
-        field.v(i, j - 1) = 2 * _wall_velocity[id] - field.v(i + 1, j - 1);
-    } else if (cell->is_border(border_position::LEFT)) {
-        field.u(i - 1, j) = 0;
-        field.v(i, j) = 2 * _wall_velocity[id] - field.v(i - 1, j);
-        field.v(i, j - 1) = 2 * _wall_velocity[id] - field.v(i - 1, j - 1);
-    } else if (cell->is_border(border_position::TOP)) {
-        field.v(i, j) = 0;
-        field.u(i, j) = 2 * _wall_velocity[id] - field.u(i, j + 1);
-        field.u(i - 1, j) = 2 * _wall_velocity[id] - field.u(i - 1, j + 1);
-    } else if (cell->is_border(border_position::BOTTOM)) {
-        field.v(i, j - 1) = 0;
-        field.u(i, j) = 2 * _wall_velocity[id] - field.u(i, j - 1);
-        field.u(i - 1, j) = 2 * _wall_velocity[id] - field.u(i - 1, j - 1);
-    }
-}
-
+/////////// FreeSlip Walls ///////////
 void FreeSlipWallBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
         int i = cell->i();

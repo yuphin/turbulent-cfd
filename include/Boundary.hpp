@@ -38,20 +38,20 @@ class Boundary {
 };
 
 /**
- * @brief Fixed wall boundary condition for the outer boundaries of the domain.
- * Dirichlet for velocities, which is zero, Neumann for pressure
+ * @brief Outlet boundary condition where fluid exits the domain.
+ * Neumann for velocities, Neumann for pressure, Neumann for temperature
  */
 class OutletBoundary : public Boundary {
   public:
     OutletBoundary(std::vector<Cell *> *cells);
     virtual ~OutletBoundary() = default;
-    void enforce_t(Fields &field) override;
     void enforce_p(Fields &field) override;
+    void enforce_t(Fields &field) override;
 };
 
 /**
- * @brief Fixed wall boundary condition for the outer boundaries of the domain.
- * Dirichlet for velocities, which is zero, Neumann for pressure
+ * @brief Inlet boundary condition where fluid enters the domain.
+ * Dirichlet for velocities, Neumann for pressure, Dirichlet for temperature
  */
 class InletBoundary : public Boundary {
   public:
@@ -60,8 +60,8 @@ class InletBoundary : public Boundary {
                   std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, Real DP);
     virtual ~InletBoundary() = default;
     void enforce_uv(Fields &field) override;
-    void enforce_t(Fields &field) override {}
-    void enforce_p(Fields &field) override;
+    void enforce_p(Fields &field) override;    
+    void enforce_t(Fields &field) override;
 
   private:
     std::unordered_map<int, Real> _inlet_U;
@@ -71,7 +71,7 @@ class InletBoundary : public Boundary {
 };
 
 /**
- * @brief Fixed wall boundary condition for the outer boundaries of the domain.
+ * @brief Fixed wall boundary condition for the boundaries of the domain.
  * Dirichlet for velocities, which is zero, Neumann for pressure
  */
 class NoSlipWallBoundary : public Boundary {
@@ -89,7 +89,7 @@ class NoSlipWallBoundary : public Boundary {
 };
 
 /**
- * @brief Moving wall boundary condition for the outer boundaries of the domain.
+ * @brief Moving wall boundary condition for the boundaries of the domain.
  * Dirichlet for velocities for the given velocity parallel to the fluid,
  * Neumann for pressure
  */
