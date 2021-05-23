@@ -21,7 +21,6 @@ Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI,
 }
 
 void Fields::calculate_fluxes(Grid &grid, bool calc_temp) {
-    // Note: external forces e.g gravity not yet included
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
