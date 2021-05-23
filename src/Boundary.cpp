@@ -184,9 +184,20 @@ void InletBoundary::enforce_uv(Fields &field) {
         int i = cell->i();
         int j = cell->j();
         int id = cell->id();
-        field.u(i, j) = _inlet_U[id];
-        field.v(i, j) = _inlet_V[id];
-        field.t(i, j) = _inlet_T[id];
+
+        if (cell->is_border(border_position::RIGHT)) {
+            field.u(i, j) = _inlet_U[id];
+            field.v(i, j) = 2 * _inlet_V[id] - field.v(i + 1, j);
+        } else if (cell->is_border(border_position::LEFT)) {
+            field.u(i, j) = _inlet_U[id];
+            field.v(i, j) = 2 * _inlet_V[id] - field.v(i - 1, j);
+        } else if (cell->is_border(border_position::TOP)) {
+            field.u(i, j) = 2 * _inlet_U[id] - field.u(i, j + 1);
+            field.v(i, j) = _inlet_V[id];
+        } else if (cell->is_border(border_position::BOTTOM)) {
+            field.u(i, j) = 2 * _inlet_U[id] - field.u(i, j - 1);
+            field.v(i, j) = _inlet_V[id];
+        }
     }
 }
 
