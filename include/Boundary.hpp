@@ -31,8 +31,6 @@ class Boundary {
   protected:
     virtual void enforce_p_main(Fields &field, Cell *cell);
     virtual void enforce_p_diagonal(Fields &field, Cell *cell);
-
-  private:
     void enforce_t_drichlet_main(Fields &field, Cell *cell);
     void enforce_t_drichlet_diag(Fields &field, Cell *cell);
     void enforce_t_adiabatic_main(Fields &field, Cell *cell);
@@ -47,7 +45,7 @@ class OutletBoundary : public Boundary {
   public:
     OutletBoundary(std::vector<Cell *> *cells);
     virtual ~OutletBoundary() = default;
-    void enforce_t(Fields &field) override {}
+    void enforce_t(Fields &field) override;
     void enforce_p(Fields &field) override;
 };
 

@@ -223,6 +223,12 @@ void OutletBoundary::enforce_p(Fields &field) {
     }
 }
 
+void OutletBoundary::enforce_t(Fields &field) {
+    for (auto &cell : *_cells) {
+        enforce_t_adiabatic_main(field, cell);
+    }
+}
+
 void NoSlipWallBoundary::enforce_uv(Fields &field) {
     for (auto &cell : *_cells) {
         if (cell->borders().size() > 2) {
