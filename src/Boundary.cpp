@@ -62,7 +62,7 @@ void Boundary::enforce_t_drichlet_diag(Fields &field, Cell *cell) {
     }
 }
 
-void Boundary::enforce_t_outflow_main(Fields &field, Cell *cell) {
+void Boundary::enforce_t_adiabatic_main(Fields &field, Cell *cell) {
     int i = cell->i();
     int j = cell->j();
     if (cell->is_border(border_position::RIGHT)) {
@@ -79,7 +79,7 @@ void Boundary::enforce_t_outflow_main(Fields &field, Cell *cell) {
     }
 }
 
-void Boundary::enforce_t_outflow_diag(Fields &field, Cell *cell) {
+void Boundary::enforce_t_adiabatic_diag(Fields &field, Cell *cell) {
     int i = cell->i();
     int j = cell->j();
     if (cell->is_border(border_position::RIGHT)) {
@@ -104,13 +104,13 @@ void Boundary::enforce_t(Fields &field) {
             if (wt != -1) {
                 enforce_t_drichlet_main(field, cell);
             } else {
-                enforce_t_outflow_main(field, cell);
+                enforce_t_adiabatic_main(field, cell);
             }
         } else {
             if (wt != -1) {
                 enforce_t_drichlet_diag(field, cell);
             } else {
-                enforce_t_outflow_diag(field, cell);
+                enforce_t_adiabatic_diag(field, cell);
             }
         }
     }

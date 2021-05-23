@@ -35,8 +35,8 @@ class Boundary {
   private:
     void enforce_t_drichlet_main(Fields &field, Cell *cell);
     void enforce_t_drichlet_diag(Fields &field, Cell *cell);
-    void enforce_t_outflow_main(Fields &field, Cell *cell);
-    void enforce_t_outflow_diag(Fields &field, Cell *cell);
+    void enforce_t_adiabatic_main(Fields &field, Cell *cell);
+    void enforce_t_adiabatic_diag(Fields &field, Cell *cell);
 };
 
 /**
