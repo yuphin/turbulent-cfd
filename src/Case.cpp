@@ -132,17 +132,18 @@ Case::Case(std::string file_name, int argn, char **args) {
         nu = 0.0;
     }
 
+    // Check if this case uses energy equation 
+    if (TI != REAL_MAX) {
+        _calc_temp = true;
+    }
+
     // Prandtl number = nu / alpha
     if (pr != REAL_MAX) {
         alpha = nu / pr;
-    } else if (alpha == REAL_MAX) {
+    } else if (alpha == REAL_MAX && _calc_temp) {
         std::cerr << "Prandtl number, alpha or beta are not set, defaulting to 0\n";
         alpha = 0.0;
         beta = 0.0;
-    }
-
-    if (TI != REAL_MAX) {
-        _calc_temp = true;
     }
 
     if (_geom_name.compare("NONE") == 0) {
