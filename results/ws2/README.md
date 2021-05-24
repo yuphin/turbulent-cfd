@@ -1,7 +1,7 @@
 ### Cases
-a) [Plane shear flow](#a-plane-shear-flow)
-b) [The Karman Vortex Street](#b-the-karman-vortex-street)
-c) [Flow over a Step](#c-flow-over-a-step)
+a) [Plane shear flow](#a-plane-shear-flow)<br>
+b) [The Karman Vortex Street](#b-the-karman-vortex-street)<br>
+c) [Flow over a Step](#c-flow-over-a-step)<br>
 d) [Natural Convection](#d-natural-convection)
 1. [nu = 0.001](#1-nu-0001)
 2. [nu = 0.0002](#2-nu-00002)
