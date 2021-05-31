@@ -17,6 +17,60 @@ const double REAL_MAX = DBL_MAX;
 typedef double Real;
 #endif
 
+// If no geometry file is provided in the input file, lid driven cavity case
+// will run by default. In the Grid.cpp, geometry will be created following
+// PGM convention, which is:
+// 0: fluid, 3: fixed wall, 4: moving wall
+namespace LidDrivenCavity {
+const int moving_wall_id = 11;
+const int fixed_wall_id = 10;
+const Real wall_velocity = 1.0;
+} // namespace LidDrivenCavity
+
+enum class border_position {
+    TOP,
+    BOTTOM,
+    LEFT,
+    RIGHT,
+};
+
+namespace border {
+const int TOP = 0;
+const int BOTTOM = 1;
+const int LEFT = 2;
+const int RIGHT = 3;
+} // namespace border
+
+enum class cell_type {
+
+    FLUID,
+    OUTLET,
+    INLET,
+    NOSLIP_WALL,
+    FREESLIP_WALL,
+    DEFAULT
+};
+struct Coord {
+    int x;
+    int y;
+};
+struct Params {
+    int iproc = 1;
+    int jproc = 1;
+    int world_rank;
+    int world_size;
+    int neighbor_left = -1;
+    int neighbor_right = -1;
+    int neighbor_bottom = -1;
+    int neighbor_top = -1;
+    int xmin;
+    int xmax;
+    int ymin;
+    int ymax;
+    int size_x;
+    int size_y;
+};
+
 /**
  * @brief Class to handle logging functionality.
  *
@@ -24,7 +78,14 @@ typedef double Real;
 class Logger {
   public:
     Logger(){};
-
+    void log(const char *str) { 
+        printf("%s\n", str);
+        fflush(stdout);
+    }
+    void log_error(const char *str) {
+        fprintf(stderr, "%s\n", str);
+        fflush(stderr);
+    }
     // Check flag for creating a log file
     void parse_flag(char *arg) {
         std::string arg_string = static_cast<std::string>(arg);
@@ -111,3 +172,14 @@ class Logger {
     // log File object
     std::ofstream _log_file;
 };
+/// Extract geometry from pgm file and create geometrical data
+std::vector<std::vector<int>> parse_geometry_file(std::string filedoc, int xdim, int ydim);
+/**@brief Default lid driven cavity case generator
+ *
+ * This function creates default lid driven cavity
+ * case without need for a pgm file
+ */
+std::vector<std::vector<int>> build_lid_driven_cavity(int xdim, int ydim);
+/// Partition the vector for subdomains
+std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec, int xmin, int xmax, int ymin,
+                                        int ymax);

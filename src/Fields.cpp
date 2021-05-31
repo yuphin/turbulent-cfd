@@ -4,17 +4,17 @@
 #include <iostream>
 #include <math.h>
 
-Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real alpha,
+Fields::Fields(Real nu, Real dt, Real tau, int xmax, int jmax, Real UI, Real VI, Real PI, Real TI, Real alpha,
                Real beta, Real gx, Real gy)
     : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta), _gx(gx), _gy(gy) {
-    _U = Matrix<Real>(imax + 2, jmax + 2, UI);
-    _V = Matrix<Real>(imax + 2, jmax + 2, VI);
-    _P = Matrix<Real>(imax + 2, jmax + 2, PI);
-    _T = Matrix<Real>(imax + 2, jmax + 2, TI);
+    _U = Matrix<Real>(xmax + 2, jmax + 2, UI);
+    _V = Matrix<Real>(xmax + 2, jmax + 2, VI);
+    _P = Matrix<Real>(xmax + 2, jmax + 2, PI);
+    _T = Matrix<Real>(xmax + 2, jmax + 2, TI);
 
-    _F = Matrix<Real>(imax + 2, jmax + 2, 0.0);
-    _G = Matrix<Real>(imax + 2, jmax + 2, 0.0);
-    _RS = Matrix<Real>(imax + 2, jmax + 2, 0.0);
+    _F = Matrix<Real>(xmax + 2, jmax + 2, 0.0);
+    _G = Matrix<Real>(xmax + 2, jmax + 2, 0.0);
+    _RS = Matrix<Real>(xmax + 2, jmax + 2, 0.0);
 
     _PI = PI;
     _TI = TI;
@@ -56,12 +56,13 @@ void Fields::calculate_velocities(Grid &grid) {
 }
 
 void Fields::calculate_temperatures(Grid &grid) {
+    auto T_old = _T;
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
         t(i, j) =
-            t(i, j) + _dt * (_alpha * Discretization::laplacian(_T, i, j) -
-                             Discretization::convection_uT(_U, _T, i, j) - Discretization::convection_vT(_V, _T, i, j));
+            t(i, j) + _dt * (_alpha * Discretization::laplacian(T_old, i, j) -
+                             Discretization::convection_uT(_U, T_old, i, j) - Discretization::convection_vT(_V, T_old, i, j));
     }
 }
 

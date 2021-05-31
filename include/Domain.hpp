@@ -1,5 +1,5 @@
 #pragma once
-#include "Enums.hpp"
+#include "Utilities.hpp"
 #include <mpi.h>
 
 /**
@@ -9,9 +9,9 @@
  */
 struct Domain {
     /// Minimum x index
-    int imin{-1};
+    int xmin{-1};
     /// Maximum x index
-    int imax{-1};
+    int xmax{-1};
 
     /// Minimum y index
     int jmin{-1};

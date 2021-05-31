@@ -1,6 +1,6 @@
 #include "Case.hpp"
-#include "Enums.hpp"
-
+#include "Communication.hpp"
+#include "Utilities.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -21,7 +21,7 @@ namespace filesystem = std::filesystem;
 #include <vtkStructuredGridWriter.h>
 #include <vtkTuple.h>
 
-Case::Case(std::string file_name, int argn, char **args) {
+Case::Case(std::string file_name, int argn, char **args, Params &params) {
 
     // Set up logging functionality
     if (argn > 2) {
@@ -58,7 +58,6 @@ Case::Case(std::string file_name, int argn, char **args) {
     std::unordered_map<int, Real> inlet_Us;
     std::unordered_map<int, Real> inlet_Vs;
     std::unordered_map<int, Real> inlet_Ts;
-
     if (file.is_open()) {
 
         std::string var;
@@ -92,6 +91,8 @@ Case::Case(std::string file_name, int argn, char **args) {
                 if (var == "TI") file >> TI;
                 if (var == "alpha") file >> alpha;
                 if (var == "DELTA_P") file >> DP;
+                if (var == "iproc") file >> params.iproc;
+                if (var == "jproc") file >> params.jproc;
                 if (!var.compare(0, 10, "wall_temp_")) {
                     Real temp;
                     file >> temp;
@@ -128,11 +129,13 @@ Case::Case(std::string file_name, int argn, char **args) {
     if (re != REAL_MAX && nu == REAL_MAX) {
         nu = 1 / re;
     } else if (re == REAL_MAX && nu == REAL_MAX) {
-        std::cerr << "Viscosity and Reynolds number not specified, defaulting viscosity to 0\n";
+        if (params.world_rank == 0) {
+            logger.log_error("Viscosity and Reynolds number not specified, defaulting viscosity to 0");
+        }
         nu = 0.0;
     }
 
-    // Check if this case uses energy equation 
+    // Check if this case uses energy equation
     if (TI != REAL_MAX) {
         _calc_temp = true;
     }
@@ -140,8 +143,10 @@ Case::Case(std::string file_name, int argn, char **args) {
     // Prandtl number = nu / alpha
     if (pr != REAL_MAX) {
         alpha = nu / pr;
-    } else if (alpha == REAL_MAX && _calc_temp) {
-        std::cerr << "Prandtl number, alpha or beta are not set, defaulting to 0\n";
+    } else if (alpha == REAL_MAX) {
+        if (params.world_rank == 0) {
+            logger.log_error("Prandtl number, alpha or beta are not set, defaulting to 0");
+        }
         alpha = 0.0;
         beta = 0.0;
     }
@@ -155,16 +160,26 @@ Case::Case(std::string file_name, int argn, char **args) {
     // Create log file in output dir
     logger.create_log(_dict_name, _case_name);
 
+    std::vector<std::vector<int>> global_geometry;
+    if (_geom_name.compare("NONE")) {
+
+        global_geometry = parse_geometry_file(_geom_name, imax, jmax);
+    } else {
+        global_geometry = build_lid_driven_cavity(imax, jmax);
+    }
+    Communication::init_params(&params, imax, jmax);
+
+    auto local_geometry = partition(global_geometry, params.xmin, params.xmax, params.ymin, params.ymax);
     // Build up the domain
     Domain domain;
     domain.dx = xlength / (Real)imax;
     domain.dy = ylength / (Real)jmax;
-    domain.domain_size_x = imax;
-    domain.domain_size_y = jmax;
+    domain.domain_size_x = params.size_x;
+    domain.domain_size_y = params.size_y;
 
-    build_domain(domain, imax, jmax);
+    build_domain(domain, params.size_x, params.size_y);
 
-    _grid = Grid(_geom_name, domain);
+    _grid = Grid(_geom_name, domain, local_geometry);
     _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, alpha, beta, GX, GY);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
@@ -334,7 +349,7 @@ void Case::output_vtk(int timestep, int my_rank) {
     Real dx = _grid.dx();
     Real dy = _grid.dy();
 
-    Real x = _grid.domain().imin * dx;
+    Real x = _grid.domain().xmin * dx;
     Real y = _grid.domain().jmin * dy;
 
     { y += dy; }
@@ -342,7 +357,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
     Real z = 0;
     for (int col = 0; col < _grid.domain().size_y + 1; col++) {
-        x = _grid.domain().imin * dx;
+        x = _grid.domain().xmin * dx;
         { x += dx; }
         for (int row = 0; row < _grid.domain().size_x + 1; row++) {
             points->InsertNextPoint(x, y, z);
@@ -378,7 +393,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
             // Insert blank cells at obstacles
             if (_grid.cell(i, j).type() != cell_type::FLUID) {
-                structuredGrid->BlankCell((j-1) * _grid.domain().domain_size_x + (i-1));
+                structuredGrid->BlankCell((j - 1) * _grid.domain().domain_size_x + (i - 1));
             }
         }
     }
@@ -431,9 +446,9 @@ void Case::output_vtk(int timestep, int my_rank) {
 }
 
 void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain) {
-    domain.imin = 0;
+    domain.xmin = 0;
     domain.jmin = 0;
-    domain.imax = imax_domain + 2;
+    domain.xmax = imax_domain + 2;
     domain.jmax = jmax_domain + 2;
     domain.size_x = imax_domain;
     domain.size_y = jmax_domain;

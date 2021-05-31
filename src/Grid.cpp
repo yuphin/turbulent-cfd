@@ -1,5 +1,5 @@
 #include "Grid.hpp"
-#include "Enums.hpp"
+#include "Utilities.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -7,38 +7,11 @@
 #include <sstream>
 #include <vector>
 
-Grid::Grid(std::string geom_name, Domain &domain) {
+Grid::Grid(std::string geom_name, Domain &domain, std::vector<std::vector<int>> &geometry_data) {
 
     _domain = domain;
 
     _cells = Matrix<Cell>(_domain.size_x + 2, _domain.size_y + 2);
-
-    if (geom_name.compare("NONE")) {
-        std::vector<std::vector<int>> geometry_data(_domain.domain_size_x + 2,
-                                                    std::vector<int>(_domain.domain_size_y + 2, 0));
-        parse_geometry_file(geom_name, geometry_data);
-        assign_cell_types(geometry_data);
-    } else {
-        build_lid_driven_cavity();
-    }
-}
-
-void Grid::build_lid_driven_cavity() {
-    std::vector<std::vector<int>> geometry_data(_domain.domain_size_x + 2,
-                                                std::vector<int>(_domain.domain_size_y + 2, 0));
-
-    for (int i = 0; i < _domain.domain_size_x + 2; ++i) {
-        for (int j = 0; j < _domain.domain_size_y + 2; ++j) {
-            // Bottom, left and right walls: no-slip
-            if (i == 0 || j == 0 || i == _domain.domain_size_x + 1) {
-                geometry_data.at(i).at(j) = LidDrivenCavity::fixed_wall_id;
-            }
-            // Top wall: moving wall
-            else if (j == _domain.domain_size_y + 1) {
-                geometry_data.at(i).at(j) = LidDrivenCavity::moving_wall_id;
-            }
-        }
-    }
     assign_cell_types(geometry_data);
 }
 
@@ -49,7 +22,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
 
     for (int j_geom = _domain.jmin; j_geom < _domain.jmax; ++j_geom) {
         { i = 0; }
-        for (int i_geom = _domain.imin; i_geom < _domain.imax; ++i_geom) {
+        for (int i_geom = _domain.xmin; i_geom < _domain.xmax; ++i_geom) {
             if (geometry_data.at(i_geom).at(j_geom) == 0) {
                 _cells(i, j) = Cell(i, j, cell_type::FLUID);
                 _fluid_cells.push_back(&_cells(i, j));
@@ -213,40 +186,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
     }
 }
 
-void Grid::parse_geometry_file(std::string filedoc, std::vector<std::vector<int>> &geometry_data) {
-
-    int numcols, numrows, depth;
-
-    std::ifstream infile(filedoc);
-    std::stringstream ss;
-    std::string inputLine = "";
-
-    // First line : version
-    getline(infile, inputLine);
-    if (inputLine.compare("P2") != 0) {
-        std::cerr << "First line of the PGM file should be P2" << std::endl;
-    }
-
-    // Second line : comment
-    getline(infile, inputLine);
-
-    // Continue with a stringstream
-    ss << infile.rdbuf();
-    // Third line : size
-    ss >> numrows >> numcols;
-    // Fourth line : depth
-    ss >> depth;
-
-    // Following lines : data
-    for (int col = numcols - 1; col > -1; --col) {
-        for (int row = 0; row < numrows; ++row) {
-            ss >> geometry_data[row][col];
-        }
-    }
-    infile.close();
-}
-
-int Grid::imax() const { return _domain.size_x; }
+int Grid::xmax() const { return _domain.size_x; }
 int Grid::jmax() const { return _domain.size_y; }
 
 int Grid::imaxb() const { return _domain.size_x + 2; }

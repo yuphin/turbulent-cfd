@@ -3,7 +3,7 @@
 #include <array>
 #include <vector>
 
-#include "Enums.hpp"
+#include "Utilities.hpp"
 
 /**
  * @brief Main element of the grid that holds neighboring and type
