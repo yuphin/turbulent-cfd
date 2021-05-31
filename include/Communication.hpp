@@ -8,11 +8,11 @@ class Communication {
         MPI_Comm_size(MPI_COMM_WORLD, &params->world_size);
         MPI_Comm_rank(MPI_COMM_WORLD, &params->world_rank);
     }
-    static void init_params(Params *params, int xmax, int jmax) {
-        int local_size_x = xmax / params->world_size;
-        int local_size_y = jmax / params->world_size;
+    static void init_params(Params *params, int imax, int jmax) {
         int iproc = params->iproc;
         int jproc = params->jproc;
+        int local_size_x = imax / iproc;
+        int local_size_y = jmax / jproc;
         int wr = params->world_rank;
         Coord coords = {wr % params->iproc, wr / params->iproc};
         params->size_x = local_size_x;
