@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #define USE_FLOATS 0
 
