@@ -22,7 +22,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
 
     for (int j_geom = _domain.jmin; j_geom < _domain.jmax; ++j_geom) {
         { i = 0; }
-        for (int i_geom = _domain.xmin; i_geom < _domain.xmax; ++i_geom) {
+        for (int i_geom = _domain.imin; i_geom < _domain.imax; ++i_geom) {
             if (geometry_data.at(i_geom).at(j_geom) == 0) {
                 _cells(i, j) = Cell(i, j, cell_type::FLUID);
                 _fluid_cells.push_back(&_cells(i, j));
@@ -186,7 +186,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
     }
 }
 
-int Grid::xmax() const { return _domain.size_x; }
+int Grid::imax() const { return _domain.size_x; }
 int Grid::jmax() const { return _domain.size_y; }
 
 int Grid::imaxb() const { return _domain.size_x + 2; }

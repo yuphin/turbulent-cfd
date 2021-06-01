@@ -99,7 +99,7 @@ template <typename T> class Matrix {
     }
 
     /// get the number of elements in x direction
-    int xmax() const { return _imax; }
+    int imax() const { return _imax; }
 
     /// get the number of elements in y direction
     int jmax() const { return _jmax; }

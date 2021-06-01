@@ -36,7 +36,7 @@ class Grid {
     Cell cell(int i, int j) const;
 
     /// access number of cells in x direction
-    int xmax() const;
+    int imax() const;
     /// access number of cells in y direction
     int jmax() const;
     /// access number of cells in x direction including ghost cells

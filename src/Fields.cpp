@@ -4,17 +4,17 @@
 #include <iostream>
 #include <math.h>
 
-Fields::Fields(Real nu, Real dt, Real tau, int xmax, int jmax, Real UI, Real VI, Real PI, Real TI, Real alpha,
+Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real alpha,
                Real beta, Real gx, Real gy)
     : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta), _gx(gx), _gy(gy) {
-    _U = Matrix<Real>(xmax + 2, jmax + 2, UI);
-    _V = Matrix<Real>(xmax + 2, jmax + 2, VI);
-    _P = Matrix<Real>(xmax + 2, jmax + 2, PI);
-    _T = Matrix<Real>(xmax + 2, jmax + 2, TI);
+    _U = Matrix<Real>(imax + 2, jmax + 2, UI);
+    _V = Matrix<Real>(imax + 2, jmax + 2, VI);
+    _P = Matrix<Real>(imax + 2, jmax + 2, PI);
+    _T = Matrix<Real>(imax + 2, jmax + 2, TI);
 
-    _F = Matrix<Real>(xmax + 2, jmax + 2, 0.0);
-    _G = Matrix<Real>(xmax + 2, jmax + 2, 0.0);
-    _RS = Matrix<Real>(xmax + 2, jmax + 2, 0.0);
+    _F = Matrix<Real>(imax + 2, jmax + 2, 0.0);
+    _G = Matrix<Real>(imax + 2, jmax + 2, 0.0);
+    _RS = Matrix<Real>(imax + 2, jmax + 2, 0.0);
 
     _PI = PI;
     _TI = TI;

@@ -169,7 +169,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     }
     Communication::init_params(&params, imax, jmax);
 
-    auto local_geometry = partition(global_geometry, params.xmin, params.xmax, params.ymin, params.ymax);
+    auto local_geometry = partition(global_geometry, params.imin, params.imax, params.jmin, params.jmax);
     // Build up the domain
     Domain domain;
     domain.dx = xlength / (Real)imax;
@@ -349,7 +349,7 @@ void Case::output_vtk(int timestep, int my_rank) {
     Real dx = _grid.dx();
     Real dy = _grid.dy();
 
-    Real x = _grid.domain().xmin * dx;
+    Real x = _grid.domain().imin * dx;
     Real y = _grid.domain().jmin * dy;
 
     { y += dy; }
@@ -357,7 +357,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
     Real z = 0;
     for (int col = 0; col < _grid.domain().size_y + 1; col++) {
-        x = _grid.domain().xmin * dx;
+        x = _grid.domain().imin * dx;
         { x += dx; }
         for (int row = 0; row < _grid.domain().size_x + 1; row++) {
             points->InsertNextPoint(x, y, z);
@@ -446,9 +446,9 @@ void Case::output_vtk(int timestep, int my_rank) {
 }
 
 void Case::build_domain(Domain &domain, int imax_domain, int jmax_domain) {
-    domain.xmin = 0;
+    domain.imin = 0;
     domain.jmin = 0;
-    domain.xmax = imax_domain + 2;
+    domain.imax = imax_domain + 2;
     domain.jmax = jmax_domain + 2;
     domain.size_x = imax_domain;
     domain.size_y = jmax_domain;

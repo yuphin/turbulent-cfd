@@ -25,7 +25,7 @@ class Fields {
      * @param[in] initial pressure
      *
      */
-    Fields(Real _nu, Real _dt, Real _tau, int xmax, int jmax, Real UI, Real VI, Real PI, Real TI, Real _alpha,
+    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real _alpha,
            Real _beta, Real _gx, Real _gy);
 
     /**

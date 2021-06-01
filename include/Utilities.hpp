@@ -63,10 +63,10 @@ struct Params {
     int neighbor_right = -1;
     int neighbor_bottom = -1;
     int neighbor_top = -1;
-    int xmin;
-    int xmax;
-    int ymin;
-    int ymax;
+    int imin;
+    int imax;
+    int jmin;
+    int jmax;
     int size_x;
     int size_y;
 };
@@ -181,5 +181,5 @@ std::vector<std::vector<int>> parse_geometry_file(std::string filedoc, int xdim,
  */
 std::vector<std::vector<int>> build_lid_driven_cavity(int xdim, int ydim);
 /// Partition the vector for subdomains
-std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec, int xmin, int xmax, int ymin,
-                                        int ymax);
+std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec, int imin, int imax, int jmin,
+                                        int jmax);

@@ -9,9 +9,9 @@
  */
 struct Domain {
     /// Minimum x index
-    int xmin{-1};
+    int imin{-1};
     /// Maximum x index
-    int xmax{-1};
+    int imax{-1};
 
     /// Minimum y index
     int jmin{-1};
