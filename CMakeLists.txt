@@ -18,6 +18,7 @@ add_definitions(-Dsolution_parallelization)
 find_package(MPI REQUIRED)
 # Find a package with different components e.g. BOOST
 # find_package(Boost COMPONENTS filesystem REQUIRED)
+find_package(Vulkan)
 
 # VTK Library
 if(WIN32)
@@ -49,6 +50,8 @@ endif()
 
 # Add include directory
 include_directories(include)
+include_directories(${Vulkan_INCLUDE_DIR})
+
 
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
   set(CMAKE_INSTALL_PREFIX /usr/local )
@@ -61,6 +64,7 @@ add_executable(fluidchen src/main.cpp src/Boundary.cpp src/Case.cpp src/Cell.cpp
 # if you use external libraries you have to link them like 
 target_link_libraries(fluidchen PRIVATE MPI::MPI_CXX)
 target_link_libraries(fluidchen PRIVATE ${VTK_LIBRARIES})
+target_link_libraries(fluidchen PRIVATE ${Vulkan_LIBRARY})
 
 install(TARGETS fluidchen DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 # If you write tests, you can include your subdirectory (in this case tests) as done here

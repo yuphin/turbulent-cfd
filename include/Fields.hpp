@@ -120,8 +120,7 @@ class Fields {
     /// initial temperature
     Real _TI;
 
-  private:
-    /// x-velocity matrix
+     /// x-velocity matrix
     Matrix<Real> _U;
     /// y-velocity matrix
     Matrix<Real> _V;

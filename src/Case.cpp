@@ -1,6 +1,6 @@
 #include "Case.hpp"
 #include "Enums.hpp"
-
+#include "GPUSimulation.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -8,7 +8,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
 namespace filesystem = std::filesystem;
 
 #include <vtkCellData.h>
@@ -259,16 +258,74 @@ void Case::simulate() {
     Real dt = _field.dt();
     uint32_t timestep = 0;
     Real output_counter = 0.0;
+    GPUSimulation simulation;
+    simulation.init();
+    simulation.create_descriptor_set_layout(
+        {descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 1),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 4),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 5)});
+    simulation.create_command_pool();
+    simulation.create_compute_pipeline();
+    std::vector<Real> is_fluid(_grid.imaxb() * _grid.jmaxb(), 0);
+    for (const auto &current_cell : _grid.fluid_cells()) {
+        int i = current_cell->i();
+        int j = current_cell->j();
+        is_fluid[_grid.imaxb() * j + i] = 1;
+    }
+    UBOData ubo_data;
+    Buffer t_buffer;
+    Buffer cell_buffer;
+    t_buffer.create(&simulation.context, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    VK_SHARING_MODE_EXCLUSIVE, sizeof(UBOData));
+    cell_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       VK_SHARING_MODE_EXCLUSIVE, sizeof(Real) * _field.f_matrix().size(), is_fluid.data());
     while (t < _t_end) {
+        Buffer u_buffer;
+        Buffer v_buffer;
+        Buffer f_buffer;
+        Buffer g_buffer;
+
         // Print progress bar
         logger.progress_bar(t, _t_end);
         // Select dt
         dt = _field.calculate_dt(_grid, _calc_temp);
-
         // Enforce velocity boundary conditions
         for (auto &boundary : _boundaries) {
             boundary->enforce_uv(_field);
         }
+        t_buffer.map();
+        ubo_data.dt = dt;
+        memcpy(t_buffer.data, &ubo_data, sizeof(UBOData));
+
+        t_buffer.unmap();
+        u_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        VK_SHARING_MODE_EXCLUSIVE, _field.u_matrix().size() * sizeof(Real),
+                        _field._U._container.data());
+        v_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        VK_SHARING_MODE_EXCLUSIVE, _field.v_matrix().size() * sizeof(Real),
+                        _field._V._container.data());
+        f_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        VK_SHARING_MODE_EXCLUSIVE, _field.f_matrix().size() * sizeof(Real),
+                        _field._F._container.data());
+        g_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                        VK_SHARING_MODE_EXCLUSIVE, _field.g_matrix().size() * sizeof(Real),
+                        _field._G._container.data());
+
+        simulation.push_descriptors({{u_buffer, 0},
+                                     {v_buffer, 1},
+                                     {f_buffer, 2},
+                                     {g_buffer, 3},
+                                     {t_buffer, 4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+                                     {cell_buffer, 5}});
 
         if (_calc_temp) {
             // Enforce temperature boundary conditions
@@ -280,7 +337,27 @@ void Case::simulate() {
         }
 
         // Compute F & G and enforce boundary conditions
-        _field.calculate_fluxes(_grid, _calc_temp);
+        //_field.calculate_fluxes(_grid, _calc_temp);
+        simulation.record_command_buffer();
+        simulation.run_command_buffer();
+        _field.f_matrix()._container.assign((Real *)f_buffer.data, (Real *)f_buffer.data + _field.f_matrix().size());
+        _field.g_matrix()._container.assign((Real *)g_buffer.data, (Real *)g_buffer.data + _field.g_matrix().size());
+        /*  f_buffer.map();
+          g_buffer.map();
+
+          for (int i = 0; i < _field.f_matrix().size(); i++) {
+              Real fbufdata = ((Real *)f_buffer.data)[i];
+              Real gbufdata = ((Real *)g_buffer.data)[i];
+              Real test = ((Real *)cell_buffer.data)[i];
+              Real a = abs(_field._F._container[i] - fbufdata);
+              Real b = abs(_field._G._container[i] - gbufdata);
+
+              if (a > 1e-5 || b > 1e-5) {
+                  int m = 4;
+              }
+          }
+          f_buffer.unmap();
+          g_buffer.unmap();*/
         for (const auto &boundary : _boundaries) {
             boundary->enforce_fg(_field);
         }
@@ -316,11 +393,22 @@ void Case::simulate() {
 
         t += dt;
         timestep++;
+        u_buffer.destroy();
+        v_buffer.destroy();
+        f_buffer.destroy();
+        g_buffer.destroy();
     }
+    t_buffer.destroy();
+    cell_buffer.destroy();
     // Print Summary
     logger.finish();
     // Output u,v,p
     output_vtk(timestep);
+    /* u_buffer.destroy();
+     v_buffer.destroy();
+     f_buffer.destroy();
+     g_buffer.destroy();*/
+    simulation.cleanup();
 }
 
 void Case::output_vtk(int timestep, int my_rank) {
@@ -377,7 +465,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
             // Insert blank cells at obstacles
             if (_grid.cell(i, j).type() != cell_type::FLUID) {
-                structuredGrid->BlankCell((j-1) * _grid.domain().domain_size_x + (i-1));
+                structuredGrid->BlankCell((j - 1) * _grid.domain().domain_size_x + (i - 1));
             }
         }
     }

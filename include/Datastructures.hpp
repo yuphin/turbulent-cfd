@@ -104,7 +104,6 @@ template <typename T> class Matrix {
     /// get the number of elements in y direction
     int jmax() const { return _jmax; }
 
-  private:
     /// Number of elements in x direction
     int _imax;
     /// Number of elements in y direction
