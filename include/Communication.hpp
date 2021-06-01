@@ -21,10 +21,10 @@ class Communication {
         params->imax = params->imin + local_size_x + 1;
         params->jmin = coords.y * local_size_y;
         params->jmax = params->jmin + local_size_y + 1;
-        params->neighbor_left = coords.x == 0 ? -1 : wr - 1;
-        params->neighbor_right = coords.x == iproc - 1 ? -1 : wr + 1;
-        params->neighbor_bottom = coords.y == 0 ? -1 : wr - params->iproc;
-        params->neighbor_top = coords.y == jproc - 1 ? -1 : wr + params->iproc;
+        params->neighbor_left = coords.x == 0 ? MPI_PROC_NULL : wr - 1;
+        params->neighbor_right = coords.x == iproc - 1 ? MPI_PROC_NULL : wr + 1;
+        params->neighbor_bottom = coords.y == 0 ? MPI_PROC_NULL : wr - params->iproc;
+        params->neighbor_top = coords.y == jproc - 1 ? MPI_PROC_NULL : wr + params->iproc;
 
 #if LOG
         std::cout << "Rank: " << wr << "(" << coords.x << "," << coords.y << ")"
