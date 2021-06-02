@@ -56,12 +56,13 @@ void Fields::calculate_velocities(Grid &grid) {
 }
 
 void Fields::calculate_temperatures(Grid &grid) {
+    auto T_old = _T;
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
         t(i, j) =
-            t(i, j) + _dt * (_alpha * Discretization::laplacian(_T, i, j) -
-                             Discretization::convection_uT(_U, _T, i, j) - Discretization::convection_vT(_V, _T, i, j));
+            t(i, j) + _dt * (_alpha * Discretization::laplacian(T_old, i, j) -
+                             Discretization::convection_uT(_U, T_old, i, j) - Discretization::convection_vT(_V, T_old, i, j));
     }
 }
 
