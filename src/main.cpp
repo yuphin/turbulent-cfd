@@ -9,7 +9,7 @@ int main(int argn, char **args) {
     if (argn > 1) {
         std::string file_name{args[1]};
         Case problem(file_name, argn, args, params);
-        problem.simulate();
+        problem.simulate(params);
 
     } else {
         std::cout << "Error: No input file is provided to fluidchen." << std::endl;

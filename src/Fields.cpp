@@ -1,4 +1,5 @@
 #include "Fields.hpp"
+#include "Communication.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -67,6 +68,7 @@ void Fields::calculate_temperatures(Grid &grid) {
 }
 
 Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
+
     Real dx2 = grid.dx() * grid.dx();
     Real dy2 = grid.dy() * grid.dy();
 
@@ -77,6 +79,12 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
     Real vMin = *std::min_element(_V.data(), _V.data() + _V.size());
     Real maxAbsU = fabs(uMax) > fabs(uMin) ? fabs(uMax) : fabs(uMin);
     Real maxAbsV = fabs(vMax) > fabs(vMin) ? fabs(vMax) : fabs(vMin);
+
+    // Get the global maximums
+    maxAbsU = Communication::reduce_all(maxAbsU, MPI_MAX);
+    maxAbsV = Communication::reduce_all(maxAbsV, MPI_MAX);
+
+
     Real cond_2 = grid.dx() / maxAbsU;
     Real cond_3 = grid.dy() / maxAbsV;
 
@@ -94,7 +102,6 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
         minimum = std::min(minimum, cond_4);
     }
     _dt = _tau * minimum;
-
     return _dt;
 }
 

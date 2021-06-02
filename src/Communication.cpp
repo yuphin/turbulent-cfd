@@ -1,8 +1,5 @@
 #include "Communication.hpp"
 
-#include <mpi.h>
-#include <iostream>
-
 
 void Communication::init_mpi(Params *params) {
     MPI_Init(NULL, NULL);
@@ -41,5 +38,15 @@ void Communication::init_params(Params *params, int imax, int jmax) {
 #endif
 }
 
+
+Real Communication::reduce_all(Real loc_value, MPI_Op mpi_operation) {
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    Real global_value = 0.0;
+    MPI_Allreduce(&loc_value, &global_value, 1, MPI_DOUBLE, mpi_operation, MPI_COMM_WORLD);
+    // std::cout << "\nRank: " << rank << "   " << global_value << std::endl;
+    MPI_Barrier(MPI_COMM_WORLD);
+    return global_value;
+}
 
 void Communication::finalize() { MPI_Finalize(); }

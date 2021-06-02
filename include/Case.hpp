@@ -37,7 +37,7 @@ class Case {
      * Calculates velocities
      * Outputs the solution files
      */
-    void simulate();
+    void simulate(Params &params);
 
   private:
     /// Plain case name without paths

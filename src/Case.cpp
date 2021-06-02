@@ -270,14 +270,17 @@ void Case::set_file_names(std::string file_name) {
  *
  * For information about the classes and functions, you can check the header files.
  */
-void Case::simulate() {
+void Case::simulate(Params &params) {
     Real t = 0.0;
     Real dt = _field.dt();
     uint32_t timestep = 0;
     Real output_counter = 0.0;
+
     while (t < _t_end) {
         // Print progress bar
-        logger.progress_bar(t, _t_end);
+        if (params.world_rank == 0)
+            logger.progress_bar(t, _t_end);
+
         // Select dt
         dt = _field.calculate_dt(_grid, _calc_temp);
 
@@ -285,7 +288,7 @@ void Case::simulate() {
         for (auto &boundary : _boundaries) {
             boundary->enforce_uv(_field);
         }
-
+        
         if (_calc_temp) {
             // Enforce temperature boundary conditions
             for (const auto &boundary : _boundaries) {
@@ -300,29 +303,31 @@ void Case::simulate() {
         for (const auto &boundary : _boundaries) {
             boundary->enforce_fg(_field);
         }
+
         // Set RHS of PPE
         _field.calculate_rs(_grid);
         // Perform pressure solve
         uint32_t it = 0;
         Real res = REAL_MAX;
+        
         while (it < _max_iter && res > _tolerance) {
-            res = _pressure_solver->solve(_field, _grid, _boundaries);
+            res = _pressure_solver->solve(_field, _grid, _boundaries, params);
             // Enforce boundary conditions
             for (const auto &boundary : _boundaries) {
                 boundary->enforce_p(_field);
             }
             it++;
         }
-
         // Check if max_iter was reached
-        if (it == _max_iter) {
+        if (params.world_rank == 0 && it == _max_iter) {
             logger.max_iter_warning();
         }
         // Output current timestep information
         logger.write_log(timestep, t, it, _max_iter, res);
 
         // Compute u^(n+1) & v^(n+1)
-        _field.calculate_velocities(_grid);
+        if (params.world_rank == 0)
+            _field.calculate_velocities(_grid);
 
         // Output u,v,p
         if (t >= output_counter * _output_freq) {
@@ -334,7 +339,8 @@ void Case::simulate() {
         timestep++;
     }
     // Print Summary
-    logger.finish();
+    if (params.world_rank == 0)
+        logger.finish();
     // Output u,v,p
     output_vtk(timestep);
 }

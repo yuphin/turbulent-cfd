@@ -1,4 +1,5 @@
 #include "Utilities.hpp"
+
 std::vector<std::vector<int>> parse_geometry_file(std::string filedoc, int xdim, int ydim) {
     std::vector<std::vector<int>> geometry_data(xdim + 2, std::vector<int>(ydim + 2, 0));
     int numcols, numrows, depth;
@@ -52,13 +53,15 @@ std::vector<std::vector<int>> build_lid_driven_cavity(int xdim, int ydim) {
 
 std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec, int imin, int imax, int jmin,
                                         int jmax) {
+
     int xdim = imax - imin + 1;
     int ydim = jmax - jmin + 1;
+   
     std::vector<std::vector<int>> result(xdim, std::vector<int>(ydim, 0));
     for (int i = 0; i < xdim; i++) {
         for (int j = 0; j < ydim; j++) {
             result[i][j] = vec[i + imin][j + jmin];
         }
-    }
+    }   
     return result;
 }

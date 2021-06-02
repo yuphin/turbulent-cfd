@@ -26,6 +26,7 @@ void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {
             if (geometry_data.at(i_geom).at(j_geom) == 0) {
                 if (i_geom == _domain.imin || i_geom == _domain.imax - 1 
                     || j_geom == _domain.jmin || j_geom == _domain.jmax -1) {
+                    ++i;
                     continue;
                 }
                 _cells(i, j) = Cell(i, j, cell_type::FLUID);

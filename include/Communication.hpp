@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Utilities.hpp"
+#include <mpi.h>
+
 #define LOG 1
 
 class Communication {
@@ -11,7 +13,7 @@ class Communication {
     
     static void communicate();
     static void reduce_min();
-    static void reduce_sum();
+    static Real reduce_all(Real loc_value, MPI_Op mpi_operation);
 
     static void finalize();
 };

@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <mpi.h>
 
 /////////// Constructors ///////////
 OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
@@ -256,6 +257,7 @@ void InletBoundary::enforce_t(Fields &field) {
 
 /////////// NoSlip Walls ///////////
 void NoSlipWallBoundary::enforce_uv(Fields &field) {
+
     for (auto &cell : *_cells) {
         if (cell->borders().size() > 2) {
             std::cerr << "Forbidden cells!!" << std::endl;
@@ -266,6 +268,7 @@ void NoSlipWallBoundary::enforce_uv(Fields &field) {
             enforce_uv_main(field, cell);
         }
     }
+    
 }
 
 void NoSlipWallBoundary::enforce_uv_main(Fields &field, Cell *cell) {
