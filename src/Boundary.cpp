@@ -292,9 +292,7 @@ void NoSlipWallBoundary::enforce_uv_diagonal(Fields &field, Cell *cell) {
     int i = cell->i();
     int j = cell->j();
     int id = cell->id();
-    if (i == 0 && j == 0) {
-        return;
-    }
+    assert(!(i == 0 && j == 0), "Illegal index");
 
     if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
         field.u(i, j) = 0;
