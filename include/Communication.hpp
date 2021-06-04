@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Utilities.hpp"
+#include "Datastructures.hpp"
 #include <mpi.h>
 
 #define LOG 1
@@ -11,7 +12,7 @@ class Communication {
     static void init_mpi(Params *params);
     static void init_params(Params *params, int imax, int jmax);
     
-    static void communicate();
+    static void communicate(Params *params, Matrix<Real> &matrix);
     static void reduce_min();
     static Real reduce_all(Real loc_value, MPI_Op mpi_operation);
 

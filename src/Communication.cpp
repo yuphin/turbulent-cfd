@@ -38,6 +38,95 @@ void Communication::init_params(Params *params, int imax, int jmax) {
 #endif
 }
 
+void Communication::communicate(Params *params, Matrix<Real> &matrix) {
+    int size_x = params->size_x;
+    int size_y = params->size_y;
+
+    MPI_Datatype column_type;
+    int block_count_col = size_y + 2;
+    int block_length_col = 1;
+    int stride_col = size_x + 2;
+    // TODO: Might need to use typedef later to adapt to different Real datatype.
+    MPI_Type_vector(block_count_col, block_length_col, stride_col, MPI_DOUBLE, &column_type);
+    MPI_Type_commit(&column_type);
+
+    MPI_Datatype row_type;
+    int block_count_row = size_x + 2;
+    int block_length_row = size_x + 2;
+    int stride_row = 1;
+    // TODO: Might need to use typedef later to adapt to different Real datatype.
+    MPI_Type_vector(block_count_row, block_length_row, stride_row, MPI_DOUBLE, &row_type);
+    MPI_Type_commit(&row_type);
+    
+    if(params->world_rank == 0) {
+        // send left column
+        if(params->neighbor_left != MPI_PROC_NULL) {
+            MPI_Send(matrix.data()+1, 1, column_type, params->neighbor_left, 0, MPI_COMM_WORLD); 
+        }
+        // receive right column
+        if(params->neighbor_right != MPI_PROC_NULL) {
+            MPI_Recv(matrix.data()+size_x+1, 1, column_type, params->neighbor_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        // send right column
+        if(params->neighbor_right != MPI_PROC_NULL) {
+            MPI_Send(matrix.data()+size_x, 1, column_type, params->neighbor_right, 1, MPI_COMM_WORLD); 
+        }
+        // receive left column
+        if(params->neighbor_left != MPI_PROC_NULL) {
+            MPI_Recv(matrix.data(), 1, column_type, params->neighbor_left, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        // send top row
+        if(params->neighbor_top != MPI_PROC_NULL) {
+            MPI_Send(matrix.data()+(size_y-2)*size_x, 1, row_type, params->neighbor_top, 2, MPI_COMM_WORLD); 
+        }
+        // receive bottom row
+        if(params->neighbor_bottom != MPI_PROC_NULL) {
+            MPI_Recv(matrix.data(), 1, row_type, params->neighbor_bottom, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        // send bottom row
+        if(params->neighbor_bottom != MPI_PROC_NULL) {
+            MPI_Send(matrix.data()+size_x, 1, row_type, params->neighbor_bottom, 3, MPI_COMM_WORLD); 
+        }
+        // receive top row
+        if(params->neighbor_top != MPI_PROC_NULL) {
+            MPI_Recv(matrix.data()+(size_y-1)*size_x, 1, row_type, params->neighbor_top, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+    }
+    else {
+        // receive right column
+        if(params->neighbor_right != MPI_PROC_NULL) {
+            MPI_Recv(matrix.data()+size_x+1, 1, column_type, params->neighbor_right, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        // send left column
+        if(params->neighbor_left != MPI_PROC_NULL) {
+            MPI_Send(matrix.data()+1, 1, column_type, params->neighbor_left, 0, MPI_COMM_WORLD); 
+        }
+        // receive left column
+        if(params->neighbor_left != MPI_PROC_NULL) {
+            MPI_Recv(matrix.data(), 1, column_type, params->neighbor_left, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        // send right column
+        if(params->neighbor_right != MPI_PROC_NULL) {
+            MPI_Send(matrix.data()+size_x, 1, column_type, params->neighbor_right, 1, MPI_COMM_WORLD); 
+        }
+        // receive bottom row
+        if(params->neighbor_bottom != MPI_PROC_NULL) {
+            MPI_Recv(matrix.data(), 1, row_type, params->neighbor_bottom, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        // send top row
+        if(params->neighbor_top != MPI_PROC_NULL) {
+            MPI_Send(matrix.data()+(size_y-2)*size_x, 1, row_type, params->neighbor_top, 2, MPI_COMM_WORLD); 
+        }
+        // receive top row
+        if(params->neighbor_top != MPI_PROC_NULL) {
+            MPI_Recv(matrix.data()+(size_y-1)*size_x, 1, row_type, params->neighbor_top, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+        // send bottom row
+        if(params->neighbor_bottom != MPI_PROC_NULL) {
+            MPI_Send(matrix.data()+size_x, 1, row_type, params->neighbor_bottom, 3, MPI_COMM_WORLD); 
+        }
+    }
+}
 
 Real Communication::reduce_all(Real loc_value, MPI_Op mpi_operation) {
     int rank;

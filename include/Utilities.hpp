@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <mpi.h>
 
 #define USE_FLOATS 0
 

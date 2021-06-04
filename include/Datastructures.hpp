@@ -57,7 +57,7 @@ template <typename T> class Matrix {
      *
      * @param[out] pointer to the beginning of the vector
      */
-    const T *data() const { return _container.data(); }
+    T *data() { return _container.data(); }
 
     /**
      * @brief Access of the size of the structure
