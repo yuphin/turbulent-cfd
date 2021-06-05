@@ -32,7 +32,9 @@ Real SOR::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Bou
         Real val = Discretization::laplacian(field.p_matrix(), i, j) - field.rs(i, j);
         rloc += (val * val);
     }
-
+    // Exchange pressure
+    Communication::communicate(&params, field.p_matrix());
+    // Compute global residual
     int global_cells;
     res = Communication::reduce_all(rloc, MPI_SUM);
     global_cells = Communication::reduce_all(grid.fluid_cells().size(), MPI_SUM);

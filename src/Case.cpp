@@ -176,6 +176,8 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     domain.dy = ylength / (Real)jmax;
     domain.domain_size_x = params.size_x;
     domain.domain_size_y = params.size_y;
+    domain.x_length = xlength;
+    domain.y_length = ylength;
 
     build_domain(domain, params.size_x, params.size_y);
 
@@ -278,8 +280,7 @@ void Case::simulate(Params &params) {
 
     while (t < _t_end) {
         // Print progress bar
-        if (params.world_rank == 0)
-            logger.progress_bar(t, _t_end);
+        if (params.world_rank == 0) logger.progress_bar(t, _t_end);
 
         // Select dt
         dt = _field.calculate_dt(_grid, _calc_temp);
@@ -288,7 +289,7 @@ void Case::simulate(Params &params) {
         for (auto &boundary : _boundaries) {
             boundary->enforce_uv(_field);
         }
-        
+
         if (_calc_temp) {
             // Enforce temperature boundary conditions
             for (const auto &boundary : _boundaries) {
@@ -296,6 +297,9 @@ void Case::simulate(Params &params) {
             }
             // Compute temperatures
             _field.calculate_temperatures(_grid);
+
+            // Communicate temperatures
+            Communication::communicate(&params, _field.t_matrix());
         }
 
         // Compute F & G and enforce boundary conditions
@@ -303,13 +307,16 @@ void Case::simulate(Params &params) {
         for (const auto &boundary : _boundaries) {
             boundary->enforce_fg(_field);
         }
+        // Communicate F and G
+        Communication::communicate(&params, _field.f_matrix());
+        Communication::communicate(&params, _field.g_matrix());
 
         // Set RHS of PPE
         _field.calculate_rs(_grid);
         // Perform pressure solve
         uint32_t it = 0;
         Real res = REAL_MAX;
-        
+
         while (it < _max_iter && res > _tolerance) {
             res = _pressure_solver->solve(_field, _grid, _boundaries, params);
             // Enforce boundary conditions
@@ -326,12 +333,14 @@ void Case::simulate(Params &params) {
         logger.write_log(timestep, t, it, _max_iter, res);
 
         // Compute u^(n+1) & v^(n+1)
-        if (params.world_rank == 0)
-            _field.calculate_velocities(_grid);
+        _field.calculate_velocities(_grid);
+        // Communicate velocities
+        Communication::communicate(&params, _field.u_matrix());
+        Communication::communicate(&params, _field.v_matrix());
 
         // Output u,v,p
         if (t >= output_counter * _output_freq) {
-            output_vtk(timestep);
+            output_vtk(timestep, params);
             output_counter++;
         }
 
@@ -339,13 +348,12 @@ void Case::simulate(Params &params) {
         timestep++;
     }
     // Print Summary
-    if (params.world_rank == 0)
-        logger.finish();
+    if (params.world_rank == 0) logger.finish();
     // Output u,v,p
-    output_vtk(timestep);
+    output_vtk(timestep, params);
 }
 
-void Case::output_vtk(int timestep, int my_rank) {
+void Case::output_vtk(int timestep, Params &params) {
     // Create a new structured grid
     vtkSmartPointer<vtkStructuredGrid> structuredGrid = vtkSmartPointer<vtkStructuredGrid>::New();
 
@@ -354,9 +362,10 @@ void Case::output_vtk(int timestep, int my_rank) {
 
     Real dx = _grid.dx();
     Real dy = _grid.dy();
-
-    Real x = _grid.domain().imin * dx;
-    Real y = _grid.domain().jmin * dy;
+    int i = params.world_rank % params.iproc;
+    int j = params.world_rank / params.iproc;
+    Real x = i * (_grid.domain().x_length / params.iproc)  + _grid.domain().imin * dx;
+    Real y = j * (_grid.domain().y_length / params.jproc) + _grid.domain().jmin * dy;
 
     { y += dy; }
     { x += dx; }
@@ -444,7 +453,7 @@ void Case::output_vtk(int timestep, int my_rank) {
 
     // Create Filename
     std::string outputname =
-        _dict_name + '/' + _case_name + "_" + std::to_string(my_rank) + "." + std::to_string(timestep) + ".vtk";
+        _dict_name + '/' + _case_name + "_" + std::to_string(params.world_rank) + "." + std::to_string(timestep) + ".vtk";
 
     writer->SetFileName(outputname.c_str());
     writer->SetInputData(structuredGrid);
