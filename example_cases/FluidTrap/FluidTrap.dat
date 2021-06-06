@@ -87,3 +87,10 @@ Pr          7
 wall_temp_10         -1
 wall_temp_11         0.5
 wall_temp_12         -0.5
+
+#--------------------------------------------
+#       number of processes in x and y direction
+#--------------------------------------------
+
+iproc         4
+jproc         2

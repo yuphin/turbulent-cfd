@@ -84,3 +84,10 @@ beta        0.00021
 wall_temp_10        -1
 wall_temp_11        1.0
 wall_temp_12        0.0
+
+#--------------------------------------------
+#       number of processes in x and y direction
+#--------------------------------------------
+
+iproc         2
+jproc         2

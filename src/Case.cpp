@@ -364,16 +364,13 @@ void Case::output_vtk(int timestep, Params &params) {
     Real dy = _grid.dy();
     int i = params.world_rank % params.iproc;
     int j = params.world_rank / params.iproc;
-    Real x = i * (_grid.domain().x_length / params.iproc)  + _grid.domain().imin * dx;
-    Real y = j * (_grid.domain().y_length / params.jproc) + _grid.domain().jmin * dy;
-
-    { y += dy; }
-    { x += dx; }
+    Real base_x = i * (_grid.domain().x_length / params.iproc)  + _grid.domain().imin * dx + dx;
+    Real base_y = j * (_grid.domain().y_length / params.jproc) + _grid.domain().jmin * dy + dy;
 
     Real z = 0;
+    Real y = base_y;
     for (int col = 0; col < _grid.domain().size_y + 1; col++) {
-        x = _grid.domain().imin * dx;
-        { x += dx; }
+        Real x = base_x;
         for (int row = 0; row < _grid.domain().size_x + 1; row++) {
             points->InsertNextPoint(x, y, z);
             x += dx;

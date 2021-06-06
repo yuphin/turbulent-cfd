@@ -81,3 +81,10 @@ Pr          12500
 wall_temp_12     291.20
 wall_temp_11     294.78
 wall_temp_10     -1   
+
+#--------------------------------------------
+#       number of processes in x and y direction
+#--------------------------------------------
+
+iproc         5
+jproc         2
