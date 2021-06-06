@@ -73,6 +73,9 @@ void Communication::communicate(Params *params, Matrix<Real> &matrix) {
     MPI_Send(&matrix(0, 1), 1, row_type, params->neighbor_bottom, 3, MPI_COMM_WORLD);
     // receive top row
     MPI_Recv(&matrix(0, size_y + 1), 1, row_type, params->neighbor_top, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    MPI_Type_free(&row_type);
+    MPI_Type_free(&column_type);
 }
 
 Real Communication::reduce_all(Real loc_value, MPI_Op mpi_operation) {

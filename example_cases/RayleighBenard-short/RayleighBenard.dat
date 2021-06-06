@@ -93,5 +93,5 @@ wall_vel_10      0
 #       number of processes in x and y direction
 #--------------------------------------------
 
-iproc         1
-jproc         1
+iproc         4
+jproc         2
