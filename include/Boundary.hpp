@@ -25,6 +25,7 @@ class Boundary {
     virtual void enforce_p(Fields &field);
     virtual void enforce_t(Fields &field);
     virtual ~Boundary() = default;
+    uint32_t get_type() {return _type;}
     std::vector<Cell *> *_cells;
     std::unordered_map<int, Real> _wall_temperature;
 
@@ -35,6 +36,7 @@ class Boundary {
     void enforce_t_drichlet_diag(Fields &field, Cell *cell);
     void enforce_t_adiabatic_main(Fields &field, Cell *cell);
     void enforce_t_adiabatic_diag(Fields &field, Cell *cell);
+    uint32_t _type;
 };
 
 /**

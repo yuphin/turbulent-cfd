@@ -266,29 +266,115 @@ void Case::simulate() {
          descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 2),
          descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 3),
          descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 4),
-         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 5)});
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 5),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 6),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 7),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 8),
+         descriptor_set_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 9)});
     simulation.create_command_pool();
-    simulation.create_compute_pipeline();
+    simulation.create_fences();
+    Pipeline discretization_pipeline = simulation.create_compute_pipeline("src/shaders/discretization.comp.spv");
+    Pipeline rs_pipeline = simulation.create_compute_pipeline("src/shaders/calc_rs.comp.spv");
+    Pipeline vel_pipeline = simulation.create_compute_pipeline("src/shaders/calc_vel.comp.spv");
+    Pipeline p_pipeline_red = simulation.create_compute_pipeline("src/shaders/calc_p_redblack_gs.comp.spv", 0);
+    Pipeline p_pipeline_black = simulation.create_compute_pipeline("src/shaders/calc_p_redblack_gs.comp.spv", 1);
+    Pipeline residual_pipeline = simulation.create_compute_pipeline("src/shaders/calc_r.comp.spv");
+    Pipeline p_boundary_pipeline = simulation.create_compute_pipeline("src/shaders/boundary_p.comp.spv");
+
     std::vector<Real> is_fluid(_grid.imaxb() * _grid.jmaxb(), 0);
     for (const auto &current_cell : _grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
         is_fluid[_grid.imaxb() * j + i] = 1;
     }
+    // Preprocess
+    std::vector<BoundaryData> boundaries(_grid.imaxb() * _grid.jmaxb());
+    for (const auto &boundary : _boundaries) {
+        BoundaryData data;
+        uint32_t type = boundary->get_type();
+        auto cells = boundary->_cells;
+        data.neighborhood |= type << 8;
+        for (auto &cell : *cells) {
+            int i = cell->i();
+            int j = cell->j();
+            data.neighborhood |= (-1 & 0xFF);
+            // data.idx = _grid.imaxb() * j + i;
+            if (cell->is_border(border_position::RIGHT)) {
+                data.neighborhood = (data.neighborhood & (-1 << 8)) | 0;
+            }
+            if (cell->is_border(border_position::LEFT)) {
+                data.neighborhood = (data.neighborhood & (-1 << 8)) | 1;
+            }
+            if (cell->is_border(border_position::TOP)) {
+                data.neighborhood = (data.neighborhood & (-1 << 8)) | 2;
+            }
+            if (cell->is_border(border_position::BOTTOM)) {
+                data.neighborhood = (data.neighborhood & (-1 << 8)) | 3;
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                data.neighborhood = (data.neighborhood & (-1 << 8)) | 4;
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                data.neighborhood = (data.neighborhood & (-1 << 8)) | 5;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                data.neighborhood = (data.neighborhood & (-1 << 8)) | 6;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                data.neighborhood = (data.neighborhood & (-1 << 8)) | 7;
+            }
+            boundaries[j * _grid.imaxb() + i] = data;
+        }
+    }
     UBOData ubo_data;
     Buffer t_buffer;
     Buffer cell_buffer;
+    Buffer neighborhood_buffer;
+    Buffer u_buffer;
+    Buffer v_buffer;
+    Buffer f_buffer;
+    Buffer g_buffer;
+    Buffer rs_buffer;
+    Buffer p_buffer;
+    Buffer residual_buffer;
+    Buffer scratch_buffer;
     t_buffer.create(&simulation.context, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                     VK_SHARING_MODE_EXCLUSIVE, sizeof(UBOData));
-    cell_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                       VK_SHARING_MODE_EXCLUSIVE, sizeof(Real) * _field.f_matrix().size(), is_fluid.data());
+    cell_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                       VK_SHARING_MODE_EXCLUSIVE, sizeof(Real) * _field.f_matrix().size(), is_fluid.data(), true);
+
+    neighborhood_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                               VK_SHARING_MODE_EXCLUSIVE, boundaries.size() * sizeof(BoundaryData), boundaries.data());
+    u_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    VK_SHARING_MODE_EXCLUSIVE, _field.u_matrix().size() * sizeof(Real), _field._U._container.data());
+    v_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    VK_SHARING_MODE_EXCLUSIVE, _field.v_matrix().size() * sizeof(Real), _field._V._container.data());
+    f_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    VK_SHARING_MODE_EXCLUSIVE, _field.f_matrix().size() * sizeof(Real), _field._F._container.data());
+    g_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    VK_SHARING_MODE_EXCLUSIVE, _field.g_matrix().size() * sizeof(Real), _field._G._container.data());
+
+    residual_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                           VK_SHARING_MODE_EXCLUSIVE, 50 * sizeof(Real));
+    rs_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, _field._RS.size() * sizeof(Real),
+                     _field._RS._container.data(), true);
+    p_buffer.create(&simulation.context,
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, _field._P.size() * sizeof(Real));
+    scratch_buffer.create(&simulation.context, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                          VK_SHARING_MODE_EXCLUSIVE, _field._P.size() * sizeof(Real));
+    simulation.push_descriptors({{neighborhood_buffer, 9}});
     while (t < _t_end) {
-        Buffer u_buffer;
-        Buffer v_buffer;
-        Buffer f_buffer;
-        Buffer g_buffer;
 
         // Print progress bar
         logger.progress_bar(t, _t_end);
@@ -298,34 +384,18 @@ void Case::simulate() {
         for (auto &boundary : _boundaries) {
             boundary->enforce_uv(_field);
         }
-        t_buffer.map();
+        u_buffer.upload(_field.u_matrix().size() * sizeof(Real), _field._U._container.data());
+        v_buffer.upload(_field.v_matrix().size() * sizeof(Real), _field._V._container.data());
         ubo_data.dt = dt;
         memcpy(t_buffer.data, &ubo_data, sizeof(UBOData));
-
-        t_buffer.unmap();
-        u_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                        VK_SHARING_MODE_EXCLUSIVE, _field.u_matrix().size() * sizeof(Real),
-                        _field._U._container.data());
-        v_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                        VK_SHARING_MODE_EXCLUSIVE, _field.v_matrix().size() * sizeof(Real),
-                        _field._V._container.data());
-        f_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                        VK_SHARING_MODE_EXCLUSIVE, _field.f_matrix().size() * sizeof(Real),
-                        _field._F._container.data());
-        g_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                        VK_SHARING_MODE_EXCLUSIVE, _field.g_matrix().size() * sizeof(Real),
-                        _field._G._container.data());
 
         simulation.push_descriptors({{u_buffer, 0},
                                      {v_buffer, 1},
                                      {f_buffer, 2},
                                      {g_buffer, 3},
                                      {t_buffer, 4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
-                                     {cell_buffer, 5}});
+                                     {cell_buffer, 5},
+                                     {rs_buffer, 6}});
 
         if (_calc_temp) {
             // Enforce temperature boundary conditions
@@ -338,35 +408,29 @@ void Case::simulate() {
 
         // Compute F & G and enforce boundary conditions
         //_field.calculate_fluxes(_grid, _calc_temp);
-        simulation.record_command_buffer();
+        simulation.begin_end_record_command_buffer(discretization_pipeline);
         simulation.run_command_buffer();
         _field.f_matrix()._container.assign((Real *)f_buffer.data, (Real *)f_buffer.data + _field.f_matrix().size());
         _field.g_matrix()._container.assign((Real *)g_buffer.data, (Real *)g_buffer.data + _field.g_matrix().size());
-        /*  f_buffer.map();
-          g_buffer.map();
-
-          for (int i = 0; i < _field.f_matrix().size(); i++) {
-              Real fbufdata = ((Real *)f_buffer.data)[i];
-              Real gbufdata = ((Real *)g_buffer.data)[i];
-              Real test = ((Real *)cell_buffer.data)[i];
-              Real a = abs(_field._F._container[i] - fbufdata);
-              Real b = abs(_field._G._container[i] - gbufdata);
-
-              if (a > 1e-5 || b > 1e-5) {
-                  int m = 4;
-              }
-          }
-          f_buffer.unmap();
-          g_buffer.unmap();*/
         for (const auto &boundary : _boundaries) {
             boundary->enforce_fg(_field);
         }
         // Set RHS of PPE
-        _field.calculate_rs(_grid);
+        //_field.calculate_rs(_grid);
+        f_buffer.upload(_field.f_matrix().size() * sizeof(Real), _field._F._container.data());
+        g_buffer.upload(_field.g_matrix().size() * sizeof(Real), _field._G._container.data());
+
+        simulation.push_descriptors({{f_buffer, 2}, {g_buffer, 3}});
+        simulation.begin_end_record_command_buffer(rs_pipeline);
+        simulation.run_command_buffer();
         // Perform pressure solve
         uint32_t it = 0;
         Real res = REAL_MAX;
-        while (it < _max_iter && res > _tolerance) {
+        //_max_iter = 100;
+        rs_buffer.copy(scratch_buffer);
+        _field._RS._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._RS.size());
+        // Do some sequential Gauss Seidel Iterations
+        while (it < 100 && res > _tolerance) {
             res = _pressure_solver->solve(_field, _grid, _boundaries);
             // Enforce boundary conditions
             for (const auto &boundary : _boundaries) {
@@ -374,41 +438,65 @@ void Case::simulate() {
             }
             it++;
         }
+        it = 0;
+        p_buffer.upload(_field.p_matrix().size() * sizeof(Real), _field._P._container.data(), &scratch_buffer);
+        simulation.push_descriptors({{p_buffer, 7}, {residual_buffer, 8}});
+        // Follow it by Red-Black Gauss Seidel
+        while (it < _max_iter && res > _tolerance) {
+            simulation.begin_recording();
+            simulation.record_command_buffer(p_pipeline_red);
+            simulation.record_command_buffer(p_pipeline_black);
+            simulation.record_command_buffer(residual_pipeline);
+            simulation.record_command_buffer(p_boundary_pipeline);
+            simulation.end_recording();
+            simulation.run_command_buffer();
+            it++;
+        }
+        // You can uncomment this for debugging
+        /* p_buffer.copy(scratch_buffer);
+         _field._P._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._P.size());*/
 
         // Check if max_iter was reached
         if (it == _max_iter) {
+            // std::cout << it << " " << res;
             logger.max_iter_warning();
         }
         // Output current timestep information
         logger.write_log(timestep, t, it, _max_iter, res);
 
         // Compute u^(n+1) & v^(n+1)
-        _field.calculate_velocities(_grid);
+        //_field.calculate_velocities(_grid);
+
+        simulation.begin_end_record_command_buffer(vel_pipeline);
+        simulation.run_command_buffer();
+        _field._U._container.assign((Real *)u_buffer.data, (Real *)u_buffer.data + _field._U.size());
+        _field._V._container.assign((Real *)v_buffer.data, (Real *)v_buffer.data + _field._V.size());
 
         // Output u,v,p
         if (t >= output_counter * _output_freq) {
             output_vtk(timestep);
             output_counter++;
         }
-
         t += dt;
         timestep++;
-        u_buffer.destroy();
-        v_buffer.destroy();
-        f_buffer.destroy();
-        g_buffer.destroy();
     }
+    scratch_buffer.destroy();
+    rs_buffer.destroy();
+    p_buffer.destroy();
+    residual_buffer.destroy();
+    f_buffer.destroy();
+    g_buffer.destroy();
+    u_buffer.destroy();
+    v_buffer.destroy();
     t_buffer.destroy();
     cell_buffer.destroy();
+    neighborhood_buffer.destroy();
     // Print Summary
     logger.finish();
     // Output u,v,p
     output_vtk(timestep);
-    /* u_buffer.destroy();
-     v_buffer.destroy();
-     f_buffer.destroy();
-     g_buffer.destroy();*/
-    simulation.cleanup();
+    simulation.cleanup({discretization_pipeline, rs_pipeline, vel_pipeline, p_pipeline_red, p_pipeline_black,
+                        residual_pipeline, p_boundary_pipeline});
 }
 
 void Case::output_vtk(int timestep, int my_rank) {

@@ -1,4 +1,5 @@
 #version 450
+#extension GL_GOOGLE_include_directive: require
 // Compile with glslangvalidator -V simulation.comp.glsl -o simulation.comp.spv
 const  int imax = 102;
 const  int jmax = 22;

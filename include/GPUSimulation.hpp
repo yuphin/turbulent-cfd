@@ -74,8 +74,19 @@ VkBufferMemoryBarrier buffer_barrier(VkBuffer handle, VkAccessFlags src_access_m
 
 struct UBOData {
     float dt;
+    float parity = 0;
+    uint32_t fluid_cells_size;
 };
 
+struct BoundaryData {
+    uint32_t neighborhood = 0;
+};
+
+struct Pipeline {
+    VkPipeline pipeline;
+    VkPipelineLayout pipeline_layout;
+    VkShaderModule shader_module;
+};
 struct Context {
     VkDevice device;
     VkQueue compute_queue;
@@ -102,6 +113,8 @@ struct Buffer {
                 VkSharingMode sharing_mode, VkDeviceSize size, void *data = nullptr, bool use_staging = false) {
         if (!this->ctx) {
             this->ctx = ctx;
+            this->mem_prop_flags = mem_property_flags;
+            this->usage_flags = usage;
         }
         if (use_staging) {
             Buffer staging_buffer;
@@ -114,6 +127,10 @@ struct Buffer {
 
             // @performance
             VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
+            VkCommandBufferBeginInfo begin_info = {};
+            begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer, &begin_info));
             VkBufferCopy copy_region = {0, 0, VkDeviceSize(size)};
             vkCmdCopyBuffer(ctx->command_buffer, staging_buffer.handle, this->handle, 1, &copy_region);
             VkBufferMemoryBarrier copy_barrier =
@@ -150,20 +167,18 @@ struct Buffer {
             VK_CHECK(vkAllocateMemory(ctx->device, &mem_alloc_info, nullptr, &memory));
 
             alignment = mem_reqs.alignment;
-            size = size;
+            this->size = size;
             usage_flags = usage;
-            mem_property_flags = mem_property_flags;
-
+            if (mem_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                map();
+            }
             // If a pointer to the buffer data has been passed, map the buffer and copy over the data
             if (data != nullptr) {
-                map();
                 memcpy(this->data, data, size);
-                unmap();
                 if ((mem_property_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0) {
                     flush();
                 }
             }
-
             // Initialize a default descriptor that covers the whole buffer size
             this->prepare_descriptor();
             this->bind();
@@ -184,6 +199,54 @@ struct Buffer {
         mapped_range.offset = offset;
         mapped_range.size = size;
         VK_CHECK(vkFlushMappedMemoryRanges(ctx->device, 1, &mapped_range));
+    }
+    void upload(VkDeviceSize size, void *data = nullptr, Buffer *staging_buffer = nullptr) {
+        if ((mem_prop_flags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))) {
+            memcpy(this->data, data, size);
+        } else {
+            // Assume device local memory
+            staging_buffer->upload(size, data);
+            VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
+            VkCommandBufferBeginInfo begin_info = {};
+            begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer, &begin_info));
+            VkBufferCopy copy_region = {0, 0, VkDeviceSize(size)};
+            vkCmdCopyBuffer(ctx->command_buffer, staging_buffer->handle, this->handle, 1, &copy_region);
+            VkBufferMemoryBarrier copy_barrier =
+                buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+            vkCmdPipelineBarrier(ctx->command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1,
+                                 &copy_barrier, 0, 0);
+            vkEndCommandBuffer(ctx->command_buffer);
+            VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &ctx->command_buffer;
+            VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
+            VK_CHECK(vkDeviceWaitIdle(ctx->device));
+        }
+    }
+    void copy(Buffer &dst_buffer) {
+        VkBufferCopy copy_region;
+        copy_region.srcOffset = 0;
+        copy_region.dstOffset = 0;
+        copy_region.size = size;
+        VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
+        VkCommandBufferBeginInfo begin_info = {};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer, &begin_info));
+        vkCmdCopyBuffer(ctx->command_buffer, handle, dst_buffer.handle, 1, &copy_region);
+        VkBufferMemoryBarrier copy_barrier =
+            buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+        vkCmdPipelineBarrier(ctx->command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                             VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1, &copy_barrier, 0, 0);
+        vkEndCommandBuffer(ctx->command_buffer);
+        VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &ctx->command_buffer;
+        VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
+        VK_CHECK(vkDeviceWaitIdle(ctx->device));
     }
 };
 
@@ -449,19 +512,31 @@ class GPUSimulation {
         return (uint32_t *)str;
     }
 
-    void create_compute_pipeline() {
+    Pipeline create_compute_pipeline(const char *shader_path, uint32_t specialization_data = -1) {
         // Create shader module
         uint32_t filelength;
         // the code in comp.spv was created by running the command:
         // glslangValidator.exe -V shader.comp
-        uint32_t *code = read_file(filelength, "src/shaders/simulation.comp.spv");
+        uint32_t *code = read_file(filelength, shader_path);
         VkShaderModuleCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         create_info.pCode = code;
         create_info.codeSize = filelength;
-
+        VkShaderModule compute_shader_module;
+        VkPipelineLayout pipeline_layout;
+        VkPipeline pipeline;
         VK_CHECK(vkCreateShaderModule(context.device, &create_info, NULL, &compute_shader_module));
         delete[] code;
+
+        VkSpecializationMapEntry entry;
+        entry.constantID = 0;
+        entry.size = sizeof(uint32_t);
+        entry.offset = 0;
+        VkSpecializationInfo specialization_info{};
+        specialization_info.dataSize = sizeof(uint32_t);
+        specialization_info.mapEntryCount = 1;
+        specialization_info.pMapEntries = &entry;
+        specialization_info.pData = &specialization_data;
 
         /*
         Now let us actually create the compute pipeline.
@@ -470,10 +545,14 @@ class GPUSimulation {
 
         So first we specify the compute shader stage, and it's entry point(main).
         */
+
         VkPipelineShaderStageCreateInfo shader_stage_create_info = {};
         shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shader_stage_create_info.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         shader_stage_create_info.module = compute_shader_module;
+        if (specialization_data != -1) {
+            shader_stage_create_info.pSpecializationInfo = &specialization_info;
+        }
         shader_stage_create_info.pName = "main";
 
         /*
@@ -490,8 +569,8 @@ class GPUSimulation {
         pipeline_create_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         pipeline_create_info.stage = shader_stage_create_info;
         pipeline_create_info.layout = pipeline_layout;
-
         VK_CHECK(vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1, &pipeline_create_info, NULL, &pipeline));
+        return {pipeline, pipeline_layout, compute_shader_module};
     }
 
     void create_command_pool() {
@@ -507,9 +586,6 @@ class GPUSimulation {
         // must be submitted to queues of this family ONLY.
         command_pool_create_info.queueFamilyIndex = compute_queue_family_index;
         VK_CHECK(vkCreateCommandPool(context.device, &command_pool_create_info, NULL, &context.command_pool));
-        /*
-      Now allocate a command buffer from the command pool.
-      */
         VkCommandBufferAllocateInfo command_buffer_allocate_info = {};
         command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         command_buffer_allocate_info.commandPool = context.command_pool; // specify the command pool to allocate from.
@@ -522,25 +598,33 @@ class GPUSimulation {
                                           &context.command_buffer)); // allocate command buffer.
     }
 
-    void record_command_buffer() {
-        VK_CHECK(vkResetCommandPool(context.device, context.command_pool, 0));
+    void begin_recording(VkCommandBufferUsageFlags flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) {
         /*
-        Now we shall start recording commands into the newly allocated command buffer.
-        */
+           Now we shall start recording commands into the newly allocated command buffer.
+           */
+        VK_CHECK(vkResetCommandPool(context.device, context.command_pool, 0));
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // the buffer is only submitted and used once in
-                                                                        // this application.
+        begin_info.flags = flags; // the buffer is only submitted and used once
+                                  // in
+                                  // this application.
         VK_CHECK(vkBeginCommandBuffer(context.command_buffer, &begin_info)); // start recording commands.
+    }
 
+    void end_recording() {
+        VK_CHECK(vkEndCommandBuffer(context.command_buffer)); // end recording commands.
+    }
+
+    void begin_end_record_command_buffer(Pipeline pipeline) {
+        begin_recording();
         /*
         We need to bind a pipeline, AND a descriptor set before we dispatch.
 
         The validation layer will NOT give warnings if you forget these, so be very careful not to forget them.
         */
-        vkCmdBindPipeline(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+        vkCmdBindPipeline(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
 
-        vkCmdBindDescriptorSets(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, 0, 1,
+        vkCmdBindDescriptorSets(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1,
                                 &descriptor_set, 0, NULL);
 
         /*
@@ -551,33 +635,44 @@ class GPUSimulation {
         const int WIDTH = 102;         // Size of rendered mandelbrot set.
         const int HEIGHT = 22;         // Size of renderered mandelbrot set.
         const int WORKGROUP_SIZE = 32; // Workgroup size in compute shader.
-        vkCmdDispatch(context.command_buffer, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)),
-                      (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
-
-        VK_CHECK(vkEndCommandBuffer(context.command_buffer)); // end recording commands.
+        const auto num_wg_x = (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE));
+        const auto num_wg_y = (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE));
+        vkCmdDispatch(context.command_buffer, num_wg_x, num_wg_y, 1);
+        end_recording();
     }
 
-    void run_command_buffer() {
+    void record_command_buffer(Pipeline pipeline) {
         /*
-        Now we shall finally submit the recorded command buffer to a queue.
-        */
-        VkSubmitInfo submit_info = {};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;                    // submit a single command buffer
-        submit_info.pCommandBuffers = &context.command_buffer; // the command buffer to submit.
+        We need to bind a pipeline, AND a descriptor set before we dispatch.
 
-        /*
-          We create a fence.
+        The validation layer will NOT give warnings if you forget these, so be very careful not to forget them.
         */
-        VkFence fence;
+        vkCmdBindPipeline(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+
+        vkCmdBindDescriptorSets(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1,
+                                &descriptor_set, 0, NULL);
+
+        const int WIDTH = 102;         // Size of rendered mandelbrot set.
+        const int HEIGHT = 22;         // Size of renderered mandelbrot set.
+        const int WORKGROUP_SIZE = 32; // Workgroup size in compute shader.
+        const auto num_wg_x = (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE));
+        const auto num_wg_y = (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE));
+        vkCmdDispatch(context.command_buffer, num_wg_x, num_wg_y, 1);
+    }
+
+    void create_fences() {
         VkFenceCreateInfo fence_create_info = {};
         fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fence_create_info.flags = 0;
         VK_CHECK(vkCreateFence(context.device, &fence_create_info, NULL, &fence));
+    }
 
-        /*
-        We submit the command buffer on the queue, at the same time giving a fence.
-        */
+    void run_command_buffer() {
+
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &context.command_buffer;
         VK_CHECK(vkQueueSubmit(context.compute_queue, 1, &submit_info, fence));
         /*
         The command will not have finished executing until the fence is signalled.
@@ -587,15 +682,13 @@ class GPUSimulation {
         Hence, we use a fence here.
         */
         VK_CHECK(vkWaitForFences(context.device, 1, &fence, VK_TRUE, 100000000000));
-
-        vkDestroyFence(context.device, fence, NULL);
+        vkResetFences(context.device, 1, &fence);
     }
 
-    void cleanup() {
+    void cleanup(const std::vector<Pipeline> &pipelines) {
         /*
         Clean up all Vulkan Resources.
         */
-
         if (enable_validation) {
             // destroy callback.
             auto func =
@@ -605,12 +698,18 @@ class GPUSimulation {
             }
             func(instance, debug_report_callback, NULL);
         }
-
-        vkDestroyShaderModule(context.device, compute_shader_module, NULL);
+        for (auto pipeline : pipelines) {
+            vkDestroyShaderModule(context.device, pipeline.shader_module, NULL);
+        }
         vkDestroyDescriptorPool(context.device, descriptor_pool, NULL);
         vkDestroyDescriptorSetLayout(context.device, descriptor_set_layout, NULL);
-        vkDestroyPipelineLayout(context.device, pipeline_layout, NULL);
-        vkDestroyPipeline(context.device, pipeline, NULL);
+        for (auto pipeline : pipelines) {
+            vkDestroyPipelineLayout(context.device, pipeline.pipeline_layout, NULL);
+        }
+        for (auto pipeline : pipelines) {
+            vkDestroyPipeline(context.device, pipeline.pipeline, NULL);
+        }
+        vkDestroyFence(context.device, fence, NULL);
         vkDestroyCommandPool(context.device, context.command_pool, NULL);
         vkDestroyDevice(context.device, NULL);
         vkDestroyInstance(instance, NULL);
@@ -620,12 +719,13 @@ class GPUSimulation {
   private:
     VkInstance instance;
     VkDebugReportCallbackEXT debug_report_callback;
-    VkPipeline pipeline;
-    VkPipelineLayout pipeline_layout;
-    VkShaderModule compute_shader_module;
+    // VkPipeline pipeline;
+    // VkPipelineLayout pipeline_layout;
+    // VkShaderModule compute_shader_module;
     VkDescriptorPool descriptor_pool;
     VkDescriptorSet descriptor_set;
     VkDescriptorSetLayout descriptor_set_layout;
+    VkFence fence;
     // VkBuffer buffer;
     // VkDeviceMemory buffer_memory;
 
