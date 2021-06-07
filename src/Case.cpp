@@ -282,7 +282,7 @@ void Case::simulate(Params &params) {
 
     while (t < _t_end) {
         // Print progress bar
-        //////////////////////////////////if (params.world_rank == 0) logger.progress_bar(t, _t_end);
+        if (params.world_rank == 0) logger.progress_bar(t, _t_end);
 
         // Select dt
         dt = _field.calculate_dt(_grid, _calc_temp);
@@ -328,13 +328,12 @@ void Case::simulate(Params &params) {
             it++;
         }
         // Check if max_iter was reached
-        /*
+        
         if (params.world_rank == 0 && it == _max_iter) {
             logger.max_iter_warning();
         }
         // Output current timestep information
         logger.write_log(timestep, t, dt, it, _max_iter, res);
-        */
 
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
@@ -371,7 +370,6 @@ void Case::output_vtk(int timestep, Params &params) {
 
     Real base_x = i * ((int) (global_size_x / params.iproc)) * dx + dx;
     Real base_y = j * ((int) (global_size_y / params.jproc)) * dy + dy;
-    std::cout << "Rank: " << params.world_rank << " base_x: " << base_x << std::endl;
 
     Real z = 0;
     Real y = base_y;
