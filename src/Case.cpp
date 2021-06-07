@@ -144,7 +144,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     if (pr != REAL_MAX) {
         alpha = nu / pr;
     } else if (alpha == REAL_MAX) {
-        if (params.world_rank == 0) {
+        if (params.world_rank == 0 && _calc_temp) {
             logger.log_error("Prandtl number, alpha or beta are not set, defaulting to 0");
         }
         alpha = 0.0;
@@ -158,7 +158,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     // Set file names for geometry file and output directory
     set_file_names(file_name);
     // Create log file in output dir
-    logger.create_log(_dict_name, _case_name);
+    logger.create_log(_dict_name, _case_name, params);
 
     std::vector<std::vector<int>> global_geometry;
     if (_geom_name.compare("NONE")) {
@@ -330,7 +330,7 @@ void Case::simulate(Params &params) {
             logger.max_iter_warning();
         }
         // Output current timestep information
-        logger.write_log(timestep, t, it, _max_iter, res);
+        logger.write_log(timestep, t, dt, it, _max_iter, res);
 
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
