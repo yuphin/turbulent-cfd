@@ -139,3 +139,11 @@ export CXX=`which g++-7`
 ```
 
 Make sure to use a backtick (\`) to get the `which` command executed. Afterwards, you can run `cmake ..`.
+
+### Running with MPI
+
+Make sure to run the program with `mpirun` or `mpiexec` with the number of processes matching the processes in the configuration file. For example
+
+```shell
+mpirun -np <num_processes> ./fluidchen <test_case>
+```
