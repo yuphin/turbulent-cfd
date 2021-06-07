@@ -72,6 +72,10 @@ class Case {
     friend class Logger;
     Logger logger = Logger();
 
+    // global grid sizes without boundaries, needed for vtk output
+    Real global_size_x;
+    Real global_size_y;
+
     /**
      * @brief Creating file names from given input data file
      *

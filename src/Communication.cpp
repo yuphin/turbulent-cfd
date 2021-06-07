@@ -8,11 +8,12 @@ void Communication::init_mpi(Params *params) {
 
 void Communication::init_params(Params *params, int imax, int jmax) {
     int iproc = params->iproc;
-    int jproc = params->jproc;
+    int jproc = params->jproc;    
+    int wr = params->world_rank;
+    Coord coords = {wr % params->iproc, wr / params->iproc};      
     int local_size_x = imax / iproc;
     int local_size_y = jmax / jproc;
-    int wr = params->world_rank;
-    Coord coords = {wr % params->iproc, wr / params->iproc};
+
     params->size_x = local_size_x;
     params->size_y = local_size_y;
     params->imin = coords.x * local_size_x;
@@ -23,6 +24,15 @@ void Communication::init_params(Params *params, int imax, int jmax) {
     params->neighbor_right = coords.x == iproc - 1 ? MPI_PROC_NULL : wr + 1;
     params->neighbor_bottom = coords.y == 0 ? MPI_PROC_NULL : wr - params->iproc;
     params->neighbor_top = coords.y == jproc - 1 ? MPI_PROC_NULL : wr + params->iproc;
+
+    if (coords.x == iproc - 1) {
+        params->size_x += imax % iproc;
+        params->imax += imax % iproc;
+    }
+    if (coords.y == jproc - 1) {
+        params->size_y += jmax % jproc;
+        params->jmax += jmax % jproc;
+    }   
 
 #if LOG
     std::cout << "Rank: " << wr << "(" << coords.x << "," << coords.y << ")"
