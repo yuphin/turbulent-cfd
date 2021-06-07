@@ -9,13 +9,23 @@
 
 Processes (iproc, jproc) | Velocity       |  Pressure
 :-----------------------:|:--------------:|:------------:
+sequential| ![LidDrivenCavity/uv_s.png](./LidDrivenCavity/uv_s.png) | ![LidDrivenCavity/p_s.png](./LidDrivenCavity/p_s.png)
 (1, 1) | ![LidDrivenCavity/uv_1_1.png](./LidDrivenCavity/uv_1_1.png) | ![LidDrivenCavity/p_1_1.png](./LidDrivenCavity/p_1_1.png)
 (2, 2) | ![LidDrivenCavity/uv_2_2.png](./LidDrivenCavity/uv_2_2.png) | ![LidDrivenCavity/p_2_2.png](./LidDrivenCavity/p_2_2.png)
 (1, 4) | ![LidDrivenCavity/uv_1_4.png](./LidDrivenCavity/uv_1_4.png) | ![LidDrivenCavity/p_1_4.png](./LidDrivenCavity/p_1_4.png)
 (3, 2) | ![LidDrivenCavity/uv_3_2.png](./LidDrivenCavity/uv_3_2.png) | ![LidDrivenCavity/p_3_2.png](./LidDrivenCavity/p_3_2.png)
 
+The end results for velocity and pressure are the same for every case, indicating a correct parallel implementaion.
+
 ### Fluid Trap
 
+ -       | (sequential) |     (1, 1)     |      (2, 3) |
+:-------:|:------------:|:--------------:|:------------:
+Velocity | ![FuidTrap/uv_s.png](./FluidTrap/uv_s.png) | ![FluidTrap/uv_1_1.png](./FluidTrap/uv_1_1.png) | ![FluidTrap/uv_2_3.png](./FluidTrap/uv_2_3.png)
+Pressure | ![FluidTrap/p_s.png](./FluidTrap/p_s.png) | ![FluidTrap/p_1_1.png](./FluidTrap/p_1_1.png) | ![FluidTrap/p_2_3.png](./FluidTrap/p_2_3.png)
+Temperature | ![FluidTrap/t_s.png](./FluidTrap/t_s.png) | ![FluidTrap/t_1_1.png](./FluidTrap/t_1_1.png) | ![FluidTrap/t_2_3.png](./FluidTrap/t_2_3.png)
+
+Again, the end results are exactly the same for all configurations.
 
 ## 2. Performance Analysis  
 
@@ -25,7 +35,7 @@ Processes (iproc, jproc) | Velocity       |  Pressure
 * jmax = 18  
 * t_end = 20000
 * 1-8 processes, domain only split along x-axis
-
+ppp
 **Speedup:**  
 ![StrongScaling/Speedup.png](./StrongScaling/Speedup.png)  
 **Parallel Efficiency**  
