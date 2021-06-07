@@ -17,6 +17,12 @@ sequential| ![LidDrivenCavity/uv_s.png](./LidDrivenCavity/uv_s.png) | ![LidDrive
 
 The end results for velocity and pressure are the same for every case, indicating a correct parallel implementaion.
 
+#### Convergence of Lid Driven Cavity
+
+![LidDrivenCavity/Convergence.png](./LidDrivenCavity/Convergence.png)
+
+Above chart shows the number of SOR iteration that were needed to achieve a residual lower than the eps value for the first 40 timesteps. The effect of the mixed Jacobi/Gauss-Seidel relaxation can be seen by the slightly higher numbers for multiple processes. The (1,1)-MPI configuration line though is not visible, since it lies exactly beneath the sequential line, indicating that our MPI_implementation works perfectly sequential for a single core.
+
 ### Fluid Trap
 
  -       | (sequential) |     (1, 1)     |      (2, 3) |
@@ -43,7 +49,7 @@ ppp
 
 For 2 processes the speedup can be really close to the theoretical speedup. There are multiple reasons for why the speedup stays far below the theoretical speedup for more processes. With increasing number of processes we increase also the communication overhead and increase the fraction of sequential code. The efficiency drops for more than 5 processes since then --use-hwthread-cpus needed to be enabled. The big drop for 8 processes is mainly due to our  simple partitioning in which the last processor takes additionally the leftover cells. Hence the work is not properly distributed for when the number of cells is not dividable by the number of processes.
 
-### Weak Scaling on LidDrivenCavity with 
+### Weak Scaling on LidDrivenCavity with
 
 |         |       |       |       |       |       |       |       |       |
 | :------ | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -56,4 +62,5 @@ For 2 processes the speedup can be really close to the theoretical speedup. Ther
 **Runtime:**  
 ![WeakScaling/Runtime.png](./WeakScaling/Runtime.png)  
 
-For the weak scaling analysis we try to increase the domain with the number of processes to keep the workload per process approximately the same. Additionally to imax and jmax we adjusted xlength and ylength to avoid more timesteps due to smaller grid spacings.
+For the weak scaling analysis we try to increase the domain with the number of processes to keep the workload per process approximately the same. Additionally to imax and jmax we adjusted xlength and ylength to avoid more timesteps due to smaller grid spacings.  
+The chart clearly shows the rising communication overhead for more processes. One should also keep in mind that we don't solve the exact problem for the several cases, therefore the weak scaling analysis might not be too accurate.
