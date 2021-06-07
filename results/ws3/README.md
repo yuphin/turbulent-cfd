@@ -1,32 +1,23 @@
-### Cases
+# Worksheet 3 Results
 
-a) [Plane shear flow](#a-plane-shear-flow)  
-b) [The Karman Vortex Street](#b-the-karman-vortex-street)  
-c) [Flow over a Step](#c-flow-over-a-step)  
-d) [Natural Convection](#d-natural-convection)  
-1. [nu = 0.001](#1-nu-0001)  
-2. [nu = 0.0002](#2-nu-00002)  
+1. [Validation of results](#1-validation-of-results)  
+2. [Performance Analysis](#2-performance-analysis)  
 
-e) [Fluid Trap](#e-fluid-trap)  
-1. [T_h to T_c](#1-t_h-to-t_c)  
-2. [T_c to T_h](#2-t_c-to-t_h)  
+## 1. Validation of results
 
-f) [Rayleigh-Bernard Convection](#f-rayleigh-bernard-convection)  
+### Lid Driven Cavity
 
-### a) Plane shear flow 
-**Velocity**<br>
-![PlaneShear/uv.png](./PlaneShear/uv.png)  
-**Stream tracer**<br>
-![PlaneShear/streamtracer.png](./PlaneShear/streamtracer.png)  
-**Glyph**<br>
-![PlaneShear/glyph.png](./PlaneShear/glyph.png)  
-**Pressure**<br>
-![PlaneShear/p.png](./PlaneShear/p.png)  
-[Return to the cases](#cases)
+Processes (iproc, jproc) | Velocity       |  Pressure
+:-----------------------:|:--------------:|:------------:
+(1, 1) | ![LidDrivenCavity/uv_1_1.png](./LidDrivenCavity/uv_1_1.png) | ![LidDrivenCavity/p_1_1.png](./LidDrivenCavity/p_1_1.png)
+(2, 2) | ![LidDrivenCavity/uv_2_2.png](./LidDrivenCavity/uv_2_2.png) | ![LidDrivenCavity/p_2_2.png](./LidDrivenCavity/p_2_2.png)
+(1, 4) | ![LidDrivenCavity/uv_1_4.png](./LidDrivenCavity/uv_1_4.png) | ![LidDrivenCavity/p_1_4.png](./LidDrivenCavity/p_1_4.png)
+(3, 2) | ![LidDrivenCavity/uv_3_2.png](./LidDrivenCavity/uv_3_2.png) | ![LidDrivenCavity/p_3_2.png](./LidDrivenCavity/p_3_2.png)
+
+### Fluid Trap
 
 
-
-## Performance Analysis  
+## 2. Performance Analysis  
 
 ### Strong Scaling on RayleighBenardConvection with
 

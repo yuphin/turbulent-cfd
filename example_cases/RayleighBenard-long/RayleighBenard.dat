@@ -22,14 +22,14 @@ jmax        18
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end       45000
+t_end       20000
 tau          0.5
 
 #--------------------------------------------
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     100
+dt_value     2000
 
 #--------------------------------------------
 #               pressure
@@ -72,7 +72,7 @@ VIN          0
 #--------------------------------------------
 TI          293
 beta        0.00179
-Pr          12500
+alpha       0.00000237
 
 #--------------------------------------------
 #          wall clusterss
@@ -86,5 +86,5 @@ wall_temp_10     -1
 #       number of processes in x and y direction
 #--------------------------------------------
 
-iproc         5
-jproc         2
+iproc         8
+jproc         1
