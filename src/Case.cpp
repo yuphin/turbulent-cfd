@@ -125,6 +125,12 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     }
     file.close();
 
+    if (params.iproc * params.jproc != params.world_size) {
+        if (params.world_rank == 0) 
+            std::cout << "ERROR: Number of MPI processes doesn't match iproc * jproc! \nAborting... " << std::endl;
+        Communication::finalize();
+        std::exit(0);
+    }
     // We assume Reynolds number = 1 / nu for now
     if (re != REAL_MAX && nu == REAL_MAX) {
         nu = 1 / re;
