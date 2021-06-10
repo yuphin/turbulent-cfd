@@ -1,8 +1,10 @@
 #pragma once
 
 #include "Boundary.hpp"
+#include <Utilities.hpp>
 #include "Fields.hpp"
 #include "Grid.hpp"
+#include <lib/pcgsolver.h>
 #include <utility>
 /**
  * @brief Abstract class for pressure Poisson equation solver
@@ -20,7 +22,8 @@ class PressureSolver {
      * @param[in] grid to be used
      * @param[in] boundary to be used
      */
-    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries) = 0;
+    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries,
+                       uint32_t iters, Real tolerance) = 0;
 };
 
 /**
@@ -48,8 +51,28 @@ class SOR : public PressureSolver {
      * @param[in] grid to be used
      * @param[in] boundary to be used
      */
-    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries);
+    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries,
+                       uint32_t iters, Real tolerance);
 
   private:
     Real _omega;
+};
+
+class PCG : public PressureSolver {
+  public:
+    PCG(int dim_x, int dim_y, Real dx, Real dy, Fields &field, Grid &grid,
+        const std::vector<std::unique_ptr<Boundary>> &boundaries);
+
+    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries,
+                       uint32_t iters, Real tolerance);
+    DiagonalSparseMatrix<Real> A_diag;
+    SparseMatrix<Real> &get_a() { return A; }
+  private:
+    int dim;
+    int dim_x;
+    int dim_y;
+    SparseMatrix<Real> A;
+    void build_matrix(SparseMatrix<Real> &A, Real dx, Real dy, Fields &field, Grid &grid,
+                      const std::vector<std::unique_ptr<Boundary>> &boundaries);
+    void create_diagonal_matrix();
 };

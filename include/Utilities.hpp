@@ -17,6 +17,19 @@ const double REAL_MAX = DBL_MAX;
 typedef double Real;
 #endif
 
+struct BoundaryData {
+    uint32_t neighborhood = 0;
+};
+
+
+template <typename T>
+struct DiagonalSparseMatrix {
+    int dim;
+    int num_diags = 5;
+    std::vector<T> data;
+    std::vector<int> offsets;
+};
+
 /**
  * @brief Class to handle logging functionality.
  *

@@ -57,7 +57,8 @@ class Case {
     Fields _field;
     Grid _grid;
     Discretization _discretization;
-    std::unique_ptr<PressureSolver> _pressure_solver;
+    std::unique_ptr<PressureSolver> _pressure_solver_sor;
+    std::unique_ptr<PressureSolver> _pressure_solver_pcg;
     std::vector<std::unique_ptr<Boundary>> _boundaries;
 
     /// Solver convergence tolerance

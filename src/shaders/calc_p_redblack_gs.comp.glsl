@@ -87,5 +87,4 @@ void main() {
 								  at(p, i, j-1));
 	float coeff = omega / (2* (inv_dx2 + inv_dy2));
 	at(p, i, j) = (1 - omega) * at(p, i, j) + coeff * (sor_helper(p_stencil) - (at(rs, i, j)));
-	//at(p, i, j) = parity + 1;
 }

@@ -78,9 +78,6 @@ struct UBOData {
     uint32_t fluid_cells_size;
 };
 
-struct BoundaryData {
-    uint32_t neighborhood = 0;
-};
 
 struct Pipeline {
     VkPipeline pipeline;
@@ -615,33 +612,14 @@ class GPUSimulation {
         VK_CHECK(vkEndCommandBuffer(context.command_buffer)); // end recording commands.
     }
 
-    void begin_end_record_command_buffer(Pipeline pipeline) {
+   void begin_end_record_command_buffer(Pipeline pipeline, int wg_x = 32, int wg_y = 32, int width = 102,
+                                         int height = 22) {
         begin_recording();
-        /*
-        We need to bind a pipeline, AND a descriptor set before we dispatch.
-
-        The validation layer will NOT give warnings if you forget these, so be very careful not to forget them.
-        */
-        vkCmdBindPipeline(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
-
-        vkCmdBindDescriptorSets(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1,
-                                &descriptor_set, 0, NULL);
-
-        /*
-        Calling vkCmdDispatch basically starts the compute pipeline, and executes the compute shader.
-        The number of workgroups is specified in the arguments.
-        If you are already familiar with compute shaders from OpenGL, this should be nothing new to you.
-        */
-        const int WIDTH = 102;         // Size of rendered mandelbrot set.
-        const int HEIGHT = 22;         // Size of renderered mandelbrot set.
-        const int WORKGROUP_SIZE = 32; // Workgroup size in compute shader.
-        const auto num_wg_x = (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE));
-        const auto num_wg_y = (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE));
-        vkCmdDispatch(context.command_buffer, num_wg_x, num_wg_y, 1);
+        record_command_buffer(pipeline, wg_x, wg_y, width, height);
         end_recording();
     }
 
-    void record_command_buffer(Pipeline pipeline) {
+    void record_command_buffer(Pipeline pipeline, int wg_x = 32, int wg_y = 32, int width = 102, int height = 22) {
         /*
         We need to bind a pipeline, AND a descriptor set before we dispatch.
 
@@ -652,11 +630,8 @@ class GPUSimulation {
         vkCmdBindDescriptorSets(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1,
                                 &descriptor_set, 0, NULL);
 
-        const int WIDTH = 102;         // Size of rendered mandelbrot set.
-        const int HEIGHT = 22;         // Size of renderered mandelbrot set.
-        const int WORKGROUP_SIZE = 32; // Workgroup size in compute shader.
-        const auto num_wg_x = (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE));
-        const auto num_wg_y = (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE));
+        const auto num_wg_x = (uint32_t)ceil(width / float(wg_x));
+        const auto num_wg_y = (uint32_t)ceil(height / float(wg_y));
         vkCmdDispatch(context.command_buffer, num_wg_x, num_wg_y, 1);
     }
 

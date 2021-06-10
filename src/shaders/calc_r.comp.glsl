@@ -1,5 +1,4 @@
 #version 450
-#extension GL_GOOGLE_include_directive: require
 #extension GL_KHR_shader_subgroup_arithmetic : enable
 const  int imax = 102;
 const  int jmax = 22;
@@ -83,24 +82,20 @@ void main() {
 		sum = val * val;
     }
 
-    barrier();
-
 	sum = subgroupAdd(sum);
 	if (gl_SubgroupInvocationID == 0) {
         data[gl_SubgroupID] = sum;
 	
     }
-    barrier();
-	memoryBarrierShared();
+	barrier();
 	
     if (gl_SubgroupID == 0) {
         sum = data[gl_SubgroupInvocationID];
-		memoryBarrier();
-		barrier();
+		subgroupBarrier();
         sum = subgroupAdd(sum); 
     }
 	if (gl_SubgroupInvocationID == 0) {
-        r[gl_WorkGroupID.x] = sqrt(sum / 2000);
+        r[gl_WorkGroupID.x] = sum;
     }
   
 }

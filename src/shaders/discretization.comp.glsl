@@ -10,7 +10,6 @@ const float inv_dx = 10;
 const float inv_dy = 10;
 const float gamma = 0.5;
 #define at(AR, I, J) AR[imax * (J) + (I)]
-#define interpolate(A, i, j, i_offset, j_offset) (at(A, i, j) - at(A, i + i_offset, j + j_offset))/ 2
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 layout(std430, binding = 0) readonly buffer U
