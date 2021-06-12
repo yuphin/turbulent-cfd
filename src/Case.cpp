@@ -248,25 +248,27 @@ static void barrier(GPUSimulation &simulation, Buffer &buffer,
                     VkAccessFlags src_access = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
                     VkAccessFlags dst_access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT) {
     VkBufferMemoryBarrier res_barrier = buffer_barrier(buffer.handle, src_access, dst_access);
-    vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx],
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1,
+                         &res_barrier, 0, 0);
 }
 
 static Real vec_dp_immediate(GPUSimulation &simulation, Buffer &v1, Buffer &v2, Buffer &residual_buffer,
                              Buffer &scratch_buffer, Pipeline &pipeline, Pipeline &reduce_pipeline,
                              int dim = 102 * 22) {
-    simulation.push_descriptors({{v1, 12}, {v2, 13}, {residual_buffer, 16}}); // for dp
     simulation.begin_recording();
-    vkCmdFillBuffer(simulation.context.command_buffer, residual_buffer.handle, 0, 32 * sizeof(Real), 0);
+    vkCmdFillBuffer(simulation.context.command_buffer[simulation.context.idx], residual_buffer.handle, 0,
+                    32 * sizeof(Real), 0);
     VkBufferMemoryBarrier fill_barrier =
         buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
-    vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+    vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
     simulation.record_command_buffer(pipeline, 1024, 1, dim, 1);
     VkBufferMemoryBarrier res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
                                                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
-    vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx],
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1,
+                         &res_barrier, 0, 0);
     simulation.record_command_buffer(reduce_pipeline, 32, 1, 32, 1); // TODO
     simulation.end_recording();
     simulation.run_command_buffer();
@@ -276,16 +278,18 @@ static Real vec_dp_immediate(GPUSimulation &simulation, Buffer &v1, Buffer &v2, 
 
 static void vec_dp(GPUSimulation &simulation, Buffer &v1, Buffer &v2, Buffer &residual_buffer, Pipeline &pipeline,
                    Pipeline &reduce_pipeline, int dim = 102 * 22) {
-    vkCmdFillBuffer(simulation.context.command_buffer, residual_buffer.handle, 0, 32 * sizeof(Real), 0);
+    vkCmdFillBuffer(simulation.context.command_buffer[simulation.context.idx], residual_buffer.handle, 0,
+                    32 * sizeof(Real), 0);
     VkBufferMemoryBarrier fill_barrier =
         buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
-    vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+    vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
     simulation.record_command_buffer(pipeline, 1024, 1, dim, 1);
     VkBufferMemoryBarrier res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
                                                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
-    vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx],
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1,
+                         &res_barrier, 0, 0);
     simulation.record_command_buffer(reduce_pipeline, 32, 1, 32, 1); // TODO
 }
 
@@ -524,13 +528,100 @@ void Case::simulate() {
                                  {t_buffer, 4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
                                  {cell_buffer, 5},
                                  {rs_buffer, 6},
+                                 {p_buffer, 7},
                                  {residual_buffer, 8},
                                  {neighborhood_buffer, 9},
                                  {a_data_buffer, 10},
                                  {a_offset_buffer, 11},
+                                 {d_buffer, 12},
+                                 {spmv_result_buffer, 13},
+                                 {residual_buffer, 14},
+                                 {r_buffer, 15},
+                                 {p_buffer, 16},
                                  {scalar_buffer, 31},
                                  {deltas_buffer, 30}});
+    auto record_conjugate_gradient_solver = [&](int command_idx = 0) {
+        simulation.context.idx = command_idx;
+        simulation.begin_recording(0);
+        // q <- A *d
+        simulation.record_command_buffer(spmv_pipeline, 1024, 1, 102 * 22, 1);
+        barrier(simulation, spmv_result_buffer);
+        // Store d^T dot q scalar in the residual buffer
+        vec_dp(simulation, d_buffer, spmv_result_buffer, residual_buffer, vec_dot_vec_0_pipeline,
+               reduce_store_pipeline);
+        barrier(simulation, residual_buffer);
 
+        // alpha = delta_new / dt_dotq
+        scalar_div(simulation, div_pipeline);
+        barrier(simulation, residual_buffer);
+
+        // x <- x + alpha * d
+        vec_saxpy(simulation, saxpy_0_pipeline, p_buffer, d_buffer, p_buffer);
+        barrier(simulation, p_buffer);
+        // r <- r - alpha * q
+        vec_saxpy(simulation, saxpy_1_pipeline, r_buffer, spmv_result_buffer, r_buffer);
+        barrier(simulation, r_buffer);
+        simulation.record_command_buffer(inc_pipeline, 1, 1, 1, 1);
+        barrier(simulation, scalar_buffer);
+
+        vec_dp(simulation, r_buffer, r_buffer, residual_buffer, vec_dot_vec_1_pipeline, reduce_store_pipeline);
+        barrier(simulation, residual_buffer);
+        /*  delta_old = delta_new;
+          delta_new = vec_dp(simulation, r_buffer, r_buffer, residual_buffer, scratch_buffer, vec_dot_vec_pipeline,
+                             reduce_pipeline);
+          Real beta = delta_new / delta_old;*/
+        scalar_div(simulation, div_store_pipeline);
+        barrier(simulation, residual_buffer);
+        barrier(simulation, d_buffer);
+        // d <- r + beta * d;
+        vec_saxpy(simulation, saxpy_2_pipeline, r_buffer, d_buffer, d_buffer);
+        barrier(simulation, d_buffer);
+        simulation.record_command_buffer(inc_pipeline, 1, 1, 1, 1);
+        barrier(simulation, scalar_buffer);
+        VkBufferCopy copy_region;
+        copy_region.srcOffset = 0;
+        copy_region.dstOffset = 0;
+        copy_region.size = deltas_buffer.size;
+        vkCmdCopyBuffer(simulation.context.command_buffer[simulation.context.idx], deltas_buffer.handle,
+                        scratch_buffer.handle, 1, &copy_region);
+        simulation.end_recording();
+    };
+
+    auto record_simulation_step = [&](int command_idx = 0) {
+        simulation.context.idx = command_idx;
+        simulation.begin_recording();
+        simulation.record_command_buffer(discretization_pipeline);
+        std::array<VkBufferMemoryBarrier, 2> fg_barriers = {
+            buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
+            buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)
+
+        };
+        vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx],
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2,
+                             fg_barriers.data(), 0, 0);
+
+        simulation.record_command_buffer(fg_boundary_pipeline);
+
+        std::array<VkBufferMemoryBarrier, 2> fg_barriers_read = {
+            buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+            buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)};
+        vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx],
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2,
+                             fg_barriers_read.data(), 0, 0);
+        simulation.record_command_buffer(rs_pipeline);
+        vkCmdFillBuffer(simulation.context.command_buffer[simulation.context.idx], p_buffer.handle, 0,
+                        102 * 22 * sizeof(Real), 0);
+        std::vector<Real> solution(_field.p_matrix().size(), 0);
+        VkBufferMemoryBarrier fill_barrier = buffer_barrier(p_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+        vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+        barrier(simulation, rs_buffer);
+        rs_buffer.copy(d_buffer, false);
+        rs_buffer.copy(r_buffer, false);
+        // Calculate  delta_new(r_norm) = r_t dot r
+        simulation.end_recording();
+    };
     while (t < _t_end) {
 
         // Print progress bar
@@ -542,9 +633,7 @@ void Case::simulate() {
         // Enforce velocity boundary conditions
         /* for (auto &boundary : _boundaries) {
              boundary->enforce_uv(_field);
-         }
-         u_buffer.upload(_field.u_matrix().size() * sizeof(Real), _field._U._container.data());
-         v_buffer.upload(_field.v_matrix().size() * sizeof(Real), _field._V._container.data());*/
+         } */
 
         ubo_data.dt = dt;
         memcpy(t_buffer.data, &ubo_data, sizeof(UBOData));
@@ -560,43 +649,16 @@ void Case::simulate() {
 
         // Compute F & G and enforce boundary conditions
         //_field.calculate_fluxes(_grid, _calc_temp);
-        simulation.begin_recording();
-        simulation.record_command_buffer(discretization_pipeline);
 
-        //_field.f_matrix()._container.assign((Real *)f_buffer.data, (Real *)f_buffer.data +
-        //_field.f_matrix().size()); _field.g_matrix()._container.assign((Real *)g_buffer.data, (Real
-        //*)g_buffer.data + _field.g_matrix().size());
         // for (const auto &boundary : _boundaries) {
         //    boundary->enforce_fg(_field);
         //}
         //// Set RHS of PPE
         ////_field.calculate_rs(_grid);
-        // f_buffer.upload(_field.f_matrix().size() * sizeof(Real), _field._F._container.data());
-        // g_buffer.upload(_field.g_matrix().size() * sizeof(Real), _field._G._container.data());
 
-        // simulation.push_descriptors({{f_buffer, 2}, {g_buffer, 3}});
-        std::array<VkBufferMemoryBarrier, 2> fg_barriers = {
-            buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
-            buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)
-
-        };
-        vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers.data(), 0, 0);
-
-        simulation.record_command_buffer(fg_boundary_pipeline);
-
-        std::array<VkBufferMemoryBarrier, 2> fg_barriers_read = {
-            buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
-            buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)};
-        vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers_read.data(), 0, 0);
-        simulation.record_command_buffer(rs_pipeline);
-        simulation.end_recording();
-        simulation.run_command_buffer();
         // Perform pressure solve
         uint32_t it = 0;
         Real res = REAL_MAX;
-        //_max_iter = 100;
 #if ENABLE_CG_CPU || ENABLE_GS_CPU
         rs_buffer.copy(scratch_buffer);
         _field._RS._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._RS.size());
@@ -618,8 +680,7 @@ void Case::simulate() {
             it++;
         }
 #endif
-        // p_buffer.upload(_field.p_matrix().size() * sizeof(Real), _field._P._container.data(), &scratch_buffer);
-        simulation.push_descriptors({{p_buffer, 7}});
+
 #if ENABLE_GS_GPU
         it = 0;
 
@@ -653,82 +714,17 @@ void Case::simulate() {
             it++;
         }
 #endif
-        it = 0;
 
-        simulation.begin_recording();
-        vkCmdFillBuffer(simulation.context.command_buffer, p_buffer.handle, 0, 102 * 22 * sizeof(Real), 0);
-        std::vector<Real> solution(_field.p_matrix().size(), 0);
-        VkBufferMemoryBarrier fill_barrier = buffer_barrier(p_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
-        vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
-        simulation.end_recording();
+        record_simulation_step(1);
         simulation.run_command_buffer();
-        rs_buffer.copy(d_buffer);
-        rs_buffer.copy(r_buffer);
-        rs_buffer.copy(scratch_buffer);
-        std::vector<Real> rs(_field._RS.size());
-        rs.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._RS.size());
-        simulation.push_descriptors({{r_buffer, 19}});
-        // Calculate  delta_new(r_norm) = r_t dot r
-        Real delta_new = vec_dp_immediate(simulation, rs_buffer, rs_buffer, residual_buffer, scratch_buffer,
-                                          vec_dot_vec_0_pipeline, reduce_pipeline);
+        Real delta_new = vec_dp_immediate(simulation, r_buffer, r_buffer, residual_buffer, scratch_buffer,
+                                          vec_dot_vec_1_pipeline, reduce_pipeline);
         Real delta_old = delta_new;
         Real delta_zero = delta_new;
         deltas_buffer.upload(sizeof(Real), &delta_new, &scratch_buffer);
 
         Real cond = _tolerance * _tolerance * delta_zero;
-        simulation.push_descriptors(
-            {{d_buffer, 12}, {spmv_result_buffer, 13}, {residual_buffer, 16}, {r_buffer, 19}, {p_buffer, 20}});
-
-
-        /* record */
-
-           simulation.begin_recording(0);
-        // q <- A *d
-        simulation.record_command_buffer(spmv_pipeline, 1024, 1, 102 * 22, 1);
-        barrier(simulation, spmv_result_buffer);
-        // Store d^T dot q scalar in the residual buffer
-
-        vec_dp(simulation, d_buffer, spmv_result_buffer, residual_buffer, vec_dot_vec_0_pipeline,
-               reduce_store_pipeline);
-        barrier(simulation, residual_buffer);
-
-        // alpha = delta_new / dt_dotq
-        // Real alpha = delta_new / dt_dot_q;
-        scalar_div(simulation, div_pipeline);
-
-        barrier(simulation, residual_buffer);
-
-        // x <- x + alpha * d
-        vec_saxpy(simulation, saxpy_0_pipeline, p_buffer, d_buffer, p_buffer);
-        barrier(simulation, p_buffer);
-        // r <- r - alpha * q
-        vec_saxpy(simulation, saxpy_1_pipeline, r_buffer, spmv_result_buffer, r_buffer);
-        barrier(simulation, r_buffer);
-        simulation.record_command_buffer(inc_pipeline, 1, 1, 1, 1);
-        barrier(simulation, scalar_buffer);
-
-        vec_dp(simulation, r_buffer, r_buffer, residual_buffer, vec_dot_vec_1_pipeline, reduce_store_pipeline);
-        barrier(simulation, residual_buffer);
-        /*  delta_old = delta_new;
-          delta_new = vec_dp(simulation, r_buffer, r_buffer, residual_buffer, scratch_buffer, vec_dot_vec_pipeline,
-                             reduce_pipeline);
-          Real beta = delta_new / delta_old;*/
-        scalar_div(simulation, div_store_pipeline);
-        barrier(simulation, residual_buffer);
-        barrier(simulation, d_buffer);
-        // d <- r + beta * d;
-        vec_saxpy(simulation, saxpy_2_pipeline, r_buffer, d_buffer, d_buffer);
-        barrier(simulation, d_buffer);
-        simulation.record_command_buffer(inc_pipeline, 1, 1, 1, 1);
-        barrier(simulation, scalar_buffer);
-        VkBufferCopy copy_region;
-        copy_region.srcOffset = 0;
-        copy_region.dstOffset = 0;
-        copy_region.size = deltas_buffer.size;
-        vkCmdCopyBuffer(simulation.context.command_buffer, deltas_buffer.handle, scratch_buffer.handle, 1, &copy_region);
-        simulation.end_recording();
+        record_conjugate_gradient_solver(2);
 
         /* end record */
         while (it < _max_iter && delta_new > cond) {
@@ -749,7 +745,6 @@ void Case::simulate() {
         // You can uncomment this for debugging
         /* p_buffer.copy(scratch_buffer);
          _field._P._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._P.size());*/
-        float del = delta_new / delta_zero;
         // Check if max_iter was reached
         std::cout << it;
         if (it == _max_iter) {
@@ -769,8 +764,10 @@ void Case::simulate() {
             buffer_barrier(v_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)
 
         };
-        vkCmdPipelineBarrier(simulation.context.command_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, uv_barriers.data(), 0, 0);
+        // TODO
+        vkCmdPipelineBarrier(simulation.context.command_buffer[simulation.context.idx],
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2,
+                             uv_barriers.data(), 0, 0);
         simulation.record_command_buffer(v_boundary_pipeline);
         simulation.end_recording();
         simulation.run_command_buffer();
@@ -803,6 +800,8 @@ void Case::simulate() {
     d_buffer.destroy();
     spmv_result_buffer.destroy();
     scalar_buffer.destroy();
+    r_buffer.destroy();
+    deltas_buffer.destroy();
     neighborhood_buffer.destroy();
     // Print Summary
     logger.finish();
@@ -811,10 +810,11 @@ void Case::simulate() {
     /*  simulation.cleanup({discretization_pipeline, rs_pipeline, vel_pipeline, p_pipeline_red, p_pipeline_black,
                           residual_pipeline, p_boundary_pipeline, v_boundary_pipeline, fg_boundary_pipeline});*/
 
-    simulation.cleanup({discretization_pipeline, rs_pipeline, vel_pipeline, p_pipeline_red, p_pipeline_black,
-                        residual_pipeline, p_boundary_pipeline, v_boundary_pipeline, fg_boundary_pipeline,
-                        spmv_pipeline,saxpy_0_pipeline, reduce_pipeline,
-                        vec_dot_vec_0_pipeline});
+    simulation.cleanup({discretization_pipeline, rs_pipeline,       vel_pipeline,          p_pipeline_red,
+                        p_pipeline_black,        residual_pipeline, p_boundary_pipeline,   v_boundary_pipeline,
+                        fg_boundary_pipeline,    spmv_pipeline,     saxpy_0_pipeline,      saxpy_1_pipeline,
+                        saxpy_2_pipeline,        reduce_pipeline,   reduce_store_pipeline, vec_dot_vec_0_pipeline,
+                        vec_dot_vec_1_pipeline,  div_pipeline,      div_store_pipeline,    inc_pipeline});
 }
 
 void Case::output_vtk(int timestep, int my_rank) {

@@ -4,7 +4,7 @@ const int dim = 32;
 
 layout(local_size_x = 32, local_size_y =1, local_size_z = 1) in;
 layout(constant_id = 0) const uint STORE = 0;
-layout(binding = 16) buffer Buffer
+layout(binding = 14) buffer Buffer
 {
 	float r[];
 };

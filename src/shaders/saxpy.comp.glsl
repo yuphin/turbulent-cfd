@@ -17,17 +17,17 @@ layout(binding = 13) buffer V2 // spmv
 	float v2[];
 };
 
-layout(binding = 16) buffer Res // res
+layout(binding = 14) buffer Res // res
 {
 	float res[];
 };
 
-layout(binding = 19) buffer R // r
+layout(binding = 15) buffer R // r
 {
 	float r[];
 };
 
-layout(binding = 20) buffer P // p
+layout(binding = 16) buffer P // p
 {
 	float p[];
 };

@@ -89,8 +89,10 @@ struct Context {
     VkQueue compute_queue;
     VkPhysicalDevice physical_device;
     VkCommandPool command_pool;
-    VkCommandBuffer command_buffer;
+    std::vector<VkCommandBuffer> command_buffer;
+    int idx = 0;
 };
+
 
 struct Buffer {
     Context *ctx = nullptr;
@@ -127,18 +129,18 @@ struct Buffer {
             VkCommandBufferBeginInfo begin_info = {};
             begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer, &begin_info));
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[ctx->idx], &begin_info));
             VkBufferCopy copy_region = {0, 0, VkDeviceSize(size)};
-            vkCmdCopyBuffer(ctx->command_buffer, staging_buffer.handle, this->handle, 1, &copy_region);
+            vkCmdCopyBuffer(ctx->command_buffer[ctx->idx], staging_buffer.handle, this->handle, 1, &copy_region);
             VkBufferMemoryBarrier copy_barrier =
                 buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-            vkCmdPipelineBarrier(ctx->command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            vkCmdPipelineBarrier(ctx->command_buffer[ctx->idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                                  VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1,
                                  &copy_barrier, 0, 0);
-            vkEndCommandBuffer(ctx->command_buffer);
+            vkEndCommandBuffer(ctx->command_buffer[ctx->idx]);
             VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
             submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &ctx->command_buffer;
+            submitInfo.pCommandBuffers = &ctx->command_buffer[ctx->idx];
 
             VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
 
@@ -207,43 +209,48 @@ struct Buffer {
             VkCommandBufferBeginInfo begin_info = {};
             begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer, &begin_info));
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[ctx->idx], &begin_info));
             VkBufferCopy copy_region = {0, 0, VkDeviceSize(size)};
-            vkCmdCopyBuffer(ctx->command_buffer, staging_buffer->handle, this->handle, 1, &copy_region);
+            vkCmdCopyBuffer(ctx->command_buffer[ctx->idx], staging_buffer->handle, this->handle, 1, &copy_region);
             VkBufferMemoryBarrier copy_barrier =
                 buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-            vkCmdPipelineBarrier(ctx->command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+            vkCmdPipelineBarrier(ctx->command_buffer[ctx->idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                                  VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1,
                                  &copy_barrier, 0, 0);
-            vkEndCommandBuffer(ctx->command_buffer);
+            vkEndCommandBuffer(ctx->command_buffer[ctx->idx]);
             VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
             submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &ctx->command_buffer;
+            submitInfo.pCommandBuffers = &ctx->command_buffer[ctx->idx];
             VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
             VK_CHECK(vkDeviceWaitIdle(ctx->device));
         }
     }
-    void copy(Buffer &dst_buffer) {
+    void copy(Buffer &dst_buffer, bool reset = true) {
         VkBufferCopy copy_region;
         copy_region.srcOffset = 0;
         copy_region.dstOffset = 0;
         copy_region.size = size;
-        VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer, &begin_info));
-        vkCmdCopyBuffer(ctx->command_buffer, handle, dst_buffer.handle, 1, &copy_region);
+        if (reset) {
+            VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[ctx->idx], &begin_info)); 
+        }
+      
+        vkCmdCopyBuffer(ctx->command_buffer[ctx->idx], handle, dst_buffer.handle, 1, &copy_region);
         VkBufferMemoryBarrier copy_barrier =
             buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-        vkCmdPipelineBarrier(ctx->command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        vkCmdPipelineBarrier(ctx->command_buffer[ctx->idx], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                              VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1, &copy_barrier, 0, 0);
-        vkEndCommandBuffer(ctx->command_buffer);
-        VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
-        submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &ctx->command_buffer;
-        VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
-        VK_CHECK(vkDeviceWaitIdle(ctx->device));
+        if (reset) {
+            vkEndCommandBuffer(ctx->command_buffer[ctx->idx]);
+            VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &ctx->command_buffer[ctx->idx];
+            VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
+            VK_CHECK(vkDeviceWaitIdle(ctx->device)); 
+        }
     }
 };
 
@@ -590,9 +597,10 @@ class GPUSimulation {
         // A secondary buffer has to be called from some primary command buffer, and cannot be directly
         // submitted to a queue. To keep things simple, we use a primary command buffer.
         command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        command_buffer_allocate_info.commandBufferCount = 1; // allocate a single command buffer.
+        context.command_buffer.resize(3);
+        command_buffer_allocate_info.commandBufferCount = 3; // allocate a single command buffer.
         VK_CHECK(vkAllocateCommandBuffers(context.device, &command_buffer_allocate_info,
-                                          &context.command_buffer)); // allocate command buffer.
+                                          context.command_buffer.data())); // allocate command buffer.
     }
 
     void begin_recording(VkCommandBufferUsageFlags flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) {
@@ -605,11 +613,11 @@ class GPUSimulation {
         begin_info.flags = flags; // the buffer is only submitted and used once
                                   // in
                                   // this application.
-        VK_CHECK(vkBeginCommandBuffer(context.command_buffer, &begin_info)); // start recording commands.
+        VK_CHECK(vkBeginCommandBuffer(context.command_buffer[context.idx], &begin_info)); // start recording commands.
     }
 
     void end_recording() {
-        VK_CHECK(vkEndCommandBuffer(context.command_buffer)); // end recording commands.
+        VK_CHECK(vkEndCommandBuffer(context.command_buffer[context.idx])); // end recording commands.
     }
 
    void begin_end_record_command_buffer(Pipeline pipeline, int wg_x = 32, int wg_y = 32, int width = 102,
@@ -625,14 +633,14 @@ class GPUSimulation {
 
         The validation layer will NOT give warnings if you forget these, so be very careful not to forget them.
         */
-        vkCmdBindPipeline(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+        vkCmdBindPipeline(context.command_buffer[context.idx], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
 
-        vkCmdBindDescriptorSets(context.command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1,
+        vkCmdBindDescriptorSets(context.command_buffer[context.idx], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1,
                                 &descriptor_set, 0, NULL);
 
         const auto num_wg_x = (uint32_t)ceil(width / float(wg_x));
         const auto num_wg_y = (uint32_t)ceil(height / float(wg_y));
-        vkCmdDispatch(context.command_buffer, num_wg_x, num_wg_y, 1);
+        vkCmdDispatch(context.command_buffer[context.idx], num_wg_x, num_wg_y, 1);
     }
 
     void create_fences() {
@@ -647,7 +655,7 @@ class GPUSimulation {
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &context.command_buffer;
+        submit_info.pCommandBuffers = &context.command_buffer[context.idx];
         VK_CHECK(vkQueueSubmit(context.compute_queue, 1, &submit_info, fence));
         /*
         The command will not have finished executing until the fence is signalled.

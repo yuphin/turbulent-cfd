@@ -16,12 +16,12 @@ layout(binding = 13) buffer V2 //spmv
 	float v2[];
 };
 
-layout(binding = 16) buffer Residual //residual
+layout(binding = 14) buffer Residual //residual
 {
 	float res[];
 };
 
-layout(binding = 19) buffer R // r
+layout(binding = 15) buffer R // r
 {
 	float r[];
 };
