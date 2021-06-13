@@ -34,7 +34,7 @@ void Communication::init_params(Params *params, int imax, int jmax) {
         params->jmax += jmax % jproc;
     }   
 
-#if LOG
+#if FLUICHEN_LOG
     std::cout << "Rank: " << wr << "(" << coords.x << "," << coords.y << ")"
               << "\n"
               << "xmin: " << params->imin << ", xmax: " << params->imax << " ymin: " << params->jmin

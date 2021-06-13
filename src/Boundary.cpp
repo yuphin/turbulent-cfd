@@ -268,7 +268,6 @@ void NoSlipWallBoundary::enforce_uv(Fields &field) {
             enforce_uv_main(field, cell);
         }
     }
-    
 }
 
 void NoSlipWallBoundary::enforce_uv_main(Fields &field, Cell *cell) {
@@ -295,6 +294,7 @@ void NoSlipWallBoundary::enforce_uv_diagonal(Fields &field, Cell *cell) {
     int i = cell->i();
     int j = cell->j();
     int id = cell->id();
+    // This shouldn't happen since index 0 is a ghost cell
     assert(!(i == 0 && j == 0) && "Illegal index");
 
     if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {

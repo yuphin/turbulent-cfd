@@ -4,7 +4,7 @@
 #include "Datastructures.hpp"
 #include <mpi.h>
 
-#define LOG 0
+#define FLUICHEN_LOG 0
 
 class Communication {
 
