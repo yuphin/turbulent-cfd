@@ -92,5 +92,5 @@ wall_temp_12         -0.5
 #       number of processes in x and y direction
 #--------------------------------------------
 
-iproc         4
-jproc         2
+iproc         2
+jproc         3

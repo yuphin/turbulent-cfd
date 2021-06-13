@@ -125,6 +125,12 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     }
     file.close();
 
+    if (params.iproc * params.jproc != params.world_size) {
+        if (params.world_rank == 0) 
+            std::cout << "ERROR: Number of MPI processes doesn't match iproc * jproc! \nAborting... " << std::endl;
+        Communication::finalize();
+        std::exit(0);
+    }
     // We assume Reynolds number = 1 / nu for now
     if (re != REAL_MAX && nu == REAL_MAX) {
         nu = 1 / re;
@@ -144,7 +150,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     if (pr != REAL_MAX) {
         alpha = nu / pr;
     } else if (alpha == REAL_MAX) {
-        if (params.world_rank == 0) {
+        if (params.world_rank == 0 && _calc_temp) {
             logger.log_error("Prandtl number, alpha or beta are not set, defaulting to 0");
         }
         alpha = 0.0;
@@ -158,8 +164,10 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     // Set file names for geometry file and output directory
     set_file_names(file_name);
     // Create log file in output dir
-    logger.create_log(_dict_name, _case_name);
+    logger.create_log(_dict_name, _case_name, params);
 
+    global_size_x = imax;
+    global_size_y = jmax;
     std::vector<std::vector<int>> global_geometry;
     if (_geom_name.compare("NONE")) {
 
@@ -326,11 +334,12 @@ void Case::simulate(Params &params) {
             it++;
         }
         // Check if max_iter was reached
+        
         if (params.world_rank == 0 && it == _max_iter) {
             logger.max_iter_warning();
         }
         // Output current timestep information
-        logger.write_log(timestep, t, it, _max_iter, res);
+        logger.write_log(timestep, t, dt, it, _max_iter, res);
 
         // Compute u^(n+1) & v^(n+1)
         _field.calculate_velocities(_grid);
@@ -364,8 +373,9 @@ void Case::output_vtk(int timestep, Params &params) {
     Real dy = _grid.dy();
     int i = params.world_rank % params.iproc;
     int j = params.world_rank / params.iproc;
-    Real base_x = i * (_grid.domain().x_length / params.iproc)  + _grid.domain().imin * dx + dx;
-    Real base_y = j * (_grid.domain().y_length / params.jproc) + _grid.domain().jmin * dy + dy;
+
+    Real base_x = i * ((int) (global_size_x / params.iproc)) * dx + dx;
+    Real base_y = j * ((int) (global_size_y / params.jproc)) * dy + dy;
 
     Real z = 0;
     Real y = base_y;

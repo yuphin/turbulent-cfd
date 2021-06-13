@@ -8,8 +8,8 @@ ylength      1
 #--------------------------------------------
 #            number of cells
 #--------------------------------------------
-imax        50
-jmax        50
+imax        100
+jmax        100
 
 #--------------------------------------------
 #               time steps
@@ -25,7 +25,7 @@ tau          0.5
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     0.5
+dt_value     1
 
 #--------------------------------------------
 #               pressure
@@ -34,7 +34,7 @@ dt_value     0.5
 # omg: relaxation factor for SOR
 # gamma: upwind differencing factor
 #--------------------------------------------
-itermax      100
+itermax      10000
 eps          0.001
 omg          1.7
 gamma        0.5
@@ -65,5 +65,5 @@ VI          0
 #       number of processes in x and y direction
 #--------------------------------------------
 
-iproc         2
+iproc         3
 jproc         2
