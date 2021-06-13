@@ -22,10 +22,6 @@ void main(){
 		
 		sum = r[idx];
 	}
-
-	memoryBarrier();
-	barrier();
-
 	sum = subgroupAdd(sum);
 	if (gl_LocalInvocationID.x == 0) {
 		int counter = cnt % 2;

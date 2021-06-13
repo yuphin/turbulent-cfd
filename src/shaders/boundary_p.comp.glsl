@@ -35,10 +35,9 @@ layout(std430, binding = 3) buffer G
 	float g[imax * jmax];
 };
 
-layout(binding = 4) uniform UBO
+layout(binding = 21) buffer DT
 {
 	float dt;
-	float parity;
 };
 
 layout(binding = 5) readonly buffer CellType

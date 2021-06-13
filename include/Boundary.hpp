@@ -64,11 +64,10 @@ class InletBoundary : public Boundary {
     void enforce_uv(Fields &field) override;
     void enforce_p(Fields &field) override;    
     void enforce_t(Fields &field) override;
-
-  private:
     std::unordered_map<int, Real> _inlet_U;
     std::unordered_map<int, Real> _inlet_V;
     std::unordered_map<int, Real> _inlet_T;
+  private:
     Real _inlet_DP = REAL_MAX;
 };
 
@@ -83,11 +82,11 @@ class NoSlipWallBoundary : public Boundary {
                        std::unordered_map<int, Real> wall_temperature);
     virtual ~NoSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
-
+    std::unordered_map<int, Real> _wall_velocity;
   private:
     void enforce_uv_main(Fields &field, Cell *cell);
     void enforce_uv_diagonal(Fields &field, Cell *cell);
-    std::unordered_map<int, Real> _wall_velocity;
+   
 };
 
 /**
@@ -102,7 +101,7 @@ class FreeSlipWallBoundary : public Boundary {
                          std::unordered_map<int, Real> wall_temperature);
     virtual ~FreeSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
-
-  private:
     std::unordered_map<int, Real> _wall_velocity;
+  private:
+  
 };

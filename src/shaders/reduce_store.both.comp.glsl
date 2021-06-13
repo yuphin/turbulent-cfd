@@ -9,10 +9,6 @@ layout(binding = 30) buffer Buffer
 	float r[];
 };
 
-layout(binding = 31) buffer Counter
-{
-	int cnt;
-};
 shared float data[32];
 
 void main(){
@@ -23,8 +19,6 @@ void main(){
 		sum = r[idx];
 	}
 
-	memoryBarrier();
-	barrier();
 
 	sum = subgroupAdd(sum);
 	if (gl_LocalInvocationID.x == 0) {

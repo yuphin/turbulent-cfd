@@ -78,7 +78,6 @@ struct UBOData {
     uint32_t fluid_cells_size;
 };
 
-
 struct Pipeline {
     VkPipeline pipeline;
     VkPipelineLayout pipeline_layout;
@@ -92,7 +91,6 @@ struct Context {
     std::vector<VkCommandBuffer> command_buffer;
     int idx = 0;
 };
-
 
 struct Buffer {
     Context *ctx = nullptr;
@@ -225,31 +223,32 @@ struct Buffer {
             VK_CHECK(vkDeviceWaitIdle(ctx->device));
         }
     }
-    void copy(Buffer &dst_buffer, bool reset = true) {
+    void copy(Buffer &dst_buffer, bool reset = true, VkDeviceSize src_offset = 0, VkDeviceSize dst_offset = 0, VkDeviceSize copy_size = 0) {
         VkBufferCopy copy_region;
         copy_region.srcOffset = 0;
         copy_region.dstOffset = 0;
-        copy_region.size = size;
+        copy_region.size = copy_size == 0 ? size : copy_size;
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         if (reset) {
             VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
-            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[ctx->idx], &begin_info)); 
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[ctx->idx], &begin_info));
         }
-      
+
         vkCmdCopyBuffer(ctx->command_buffer[ctx->idx], handle, dst_buffer.handle, 1, &copy_region);
         VkBufferMemoryBarrier copy_barrier =
             buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-        vkCmdPipelineBarrier(ctx->command_buffer[ctx->idx], VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                             VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1, &copy_barrier, 0, 0);
+        vkCmdPipelineBarrier(ctx->command_buffer[ctx->idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1, &copy_barrier, 0,
+                             0);
         if (reset) {
             vkEndCommandBuffer(ctx->command_buffer[ctx->idx]);
             VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
             submitInfo.commandBufferCount = 1;
             submitInfo.pCommandBuffers = &ctx->command_buffer[ctx->idx];
             VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
-            VK_CHECK(vkDeviceWaitIdle(ctx->device)); 
+            VK_CHECK(vkDeviceWaitIdle(ctx->device));
         }
     }
 };
@@ -620,7 +619,7 @@ class GPUSimulation {
         VK_CHECK(vkEndCommandBuffer(context.command_buffer[context.idx])); // end recording commands.
     }
 
-   void begin_end_record_command_buffer(Pipeline pipeline, int wg_x = 32, int wg_y = 32, int width = 102,
+    void begin_end_record_command_buffer(Pipeline pipeline, int wg_x = 32, int wg_y = 32, int width = 102,
                                          int height = 22) {
         begin_recording();
         record_command_buffer(pipeline, wg_x, wg_y, width, height);
@@ -635,8 +634,8 @@ class GPUSimulation {
         */
         vkCmdBindPipeline(context.command_buffer[context.idx], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
 
-        vkCmdBindDescriptorSets(context.command_buffer[context.idx], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline_layout, 0, 1,
-                                &descriptor_set, 0, NULL);
+        vkCmdBindDescriptorSets(context.command_buffer[context.idx], VK_PIPELINE_BIND_POINT_COMPUTE,
+                                pipeline.pipeline_layout, 0, 1, &descriptor_set, 0, NULL);
 
         const auto num_wg_x = (uint32_t)ceil(width / float(wg_x));
         const auto num_wg_y = (uint32_t)ceil(height / float(wg_y));

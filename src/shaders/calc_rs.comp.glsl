@@ -33,7 +33,7 @@ layout(std430, binding = 3) writeonly buffer G
 	float g[imax * jmax];
 };
 
-layout(binding = 4) uniform UBO
+layout(binding = 21) buffer DT
 {
 	float dt;
 };

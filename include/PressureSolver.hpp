@@ -67,12 +67,18 @@ class PCG : public PressureSolver {
                        uint32_t iters, Real tolerance);
     DiagonalSparseMatrix<Real> A_diag;
     SparseMatrix<Real> &get_a() { return A; }
+    FixedSparseMatrix<Real> U_fixed;
+    FixedSparseMatrix<Real> V_fixed;
+    std::vector<Real> U_RHS;
+    std::vector<Real> V_RHS;
   private:
     int dim;
     int dim_x;
     int dim_y;
     SparseMatrix<Real> A;
-    void build_matrix(SparseMatrix<Real> &A, Real dx, Real dy, Fields &field, Grid &grid,
+    SparseMatrix<Real> U;
+    SparseMatrix<Real> V;
+    void build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
                       const std::vector<std::unique_ptr<Boundary>> &boundaries);
     void create_diagonal_matrix();
 };

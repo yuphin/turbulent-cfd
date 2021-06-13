@@ -41,8 +41,8 @@ Real SOR::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Bou
 
 PCG::PCG(int dim_x, int dim_y, Real dx, Real dy, Fields &field, Grid &grid,
          const std::vector<std::unique_ptr<Boundary>> &boundaries)
-    : dim(dim_x * dim_y), dim_x(dim_x), dim_y(dim_y), A(dim) {
-    build_matrix(A, dx, dy, field, grid, boundaries);
+    : dim(dim_x * dim_y), dim_x(dim_x), dim_y(dim_y), A(dim), U(dim), V(dim) {
+    build_matrix(dx, dy, field, grid, boundaries);
     create_diagonal_matrix();
 }
 
@@ -71,7 +71,7 @@ Real PCG::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Bou
     return pcg_residual;
 }
 
-void PCG::build_matrix(SparseMatrix<Real> &A, Real dx, Real dy, Fields &field, Grid &grid,
+void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
                        const std::vector<std::unique_ptr<Boundary>> &boundaries) {
     int dim_x = this->dim_x;
     Real inv_dx2 = 1 / (dx * dx);
@@ -86,33 +86,50 @@ void PCG::build_matrix(SparseMatrix<Real> &A, Real dx, Real dy, Fields &field, G
              A.set_element(loc, loc, 1);
          }
      }*/
+    U_RHS.resize(dim);
+    V_RHS.resize(dim);
     for (auto &boundary : boundaries) {
         for (auto &cell : *boundary->_cells) {
             int i = cell->i();
             int j = cell->j();
+            int id = cell->id();
             auto loc = at(i, j);
-            if (boundary->get_type() == 0) {
+            switch (boundary->get_type()) {
+            case 0: {
                 // Outlet
                 A.set_element(loc, loc, 1);
                 field.rs(i, j) = field._PI;
-
-            } else if (boundary->get_type() == 1 || boundary->get_type() == 2) {
+            }
+            break;
+            case 1: {
+                // Inlet
+                auto inlet_vel_u = static_cast<InletBoundary *>(boundary.get())->_inlet_U[id];
+                auto inlet_vel_v = static_cast<InletBoundary *>(boundary.get())->_inlet_V[id];
                 field.rs(i, j) = 0;
                 A.set_element(loc, loc, 1 * inv_dx2);
-                // Inlet & noslip
                 // Apply noslip for now
+                U_RHS[loc] += inlet_vel_u;
+                V_RHS[loc] += inlet_vel_v;
                 if (cell->is_border(border_position::RIGHT)) {
                     A.set_element(loc, loc, inv_dx2);
                     A.set_element(loc, at(i + 1, j), -inv_dx2);
+                    // Velocity
+                    V.set_element(loc, at(i + 1, j), -1);
                 } else if (cell->is_border(border_position::LEFT)) {
                     A.set_element(loc, loc, inv_dx2);
                     A.set_element(loc, at(i - 1, j), -inv_dx2);
+                    // Velocity
+                    V.set_element(loc, at(i - 1, j), -1);
                 } else if (cell->is_border(border_position::TOP)) {
                     A.set_element(loc, loc, inv_dy2);
                     A.set_element(loc, at(i, j + 1), -inv_dy2);
+                    // Velocity
+                    U.set_element(loc, at(i, j + 1), -1);
                 } else if (cell->is_border(border_position::BOTTOM)) {
                     A.set_element(loc, loc, inv_dy2);
                     A.set_element(loc, at(i, j - 1), -inv_dy2);
+                    // Velocity
+                    U.set_element(loc, at(i, j - 1), -1);
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
                     A.set_element(loc, loc, 0.5 * (dim));
@@ -135,6 +152,98 @@ void PCG::build_matrix(SparseMatrix<Real> &A, Real dx, Real dy, Fields &field, G
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }
             }
+
+            break;
+            case 2: {
+                // NoSlip
+                field.rs(i, j) = 0;
+                A.set_element(loc, loc, 1 * inv_dx2);
+                auto wall_vel_u = static_cast<NoSlipWallBoundary *>(boundary.get())->_wall_velocity[id];
+                auto wall_vel_v = static_cast<NoSlipWallBoundary *>(boundary.get())->_wall_velocity[id];
+                // Apply noslip for now
+                if (cell->is_border(border_position::RIGHT)) {
+                    A.set_element(loc, loc, inv_dx2);
+                    A.set_element(loc, at(i + 1, j), -inv_dx2);
+                    // Velocity
+                    V_RHS[loc] += wall_vel_v;
+                    V.set_element(loc, at(i + 1, j), -1);
+                } else if (cell->is_border(border_position::LEFT)) {
+                    // Pressure
+                    A.set_element(loc, loc, inv_dx2);
+                    A.set_element(loc, at(i - 1, j), -inv_dx2);
+                    // Velocity
+                    V_RHS[loc] += wall_vel_v;
+                    V.set_element(loc, at(i - 1, j), -1);
+                } else if (cell->is_border(border_position::TOP)) {
+                    // Pressure
+                    A.set_element(loc, loc, inv_dy2);
+                    A.set_element(loc, at(i, j + 1), -inv_dy2);
+                    // Velocity
+                    U_RHS[loc] += wall_vel_u;
+                    U.set_element(loc, at(i, j + 1), -1);
+                } else if (cell->is_border(border_position::BOTTOM)) {
+                    // Pressure
+                    A.set_element(loc, loc, inv_dy2);
+                    A.set_element(loc, at(i, j - 1), -inv_dy2);
+                    // Velocity
+                    U_RHS[loc] += wall_vel_u;
+                    U.set_element(loc, at(i, j - 1), -1);
+                }
+                if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                    // Pressure
+                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
+                    A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
+                    // Velocity
+                    U_RHS[at(i - 1, j)] += wall_vel_u;
+                    V_RHS[at(i, j - 1)] += wall_vel_v;
+                    U.set_element(at(i - 1, j), at(i - 1, j + 1), -1);
+                    V.set_element(at(i, j - 1), at(i + 1, j - 1), -1);
+                }
+                if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                    // Pressure
+                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
+                    A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
+                    // Velocity
+                    U_RHS[at(i - 1, j)] += wall_vel_u;
+                    V_RHS[at(i + 1, j)] += wall_vel_v;
+                    U.set_element(at(i - 1, j), at(i - 1, j - 1), -1);
+                    V.set_element(loc, at(i + 1, j), -1);
+                }
+                if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                    // Pressure
+                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
+                    A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
+                    // Velocity
+                    U_RHS[loc] += wall_vel_u;
+                    V_RHS[at(i, j - 1)] += wall_vel_v;
+                    U.set_element(loc, at(i, j + 1), -1);
+                    V.set_element(at(i, j - 1), at(i - 1, j - 1), -1);
+                }
+                if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                    // Pressure
+                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
+                    A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
+                    // Velocity
+                    U_RHS[loc] += wall_vel_u;
+                    V_RHS[loc] += wall_vel_v;
+                    U.set_element(loc, at(i, j - 1), -1);
+                    V.set_element(loc, at(i - 1, j), -1);
+                }
+            }
+
+            break;
+            case 3: {
+            }
+            // FreeSlip
+            // Velocity
+            break;
+            default:
+                break;
+            }
         }
     }
 
@@ -147,7 +256,12 @@ void PCG::build_matrix(SparseMatrix<Real> &A, Real dx, Real dy, Fields &field, G
         A.set_element(loc, at(i + 1, j), -inv_dx2);
         A.set_element(loc, at(i, j + 1), -inv_dy2);
         A.set_element(loc, at(i, j - 1), -inv_dy2);
+        U.set_element(loc, loc, 1);
+        V.set_element(loc, loc, 1);
     }
+
+    U_fixed.construct_from_matrix(U);
+    V_fixed.construct_from_matrix(V);
 }
 
 void PCG::create_diagonal_matrix() {
