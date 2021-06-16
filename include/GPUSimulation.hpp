@@ -1,10 +1,17 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 #ifdef NDEBUG
-constexpr bool enable_validation = true;
+constexpr bool enable_validation = false;
 #else
 constexpr bool enable_validation = true;
 #endif
+
+enum CommandBufferIndex {
+    COMMAND_BUFFER_IDX_0,
+    COMMAND_BUFFER_IDX_1,
+    COMMAND_BUFFER_IDX_2,
+    COMMAND_BUFFER_IDX_3,
+};
 
 #define VK_CHECK(f)                                                                                                    \
     {                                                                                                                  \
@@ -73,9 +80,22 @@ VkBufferMemoryBarrier buffer_barrier(VkBuffer handle, VkAccessFlags src_access_m
 }
 
 struct UBOData {
-    float dt;
-    float parity = 0;
-    uint32_t fluid_cells_size;
+    int imax;
+    int jmax;
+    int size;
+    float nu;
+    float dx;
+    float dy;
+    float dx2;
+    float dy2;
+    float inv_dx;
+    float inv_dy;
+    float gamma;
+    float PI;
+    float UI;
+    float VI;
+    float tau;
+    int num_wgs;
 };
 
 struct Pipeline {
@@ -89,7 +109,6 @@ struct Context {
     VkPhysicalDevice physical_device;
     VkCommandPool command_pool;
     std::vector<VkCommandBuffer> command_buffer;
-    int idx = 0;
 };
 
 struct Buffer {
@@ -107,7 +126,8 @@ struct Buffer {
         if (memory) vkFreeMemory(ctx->device, memory, nullptr);
     }
     void create(Context *ctx, VkBufferUsageFlags usage, VkMemoryPropertyFlags mem_property_flags,
-                VkSharingMode sharing_mode, VkDeviceSize size, void *data = nullptr, bool use_staging = false) {
+                VkSharingMode sharing_mode, VkDeviceSize size, void *data = nullptr, bool use_staging = false,
+                int command_idx = 0) {
         if (!this->ctx) {
             this->ctx = ctx;
             this->mem_prop_flags = mem_property_flags;
@@ -118,27 +138,27 @@ struct Buffer {
             assert(mem_property_flags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
             staging_buffer.create(ctx, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                  VK_SHARING_MODE_EXCLUSIVE, size, data);
+                                  VK_SHARING_MODE_EXCLUSIVE, size, data, command_idx);
             this->create(ctx, VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage, mem_property_flags, sharing_mode, size, nullptr,
-                         /* use_staging */ false);
+                         /* use_staging */ false, command_idx);
 
             // @performance
-            VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
+            // VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
             VkCommandBufferBeginInfo begin_info = {};
             begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[ctx->idx], &begin_info));
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[command_idx], &begin_info));
             VkBufferCopy copy_region = {0, 0, VkDeviceSize(size)};
-            vkCmdCopyBuffer(ctx->command_buffer[ctx->idx], staging_buffer.handle, this->handle, 1, &copy_region);
+            vkCmdCopyBuffer(ctx->command_buffer[command_idx], staging_buffer.handle, this->handle, 1, &copy_region);
             VkBufferMemoryBarrier copy_barrier =
                 buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-            vkCmdPipelineBarrier(ctx->command_buffer[ctx->idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+            vkCmdPipelineBarrier(ctx->command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                                  VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1,
                                  &copy_barrier, 0, 0);
-            vkEndCommandBuffer(ctx->command_buffer[ctx->idx]);
+            vkEndCommandBuffer(ctx->command_buffer[command_idx]);
             VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
             submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &ctx->command_buffer[ctx->idx];
+            submitInfo.pCommandBuffers = &ctx->command_buffer[command_idx];
 
             VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
 
@@ -197,33 +217,34 @@ struct Buffer {
         mapped_range.size = size;
         VK_CHECK(vkFlushMappedMemoryRanges(ctx->device, 1, &mapped_range));
     }
-    void upload(VkDeviceSize size, void *data = nullptr, Buffer *staging_buffer = nullptr) {
+    void upload(VkDeviceSize size, int command_idx, void *data = nullptr, Buffer *staging_buffer = nullptr) {
         if ((mem_prop_flags & (VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))) {
             memcpy(this->data, data, size);
         } else {
             // Assume device local memory
-            staging_buffer->upload(size, data);
-            VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
+            staging_buffer->upload(size, command_idx, data);
+            // VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
             VkCommandBufferBeginInfo begin_info = {};
             begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[ctx->idx], &begin_info));
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[command_idx], &begin_info));
             VkBufferCopy copy_region = {0, 0, VkDeviceSize(size)};
-            vkCmdCopyBuffer(ctx->command_buffer[ctx->idx], staging_buffer->handle, this->handle, 1, &copy_region);
+            vkCmdCopyBuffer(ctx->command_buffer[command_idx], staging_buffer->handle, this->handle, 1, &copy_region);
             VkBufferMemoryBarrier copy_barrier =
                 buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-            vkCmdPipelineBarrier(ctx->command_buffer[ctx->idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+            vkCmdPipelineBarrier(ctx->command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                                  VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1,
                                  &copy_barrier, 0, 0);
-            vkEndCommandBuffer(ctx->command_buffer[ctx->idx]);
+            vkEndCommandBuffer(ctx->command_buffer[command_idx]);
             VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
             submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &ctx->command_buffer[ctx->idx];
+            submitInfo.pCommandBuffers = &ctx->command_buffer[command_idx];
             VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
             VK_CHECK(vkDeviceWaitIdle(ctx->device));
         }
     }
-    void copy(Buffer &dst_buffer, bool reset = true, VkDeviceSize src_offset = 0, VkDeviceSize dst_offset = 0, VkDeviceSize copy_size = 0) {
+    void copy(Buffer &dst_buffer, int command_idx, bool reset = true, VkDeviceSize src_offset = 0,
+              VkDeviceSize dst_offset = 0, VkDeviceSize copy_size = 0) {
         VkBufferCopy copy_region;
         copy_region.srcOffset = 0;
         copy_region.dstOffset = 0;
@@ -232,21 +253,21 @@ struct Buffer {
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         if (reset) {
-            VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
-            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[ctx->idx], &begin_info));
+            // VK_CHECK(vkResetCommandPool(ctx->device, ctx->command_pool, 0));
+            VK_CHECK(vkBeginCommandBuffer(ctx->command_buffer[command_idx], &begin_info));
         }
 
-        vkCmdCopyBuffer(ctx->command_buffer[ctx->idx], handle, dst_buffer.handle, 1, &copy_region);
+        vkCmdCopyBuffer(ctx->command_buffer[command_idx], handle, dst_buffer.handle, 1, &copy_region);
         VkBufferMemoryBarrier copy_barrier =
             buffer_barrier(handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-        vkCmdPipelineBarrier(ctx->command_buffer[ctx->idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+        vkCmdPipelineBarrier(ctx->command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                              VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, 0, 1, &copy_barrier, 0,
                              0);
         if (reset) {
-            vkEndCommandBuffer(ctx->command_buffer[ctx->idx]);
+            vkEndCommandBuffer(ctx->command_buffer[command_idx]);
             VkSubmitInfo submitInfo = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
             submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &ctx->command_buffer[ctx->idx];
+            submitInfo.pCommandBuffers = &ctx->command_buffer[command_idx];
             VK_CHECK(vkQueueSubmit(ctx->compute_queue, 1, &submitInfo, VK_NULL_HANDLE));
             VK_CHECK(vkDeviceWaitIdle(ctx->device));
         }
@@ -261,11 +282,12 @@ struct Descriptor {
 
 class GPUSimulation {
   public:
-    void init() {
+    void init(UBOData &data) {
         create_instance();
         find_physical_device();
         create_device();
         create_descriptor_pool();
+        this->data = data;
     }
     void create_instance() {
         std::vector<const char *> enabled_extensions;
@@ -541,6 +563,11 @@ class GPUSimulation {
         specialization_info.pMapEntries = &entry;
         specialization_info.pData = &specialization_data;
 
+        VkPushConstantRange push_constant_range{};
+        push_constant_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+        push_constant_range.offset = 0;
+        push_constant_range.size = sizeof(UBOData);
+
         /*
         Now let us actually create the compute pipeline.
         A compute pipeline is very simple compared to a graphics pipeline.
@@ -566,6 +593,8 @@ class GPUSimulation {
         pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipeline_layout_create_info.setLayoutCount = 1;
         pipeline_layout_create_info.pSetLayouts = &descriptor_set_layout;
+        pipeline_layout_create_info.pushConstantRangeCount = 1;
+        pipeline_layout_create_info.pPushConstantRanges = &push_constant_range;
         VK_CHECK(vkCreatePipelineLayout(context.device, &pipeline_layout_create_info, NULL, &pipeline_layout));
 
         VkComputePipelineCreateInfo pipeline_create_info = {};
@@ -577,69 +606,59 @@ class GPUSimulation {
     }
 
     void create_command_pool() {
-        /*
-              We are getting closer to the end. In order to send commands to the device(GPU),
-              we must first record commands into a command buffer.
-              To allocate a command buffer, we must first create a command pool. So let us do that.
-              */
+
         VkCommandPoolCreateInfo command_pool_create_info = {};
         command_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        command_pool_create_info.flags = 0;
-        // the queue family of this command pool. All command buffers allocated from this command pool,
-        // must be submitted to queues of this family ONLY.
+        command_pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         command_pool_create_info.queueFamilyIndex = compute_queue_family_index;
         VK_CHECK(vkCreateCommandPool(context.device, &command_pool_create_info, NULL, &context.command_pool));
         VkCommandBufferAllocateInfo command_buffer_allocate_info = {};
         command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        command_buffer_allocate_info.commandPool = context.command_pool; // specify the command pool to allocate from.
-        // if the command buffer is primary, it can be directly submitted to queues.
-        // A secondary buffer has to be called from some primary command buffer, and cannot be directly
-        // submitted to a queue. To keep things simple, we use a primary command buffer.
+        command_buffer_allocate_info.commandPool = context.command_pool;
         command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        context.command_buffer.resize(3);
-        command_buffer_allocate_info.commandBufferCount = 3; // allocate a single command buffer.
-        VK_CHECK(vkAllocateCommandBuffers(context.device, &command_buffer_allocate_info,
-                                          context.command_buffer.data())); // allocate command buffer.
+        context.command_buffer.resize(4);
+        command_buffer_allocate_info.commandBufferCount = 4;
+        VK_CHECK(
+            vkAllocateCommandBuffers(context.device, &command_buffer_allocate_info, context.command_buffer.data()));
     }
 
-    void begin_recording(VkCommandBufferUsageFlags flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) {
-        /*
-           Now we shall start recording commands into the newly allocated command buffer.
-           */
-        VK_CHECK(vkResetCommandPool(context.device, context.command_pool, 0));
+    void begin_recording(int command_idx,
+                         VkCommandBufferUsageFlags flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) {
+
+        // VK_CHECK(vkResetCommandPool(context.device, context.command_pool, 0));
         VkCommandBufferBeginInfo begin_info = {};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags = flags; // the buffer is only submitted and used once
-                                  // in
-                                  // this application.
-        VK_CHECK(vkBeginCommandBuffer(context.command_buffer[context.idx], &begin_info)); // start recording commands.
+        begin_info.flags = flags;
+        VK_CHECK(vkBeginCommandBuffer(context.command_buffer[command_idx], &begin_info)); // start recording commands.
     }
 
-    void end_recording() {
-        VK_CHECK(vkEndCommandBuffer(context.command_buffer[context.idx])); // end recording commands.
+    void end_recording(int command_idx) {
+        VK_CHECK(vkEndCommandBuffer(context.command_buffer[command_idx])); // end recording commands.
     }
 
-    void begin_end_record_command_buffer(Pipeline pipeline, int wg_x = 32, int wg_y = 32, int width = 102,
-                                         int height = 22) {
-        begin_recording();
-        record_command_buffer(pipeline, wg_x, wg_y, width, height);
-        end_recording();
+    void begin_end_record_command_buffer(Pipeline pipeline, int command_idx, int wg_x, int wg_y, int width,
+                                         int height) {
+        begin_recording(command_idx);
+        record_command_buffer(pipeline, command_idx, wg_x, wg_y, width, height);
+        end_recording(command_idx);
     }
 
-    void record_command_buffer(Pipeline pipeline, int wg_x = 32, int wg_y = 32, int width = 102, int height = 22) {
+    void record_command_buffer(Pipeline pipeline, int command_idx, int wg_x, int wg_y, int width, int height) {
         /*
         We need to bind a pipeline, AND a descriptor set before we dispatch.
 
         The validation layer will NOT give warnings if you forget these, so be very careful not to forget them.
         */
-        vkCmdBindPipeline(context.command_buffer[context.idx], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+        vkCmdBindPipeline(context.command_buffer[command_idx], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
 
-        vkCmdBindDescriptorSets(context.command_buffer[context.idx], VK_PIPELINE_BIND_POINT_COMPUTE,
+        vkCmdBindDescriptorSets(context.command_buffer[command_idx], VK_PIPELINE_BIND_POINT_COMPUTE,
                                 pipeline.pipeline_layout, 0, 1, &descriptor_set, 0, NULL);
 
+        vkCmdPushConstants(context.command_buffer[command_idx], pipeline.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                           0, sizeof(UBOData), &data);
         const auto num_wg_x = (uint32_t)ceil(width / float(wg_x));
         const auto num_wg_y = (uint32_t)ceil(height / float(wg_y));
-        vkCmdDispatch(context.command_buffer[context.idx], num_wg_x, num_wg_y, 1);
+        vkCmdDispatch(context.command_buffer[command_idx], num_wg_x, num_wg_y, 1);
     }
 
     void create_fences() {
@@ -649,12 +668,12 @@ class GPUSimulation {
         VK_CHECK(vkCreateFence(context.device, &fence_create_info, NULL, &fence));
     }
 
-    void run_command_buffer() {
+    void run_command_buffer(int command_idx) {
 
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &context.command_buffer[context.idx];
+        submit_info.pCommandBuffers = &context.command_buffer[command_idx];
         VK_CHECK(vkQueueSubmit(context.compute_queue, 1, &submit_info, fence));
         /*
         The command will not have finished executing until the fence is signalled.
@@ -697,6 +716,7 @@ class GPUSimulation {
         vkDestroyInstance(instance, NULL);
     }
     Context context;
+    UBOData data;
 
   private:
     VkInstance instance;
@@ -716,3 +736,87 @@ class GPUSimulation {
 
     uint32_t compute_queue_family_index;
 };
+
+void barrier(GPUSimulation &simulation, Buffer &buffer, int command_idx,
+             VkAccessFlags src_access = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT,
+             VkAccessFlags dst_access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT) {
+    VkBufferMemoryBarrier res_barrier = buffer_barrier(buffer.handle, src_access, dst_access);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+}
+
+Real vec_dp_immediate(GPUSimulation &simulation, Buffer &v1, Buffer &v2, Buffer &residual_buffer,
+                      Buffer &scratch_buffer, Pipeline &pipeline, Pipeline &reduce_pipeline, int command_idx, int dim) {
+    simulation.begin_recording(command_idx);
+    vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size, 0);
+    VkBufferMemoryBarrier fill_barrier =
+        buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+    simulation.record_command_buffer(pipeline, command_idx, 1024, 1, dim, 1);
+    VkBufferMemoryBarrier res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
+                                                       VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+    simulation.record_command_buffer(reduce_pipeline, command_idx, 32, 1, 32, 1); // TODO
+    simulation.end_recording(command_idx);
+    simulation.run_command_buffer(command_idx);
+    residual_buffer.copy(scratch_buffer, command_idx);
+    return *(Real *)scratch_buffer.data;
+}
+
+void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &pipeline, Pipeline &reduce_pipeline,
+            int command_idx, int dim) {
+    vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size, 0);
+    VkBufferMemoryBarrier fill_barrier =
+        buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+    simulation.record_command_buffer(pipeline, command_idx, 1024, 1, dim, 1);
+    VkBufferMemoryBarrier res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
+                                                       VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+    int num_wgs = ceil(dim / 1024.0f);
+    simulation.data.num_wgs = num_wgs;
+    while (num_wgs != 1) {
+        simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
+        num_wgs = ceil(num_wgs / 1024.0f);
+        if (num_wgs > 1) {
+            vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+        }
+    }
+}
+
+void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &min_max_uv_pipeline,
+            Pipeline &reduce_pipeline,
+            int command_idx, int dim) {
+    vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size, 0);
+    VkBufferMemoryBarrier fill_barrier =
+        buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+    VkBufferMemoryBarrier res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
+                                                       VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, dim, 1);
+    int num_wgs = ceil(dim / 1024.0f);
+    simulation.data.num_wgs = num_wgs;
+    while (num_wgs != 1) {
+        simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
+        num_wgs = ceil(num_wgs / 1024.0f);
+        if (num_wgs > 1) {
+            vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+        }
+    }
+}
+
+void scalar_div(GPUSimulation &simulation, Pipeline &pipeline, int command_idx) {
+    simulation.record_command_buffer(pipeline, command_idx, 1, 1, 1, 1);
+}
+
+void vec_saxpy(GPUSimulation &simulation, Pipeline &pipeline, Buffer &v1, Buffer &v2, Buffer &out, int command_idx,
+               int dim) {
+    simulation.record_command_buffer(pipeline, command_idx, 1024, 1, dim, 1);
+}

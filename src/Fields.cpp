@@ -18,6 +18,8 @@ Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI,
 
     _PI = PI;
     _TI = TI;
+    _UI = UI;
+    _VI = VI;
 }
 
 void Fields::calculate_fluxes(Grid &grid, bool calc_temp) {
@@ -74,8 +76,22 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
     Real uMin = *std::min_element(_U.data(), _U.data() + _U.size());
     Real vMax = *std::max_element(_V.data(), _V.data() + _V.size());
     Real vMin = *std::min_element(_V.data(), _V.data() + _V.size());
-    Real maxAbsU = fabs(uMax) > fabs(uMin) ? fabs(uMax) : fabs(uMin);
-    Real maxAbsV = fabs(vMax) > fabs(vMin) ? fabs(vMax) : fabs(vMin);
+
+    Real maxAbsU = -1000000;
+    Real maxAbsV = -1000000;
+    for (int i = 0; i < grid.imaxb(); i++) {
+        for (int j = 0; j < grid.jmaxb(); j++) {
+            if (fabs(u(i, j) > maxAbsU)) {
+                maxAbsU = fabs(u(i, j));
+            }
+            if (fabs(v(i, j) > maxAbsV)) {
+                maxAbsV = fabs(v(i, j));
+            }
+        }
+    }
+
+  /*  Real maxAbsU = fabs(uMax) > fabs(uMin) ? fabs(uMax) : fabs(uMin);
+    Real maxAbsV = fabs(vMax) > fabs(vMin) ? fabs(vMax) : fabs(vMin);*/
     Real cond_2 = grid.dx() / maxAbsU;
     Real cond_3 = grid.dy() / maxAbsV;
 

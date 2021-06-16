@@ -1,17 +1,16 @@
 #version 450
 #extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_GOOGLE_include_directive: require
+#include "UBOData.h"
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
-const uint size_x = 102;
-const uint size_y = 22;
-const uint num_rows = size_x * size_y;
-const uint num_cols = size_x * size_y;
-const uint num_diags = 5;
+ uint num_rows = imax * jmax;
+ uint num_cols = imax * jmax;
+ uint num_diags = 5;
 
 layout(binding = 10) buffer SparseMatrix
 {
 	float A[];
 };
-
 
 layout(binding = 11) buffer Offsets
 {

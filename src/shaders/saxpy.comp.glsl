@@ -1,9 +1,8 @@
 #version 450
 #extension GL_KHR_shader_subgroup_arithmetic : enable
+#extension GL_GOOGLE_include_directive: require
+#include "UBOData.h"
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
-const uint size_x = 102;
-const uint size_y = 22;
-const uint size = size_x * size_y;
 
 layout(constant_id = 0) const uint MODE = 0;
 
@@ -32,18 +31,11 @@ layout(binding = 16) buffer P // p
 	float p[];
 };
 
-layout(binding = 31) buffer Counter
-{
-	int cnt;
-};
-
-
 void main() {
 	uint idx = gl_GlobalInvocationID.x;
-	int counter = cnt % 2;
 	// res = 0
 	if(idx < size){
-		float alpha =  res[counter];
+		float alpha =  res[0];
 		switch(MODE){
 			case 0:
 				p[idx] = p[idx] + alpha * v1[idx];
@@ -51,7 +43,6 @@ void main() {
 			case 1:
 				r[idx] = r[idx] - alpha * v2[idx];
 				break;
-
 			case 2:
 				v1[idx] = r[idx] + alpha * v1[idx];
 				break;

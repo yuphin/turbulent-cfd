@@ -125,8 +125,10 @@ class Discretization {
      */
     static Real diff(const Matrix<Real> &A, int i, int j, int i_offset, int j_offset);
 
+    static Real _gamma;
+
   private:
     static Real _dx;
     static Real _dy;
-    static Real _gamma;
+   
 };
