@@ -778,8 +778,9 @@ void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &pipeli
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
     int num_wgs = ceil(dim / 1024.0f);
-    simulation.data.num_wgs = num_wgs;
+   
     while (num_wgs != 1) {
+        simulation.data.num_wgs = num_wgs;
         simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
         num_wgs = ceil(num_wgs / 1024.0f);
         if (num_wgs > 1) {

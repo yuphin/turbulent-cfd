@@ -9,6 +9,10 @@ layout(binding = 14) buffer Buffer
 {
 	float r[];
 };
+
+shared float data[32];
+
+
 void main(){
 	uint idx = gl_GlobalInvocationID.x;
 	float sum = 0;
@@ -21,8 +25,19 @@ void main(){
 	barrier();
 
 	sum = subgroupAdd(sum);
+	if (gl_SubgroupInvocationID == 0) {
+        data[gl_SubgroupID] = sum;
+    }
+	barrier();
+
+	if (gl_SubgroupID == 0) {
+        sum = data[gl_SubgroupInvocationID];
+		subgroupBarrier();
+        sum = subgroupAdd(sum); 
+    }
+
 	if (gl_LocalInvocationID.x == 0) {
-		r[gl_WorkGroupID.x] = sum;
-	}
+        r[gl_WorkGroupID.x] = sum;
+    }
 }
 
