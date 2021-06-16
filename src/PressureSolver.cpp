@@ -108,28 +108,30 @@ void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
                 field.rs(i, j) = 0;
                 A.set_element(loc, loc, 1 * inv_dx2);
                 // Apply noslip for now
-                U_RHS[loc] += inlet_vel_u;
-                V_RHS[loc] += inlet_vel_v;
                 if (cell->is_border(border_position::RIGHT)) {
                     A.set_element(loc, loc, inv_dx2);
                     A.set_element(loc, at(i + 1, j), -inv_dx2);
                     // Velocity
                     V.set_element(loc, at(i + 1, j), -1);
+                    U_RHS[loc] += 0.5 * inlet_vel_u;
                 } else if (cell->is_border(border_position::LEFT)) {
                     A.set_element(loc, loc, inv_dx2);
                     A.set_element(loc, at(i - 1, j), -inv_dx2);
                     // Velocity
                     V.set_element(loc, at(i - 1, j), -1);
+                    U_RHS[loc] += 0.5 * inlet_vel_u;
                 } else if (cell->is_border(border_position::TOP)) {
                     A.set_element(loc, loc, inv_dy2);
                     A.set_element(loc, at(i, j + 1), -inv_dy2);
                     // Velocity
                     U.set_element(loc, at(i, j + 1), -1);
+                    V_RHS[loc] += 0.5 * inlet_vel_v;
                 } else if (cell->is_border(border_position::BOTTOM)) {
                     A.set_element(loc, loc, inv_dy2);
                     A.set_element(loc, at(i, j - 1), -inv_dy2);
                     // Velocity
                     U.set_element(loc, at(i, j - 1), -1);
+                    V_RHS[loc] += 0.5 * inlet_vel_v;
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
                     A.set_element(loc, loc, 0.5 * (dim));

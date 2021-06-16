@@ -465,11 +465,11 @@ void Case::simulate() {
     r_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
                     _field.p_matrix().size() * sizeof(Real));
-    dt_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                     VK_SHARING_MODE_EXCLUSIVE, sizeof(Real));
-    /*  dt_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+  /*  dt_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                     VK_SHARING_MODE_EXCLUSIVE, sizeof(Real));*/
+      dt_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                       VK_SHARING_MODE_EXCLUSIVE, sizeof(Real));*/
+                       VK_SHARING_MODE_EXCLUSIVE, sizeof(Real));
 
     auto pcg_solver = (PCG *)_pressure_solver_pcg.get();
     auto u_matrix_data = pcg_solver->U_fixed.value.data();
@@ -743,7 +743,6 @@ void Case::simulate() {
         Real delta_old = delta_new;
         Real delta_zero = delta_new;
         Real cond = _tolerance * _tolerance * delta_zero;
-        _max_iter = 1000;
         while (it < _max_iter && delta_new > cond) {
             simulation.run_command_buffer(1);
             delta_new = *(Real *)scratch_buffer.data;
@@ -774,6 +773,7 @@ void Case::simulate() {
             output_vtk(timestep);
             output_counter++;
         }
+        dt = *(Real *)dt_buffer.data;
         t += dt;
         timestep++;
     }
