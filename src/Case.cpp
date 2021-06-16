@@ -647,7 +647,7 @@ void Case::simulate() {
         logger.progress_bar(t, _t_end);
         // std::cout << t << "/" << _t_end;
         // Select dt
-        dt = _field.calculate_dt(_grid, _calc_temp);
+        //dt = _field.calculate_dt(_grid, _calc_temp);
 
         // Enforce velocity boundary conditions
         /* for (auto &boundary : _boundaries) {
@@ -742,8 +742,7 @@ void Case::simulate() {
         Real delta_new = *(Real *)scratch_buffer.data;
         Real delta_old = delta_new;
         Real delta_zero = delta_new;
-        Real cond = _tolerance * delta_zero;
-
+        Real cond = _tolerance * _tolerance * delta_zero;
         while (it < _max_iter && delta_new > cond) {
             simulation.run_command_buffer(1);
             delta_new = *(Real *)scratch_buffer.data;
