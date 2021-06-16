@@ -743,6 +743,7 @@ void Case::simulate() {
         Real delta_old = delta_new;
         Real delta_zero = delta_new;
         Real cond = _tolerance * _tolerance * delta_zero;
+        _max_iter = 1000;
         while (it < _max_iter && delta_new > cond) {
             simulation.run_command_buffer(1);
             delta_new = *(Real *)scratch_buffer.data;
@@ -765,6 +766,8 @@ void Case::simulate() {
         _field._U._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._U.size());
         v_buffer.copy(scratch_buffer, 3);
         _field._V._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._V.size());
+        p_buffer.copy(scratch_buffer, 3);
+        _field._P._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._P.size());
 
         // Output u,v,p
         if (t >= output_counter * _output_freq) {

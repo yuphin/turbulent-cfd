@@ -62,12 +62,12 @@ void main() {
 		for(int j = u_row_start[row]; j < u_row_start[row+1]; j++){
 			sum += u[j] * u_vec[u_col_idx[j]];
 		}
-		u_vec[row] = sum + u_rhs[row];
+		u_vec[row] = sum + 2 * u_rhs[row];
 
 		sum = 0;
 		for(int j = v_row_start[row]; j < v_row_start[row+1]; j++){
 			sum += v[j] * v_vec[v_col_idx[j]];
 		}
-		v_vec[row] = sum + v_rhs[row];
+		v_vec[row] = sum + 2 * v_rhs[row];
 	}
 }
