@@ -178,7 +178,7 @@ class Logger {
 
   private:
     // Start time for the simulation
-    std::chrono::_V2::steady_clock::time_point start_time;
+    std::chrono::steady_clock::time_point start_time;
     // True if log file is being created
     bool _log = false;
     // Bar width of the progress bar

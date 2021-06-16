@@ -1,5 +1,5 @@
 #include "Utilities.hpp"
-
+#include <sstream>
 std::vector<std::vector<int>> parse_geometry_file(std::string filedoc, int xdim, int ydim) {
     std::vector<std::vector<int>> geometry_data(xdim + 2, std::vector<int>(ydim + 2, 0));
     int numcols, numrows, depth;
