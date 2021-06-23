@@ -388,7 +388,7 @@ void Case::simulate() {
     simulation.create_descriptor_set_layout(set_layout_bindings);
     simulation.create_command_pool();
     simulation.create_fences();
-    Pipeline discretization_pipeline = simulation.create_compute_pipeline("src/shaders/discretization.comp.spv");
+    Pipeline fg_pipeline = simulation.create_compute_pipeline("src/shaders/calc_fg.comp.spv");
     Pipeline rs_pipeline = simulation.create_compute_pipeline("src/shaders/calc_rs.comp.spv");
     Pipeline vel_pipeline = simulation.create_compute_pipeline("src/shaders/calc_vel.comp.spv");
     Pipeline p_pipeline_red = simulation.create_compute_pipeline("src/shaders/calc_p_redblack_gs.comp.spv", 0);
@@ -586,7 +586,7 @@ void Case::simulate() {
         barrier(simulation, residual_buffer, command_idx);
         simulation.record_command_buffer(calc_dt_pipeline, command_idx, 1, 1, 1, 1);
         barrier(simulation, dt_buffer, command_idx);
-        simulation.record_command_buffer(discretization_pipeline, command_idx, 32, 32, grid_x, grid_y);
+        simulation.record_command_buffer(fg_pipeline, command_idx, 32, 32, grid_x, grid_y);
         std::array<VkBufferMemoryBarrier, 2> fg_barriers = {
             buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
             buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)
@@ -885,7 +885,7 @@ void Case::simulate() {
     logger.finish();
     // Output u,v,p
     output_vtk(timestep);
-    simulation.cleanup({discretization_pipeline,
+    simulation.cleanup({fg_pipeline,
                         rs_pipeline,
                         vel_pipeline,
                         p_pipeline_red,
