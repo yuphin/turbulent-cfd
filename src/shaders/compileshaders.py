@@ -25,9 +25,29 @@ def findGlslang():
         if isExe(full_path):
             return full_path
 
-    sys.exit("Could not find DXC executable on PATH, and was not specified with --dxc")
+    sys.exit("Could not find glslangValidator executable on PATH")
+
+def findSpirvOpt():
+    def isExe(path):
+        return os.path.isfile(path) and os.access(path, os.X_OK)
+
+    if args.glslang != None and isExe(args.glslang):
+        return args.glslang
+
+    exe_name = "spirv-opt"
+    if os.name == "nt":
+        exe_name += ".exe"
+
+    for exe_dir in os.environ["PATH"].split(os.pathsep):
+        full_path = os.path.join(exe_dir, exe_name)
+        if isExe(full_path):
+            return full_path
+
+    print("Could not find spirv-opt on PATH")
+    return ""
 
 glslang_path = findGlslang()
+spirvopt_path = findSpirvOpt()
 dir_path = os.path.dirname(os.path.realpath(__file__))
 dir_path = dir_path.replace('\\', '/')
 for root, dirs, files in os.walk(dir_path):
@@ -49,6 +69,14 @@ for root, dirs, files in os.walk(dir_path):
                add_params = add_params + " --target-env vulkan1.2"
 
             res = subprocess.call("%s -V %s --target-env vulkan1.2 -o %s %s" % (glslang_path, input_file, output_file, add_params), shell=True)
-            # res = subprocess.call([glslang_path, '-V', input_file, '-o', output_file, add_params], shell=True)
+
             if res != 0:
                 sys.exit()
+    
+    if(spirvopt_path):
+        print("Optimizing shaders...")
+        for file in files:
+            if(file.endswith(".spv")):
+                res_opt = subprocess.call("%s -O %s -o %s" % (spirvopt_path, file, file), shell=True)
+                if res_opt != 0:
+                    sys.exit()
