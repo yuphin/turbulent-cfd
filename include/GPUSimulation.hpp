@@ -394,17 +394,14 @@ class GPUSimulation {
         }
     }
 
-    // Returns the index of a queue family that supports compute operations.
     uint32_t get_compute_queue_family_index() {
 
         uint32_t queue_family_count;
         vkGetPhysicalDeviceQueueFamilyProperties(context.physical_device, &queue_family_count, NULL);
 
-        // Retrieve all queue families.
         std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
         vkGetPhysicalDeviceQueueFamilyProperties(context.physical_device, &queue_family_count, queue_families.data());
 
-        // Now find a family that supports compute.
         uint32_t i = 0;
         for (; i < queue_families.size(); ++i) {
             VkQueueFamilyProperties props = queue_families[i];
@@ -423,13 +420,12 @@ class GPUSimulation {
     }
 
     void create_device() {
-        // Create the logical device
         VkDeviceQueueCreateInfo queue_create_info = {};
         queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        compute_queue_family_index = get_compute_queue_family_index(); // find queue family with compute capability.
+        compute_queue_family_index = get_compute_queue_family_index();
         queue_create_info.queueFamilyIndex = compute_queue_family_index;
-        queue_create_info.queueCount = 1; // create one queue in this family. We don't need more.
-        float queue_priorities = 1.0;     // we only have one queue, so this is not that imporant.
+        queue_create_info.queueCount = 1;
+        float queue_priorities = 1.0;
         queue_create_info.pQueuePriorities = &queue_priorities;
 
         VkDeviceCreateInfo device_create_info = {};
@@ -440,14 +436,12 @@ class GPUSimulation {
         device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         device_create_info.enabledLayerCount = enabled_layers.size();
         device_create_info.ppEnabledLayerNames = enabled_layers.data();
-        device_create_info.pQueueCreateInfos =
-            &queue_create_info; // when creating the logical device, we also specify what queues it has.
+        device_create_info.pQueueCreateInfos = &queue_create_info;
         device_create_info.queueCreateInfoCount = 1;
         device_create_info.pEnabledFeatures = &device_features;
 
         VK_CHECK(vkCreateDevice(context.physical_device, &device_create_info, NULL, &context.device));
 
-        // Get a handle to the only member of the queue family.
         vkGetDeviceQueue(context.device, compute_queue_family_index, 0, &context.compute_queue);
     }
     void create_mem(VkDeviceMemory &mem, VkMemoryPropertyFlags mem_flags, size_t size) {
@@ -460,18 +454,14 @@ class GPUSimulation {
     }
 
     void create_descriptor_pool() {
-        /*
-              Our descriptor pool can only allocate a single storage buffer.
-              */
         std::vector<VkDescriptorPoolSize> pool_sizes = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32},
                                                         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 32}};
         VkDescriptorPoolCreateInfo descriptor_pool_create_info = {};
         descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptor_pool_create_info.maxSets = 32; // we only need to allocate one descriptor set from the pool.
+        descriptor_pool_create_info.maxSets = 32;
         descriptor_pool_create_info.poolSizeCount = pool_sizes.size();
         descriptor_pool_create_info.pPoolSizes = pool_sizes.data();
 
-        // create descriptor pool.
         VK_CHECK(vkCreateDescriptorPool(context.device, &descriptor_pool_create_info, NULL, &descriptor_pool));
     }
 
@@ -486,33 +476,28 @@ class GPUSimulation {
             descriptor_set_allocate_info.descriptorSetCount = 1;
             descriptor_set_allocate_info.pSetLayouts = &descriptor_set_layouts[i];
 
-            // allocate descriptor set.
             VK_CHECK(vkAllocateDescriptorSets(context.device, &descriptor_set_allocate_info, &descriptor_sets[i]));
         }
     }
 
     void push_descriptors(const std::vector<Descriptor> &descriptors) {
-        // Specify the buffer to bind to the descriptor.
         std::vector<VkWriteDescriptorSet> write_descriptor_sets;
         for (const auto &descriptor : descriptors) {
             VkWriteDescriptorSet write_descriptor_set = {};
             write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write_descriptor_set.dstSet = descriptor_sets[descriptor.set_idx]; // write to this descriptor set.
-            write_descriptor_set.dstBinding = descriptor.binding;              // write to the first, and only binding.
-            write_descriptor_set.descriptorCount = 1;                          // update a single descriptor.
+            write_descriptor_set.dstSet = descriptor_sets[descriptor.set_idx];
+            write_descriptor_set.dstBinding = descriptor.binding;
+            write_descriptor_set.descriptorCount = 1;
             write_descriptor_set.descriptorType = descriptor.desc_type;
             write_descriptor_set.pBufferInfo = &descriptor.handle.descriptor;
             write_descriptor_sets.push_back(write_descriptor_set);
         }
-        // perform the update of the descriptor set.
         vkUpdateDescriptorSets(context.device, write_descriptor_sets.size(), write_descriptor_sets.data(), 0, NULL);
 
         /*  vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, 0, 1,
            &descriptor_set, 0, NULL);*/
     }
 
-    // Read file into array of bytes, and cast to uint32_t*, then return.
-    // The data has been padded, so that it fits into an array uint32_t.
     uint32_t *read_file(uint32_t &length, const char *filename) {
 
         FILE *fp = fopen(filename, "rb");
@@ -542,10 +527,7 @@ class GPUSimulation {
     }
 
     Pipeline create_compute_pipeline(const char *shader_path, uint32_t specialization_data = -1) {
-        // Create shader module
         uint32_t filelength;
-        // the code in comp.spv was created by running the command:
-        // glslangValidator.exe -V shader.comp
         uint32_t *code = read_file(filelength, shader_path);
         VkShaderModuleCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -572,14 +554,6 @@ class GPUSimulation {
         push_constant_range.offset = 0;
         push_constant_range.size = sizeof(UBOData);
 
-        /*
-        Now let us actually create the compute pipeline.
-        A compute pipeline is very simple compared to a graphics pipeline.
-        It only consists of a single stage with a compute shader.
-
-        So first we specify the compute shader stage, and it's entry point(main).
-        */
-
         VkPipelineShaderStageCreateInfo shader_stage_create_info = {};
         shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shader_stage_create_info.stage = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -589,10 +563,6 @@ class GPUSimulation {
         }
         shader_stage_create_info.pName = "main";
 
-        /*
-        The pipeline layout allows the pipeline to access descriptor sets.
-        So we just specify the descriptor set layout we created earlier.
-        */
         VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
         pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipeline_layout_create_info.setLayoutCount = MAX_DESCRIPTOR_SETS;
@@ -636,9 +606,7 @@ class GPUSimulation {
         VK_CHECK(vkBeginCommandBuffer(context.command_buffer[command_idx], &begin_info)); // start recording commands.
     }
 
-    void end_recording(int command_idx) {
-        VK_CHECK(vkEndCommandBuffer(context.command_buffer[command_idx])); // end recording commands.
-    }
+    void end_recording(int command_idx) { VK_CHECK(vkEndCommandBuffer(context.command_buffer[command_idx])); }
 
     void begin_end_record_command_buffer(Pipeline pipeline, int command_idx, int wg_x, int wg_y, int width,
                                          int height) {
@@ -673,23 +641,12 @@ class GPUSimulation {
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &context.command_buffer[command_idx];
         VK_CHECK(vkQueueSubmit(context.compute_queue, 1, &submit_info, fence));
-        /*
-        The command will not have finished executing until the fence is signalled.
-        So we wait here.
-        We will directly after this read our buffer from the GPU,
-        and we will not be sure that the command has finished executing unless we wait for the fence.
-        Hence, we use a fence here.
-        */
         VK_CHECK(vkWaitForFences(context.device, 1, &fence, VK_TRUE, 100000000000));
         vkResetFences(context.device, 1, &fence);
     }
 
     void cleanup(const std::vector<Pipeline> &pipelines) {
-        /*
-        Clean up all Vulkan Resources.
-        */
         if (enable_validation) {
-            // destroy callback.
             auto func =
                 (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
             if (func == nullptr) {
