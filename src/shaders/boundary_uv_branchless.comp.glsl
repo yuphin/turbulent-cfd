@@ -14,42 +14,42 @@ layout(binding = 1) buffer Vvec
 	float v_vec[];
 };
 
-layout(binding = 22) buffer U
+layout(set = 1, binding = 0) buffer U
 {
 	float u[];
 };
 
-layout(binding = 23) buffer V
+layout(set = 1, binding = 1) buffer V
 {
 	float v[];
 };
 
-layout(binding = 24) buffer URHS
+layout(set = 1, binding = 2) buffer URHS
 {
 	float u_rhs[];
 };
 
-layout(binding = 25) buffer VRHS
+layout(set = 1, binding = 3) buffer VRHS
 {
 	float v_rhs[];
 };
 
-layout(binding = 26) buffer URowStart
+layout(set = 1, binding = 4) buffer URowStart
 {
 	int u_row_start[];
 };
 
-layout(binding = 27) buffer VRowStart
+layout(set = 1, binding = 5) buffer VRowStart
 {
 	int v_row_start[];
 };
 
-layout(binding = 28) buffer UColIdx
+layout(set = 1, binding = 6) buffer UColIdx
 {
 	int u_col_idx[];
 };
 
-layout(binding = 29) buffer VColIdx
+layout(set = 1, binding = 7) buffer VColIdx
 {
 	int v_col_idx[];
 };

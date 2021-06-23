@@ -280,8 +280,8 @@ struct Buffer {
 struct Descriptor {
     Buffer handle;
     int binding;
-    VkDescriptorType desc_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     int set_idx = 0;
+    VkDescriptorType desc_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 };
 
 class GPUSimulation {
