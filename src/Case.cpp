@@ -29,7 +29,7 @@ namespace filesystem = std::filesystem;
 
 #define ENABLE_CG_CPU 0
 
-#define ENABLE_PRECOND 0
+#define ENABLE_PRECOND 1
 Case::Case(std::string file_name, int argn, char **args) {
 
     // Set up logging functionality
@@ -574,6 +574,63 @@ void Case::simulate() {
                                  {deltas_buffer, 30},
                                  {counter_buffer, 31}});
 
+    auto record_simulation_step = [&](int command_idx) {
+        simulation.begin_recording(command_idx, 0);
+        simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, grid_size, 1);
+        uv_max(simulation, residual_buffer, min_max_uv_pipeline, reduce_uv_pipeline, command_idx, grid_size);
+        barrier(simulation, residual_buffer, command_idx);
+        simulation.record_command_buffer(calc_dt_pipeline, command_idx, 1, 1, 1, 1);
+        barrier(simulation, dt_buffer, command_idx);
+        simulation.record_command_buffer(discretization_pipeline, command_idx, 32, 32, grid_x, grid_y);
+        std::array<VkBufferMemoryBarrier, 2> fg_barriers = {
+            buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
+            buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)
+
+        };
+        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers.data(), 0, 0);
+        if (_calc_temp) {
+            // TODO: Implement convection
+        }
+        // Compute F & G and enforce boundary conditions
+        simulation.record_command_buffer(fg_boundary_pipeline, command_idx, 32, 32, grid_x, grid_y);
+
+        std::array<VkBufferMemoryBarrier, 2> fg_barriers_read = {
+            buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+            buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)};
+        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers_read.data(), 0, 0);
+        simulation.record_command_buffer(rs_pipeline, command_idx, 32, 32, grid_x, grid_y);
+        vkCmdFillBuffer(simulation.context.command_buffer[command_idx], p_buffer.handle, 0,
+                        _grid.imaxb() * _grid.jmaxb() * sizeof(Real), 0);
+        std::vector<Real> solution(_field.p_matrix().size(), 0);
+        VkBufferMemoryBarrier fill_barrier = buffer_barrier(p_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+        barrier(simulation, rs_buffer, command_idx);
+
+        rs_buffer.copy(r_buffer, command_idx, false);
+        barrier(simulation, r_buffer, command_idx);
+
+        if (!ENABLE_PRECOND) {
+            // z_buffer.copy(d_buffer, command_idx, false);
+            rs_buffer.copy(d_buffer, command_idx, false);
+
+            vec_dp(simulation, residual_buffer, vec_dot_vec_1_pipeline, reduce_pipeline, command_idx, grid_size);
+        } else {
+            simulation.record_command_buffer(spmv_m_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
+            barrier(simulation, z_buffer, command_idx);
+            z_buffer.copy(d_buffer, command_idx, false);
+            vec_dp(simulation, residual_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx, grid_size);
+        }
+        barrier(simulation, residual_buffer, command_idx);
+        residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(Real));
+        residual_buffer.copy(deltas_buffer, command_idx, false, 0, 0, sizeof(Real));
+        // Calculate delta_new(r_norm) = r_t dot r
+        simulation.end_recording(command_idx);
+    };
+
     auto record_conjugate_gradient_solver = [&](int command_idx = 0) {
         simulation.begin_recording(command_idx, 0);
         // q <- A *d
@@ -630,60 +687,6 @@ void Case::simulate() {
         copy_region.size = deltas_buffer.size;
         vkCmdCopyBuffer(simulation.context.command_buffer[command_idx], deltas_buffer.handle, scratch_buffer.handle, 1,
                         &copy_region);
-        simulation.end_recording(command_idx);
-    };
-
-    auto record_simulation_step = [&](int command_idx) {
-        simulation.begin_recording(command_idx, 0);
-        simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, grid_size, 1);
-        uv_max(simulation, residual_buffer, min_max_uv_pipeline, reduce_uv_pipeline, command_idx, grid_size);
-        barrier(simulation, residual_buffer, command_idx);
-        simulation.record_command_buffer(calc_dt_pipeline, command_idx, 1, 1, 1, 1);
-        barrier(simulation, dt_buffer, command_idx);
-        simulation.record_command_buffer(discretization_pipeline, command_idx, 32, 32, grid_x, grid_y);
-        std::array<VkBufferMemoryBarrier, 2> fg_barriers = {
-            buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
-            buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)
-
-        };
-        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers.data(), 0, 0);
-
-        simulation.record_command_buffer(fg_boundary_pipeline, command_idx, 32, 32, grid_x, grid_y);
-
-        std::array<VkBufferMemoryBarrier, 2> fg_barriers_read = {
-            buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
-            buffer_barrier(g_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)};
-        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers_read.data(), 0, 0);
-        simulation.record_command_buffer(rs_pipeline, command_idx, 32, 32, grid_x, grid_y);
-        vkCmdFillBuffer(simulation.context.command_buffer[command_idx], p_buffer.handle, 0,
-                        _grid.imaxb() * _grid.jmaxb() * sizeof(Real), 0);
-        std::vector<Real> solution(_field.p_matrix().size(), 0);
-        VkBufferMemoryBarrier fill_barrier = buffer_barrier(p_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
-        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
-        barrier(simulation, rs_buffer, command_idx);
-
-        rs_buffer.copy(r_buffer, command_idx, false);
-        barrier(simulation, r_buffer, command_idx);
-
-        if (!ENABLE_PRECOND) {
-            // z_buffer.copy(d_buffer, command_idx, false);
-            rs_buffer.copy(d_buffer, command_idx, false);
-
-            vec_dp(simulation, residual_buffer, vec_dot_vec_1_pipeline, reduce_pipeline, command_idx, grid_size);
-        } else {
-            simulation.record_command_buffer(spmv_m_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
-            barrier(simulation, z_buffer, command_idx);
-            z_buffer.copy(d_buffer, command_idx, false);
-            vec_dp(simulation, residual_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx, grid_size);
-        }
-        barrier(simulation, residual_buffer, command_idx);
-        residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(Real));
-        residual_buffer.copy(deltas_buffer, command_idx, false, 0, 0, sizeof(Real));
-        // Calculate delta_new(r_norm) = r_t dot r
         simulation.end_recording(command_idx);
     };
 

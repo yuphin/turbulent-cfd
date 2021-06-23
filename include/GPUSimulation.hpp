@@ -13,6 +13,8 @@ enum CommandBufferIndex {
     COMMAND_BUFFER_IDX_3,
 };
 
+constexpr int MAX_DESCRIPTOR_SETS = 4;
+
 struct UBOData {
     int imax;
     int jmax;
@@ -279,6 +281,7 @@ struct Descriptor {
     Buffer handle;
     int binding;
     VkDescriptorType desc_type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    int set_idx = 0;
 };
 
 class GPUSimulation {
@@ -289,6 +292,8 @@ class GPUSimulation {
         create_device();
         create_descriptor_pool();
         this->data = data;
+        descriptor_sets.resize(MAX_DESCRIPTOR_SETS);
+        descriptor_set_layouts.resize(MAX_DESCRIPTOR_SETS);
     }
     void create_instance() {
         std::vector<const char *> enabled_extensions;
@@ -474,18 +479,16 @@ class GPUSimulation {
         VkDescriptorSetLayoutCreateInfo dsl_create_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         dsl_create_info.bindingCount = bindings.size();
         dsl_create_info.pBindings = bindings.data();
-        // Create the descriptor set layout.
-        VK_CHECK(vkCreateDescriptorSetLayout(context.device, &dsl_create_info, NULL, &descriptor_set_layout));
-        /*
-      With the pool allocated, we can now allocate the descriptor set.
-      */
-        VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-        descriptor_set_allocate_info.descriptorPool = descriptor_pool; // pool to allocate from.
-        descriptor_set_allocate_info.descriptorSetCount = 1;           // allocate a single descriptor set.
-        descriptor_set_allocate_info.pSetLayouts = &descriptor_set_layout;
+        for (int i = 0; i < MAX_DESCRIPTOR_SETS; i++) {
+            VK_CHECK(vkCreateDescriptorSetLayout(context.device, &dsl_create_info, NULL, &descriptor_set_layouts[i]));
+            VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+            descriptor_set_allocate_info.descriptorPool = descriptor_pool;
+            descriptor_set_allocate_info.descriptorSetCount = 1;
+            descriptor_set_allocate_info.pSetLayouts = &descriptor_set_layouts[i];
 
-        // allocate descriptor set.
-        VK_CHECK(vkAllocateDescriptorSets(context.device, &descriptor_set_allocate_info, &descriptor_set));
+            // allocate descriptor set.
+            VK_CHECK(vkAllocateDescriptorSets(context.device, &descriptor_set_allocate_info, &descriptor_sets[i]));
+        }
     }
 
     void push_descriptors(const std::vector<Descriptor> &descriptors) {
@@ -494,9 +497,9 @@ class GPUSimulation {
         for (const auto &descriptor : descriptors) {
             VkWriteDescriptorSet write_descriptor_set = {};
             write_descriptor_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write_descriptor_set.dstSet = descriptor_set;         // write to this descriptor set.
-            write_descriptor_set.dstBinding = descriptor.binding; // write to the first, and only binding.
-            write_descriptor_set.descriptorCount = 1;             // update a single descriptor.
+            write_descriptor_set.dstSet = descriptor_sets[descriptor.set_idx]; // write to this descriptor set.
+            write_descriptor_set.dstBinding = descriptor.binding;              // write to the first, and only binding.
+            write_descriptor_set.descriptorCount = 1;                          // update a single descriptor.
             write_descriptor_set.descriptorType = descriptor.desc_type;
             write_descriptor_set.pBufferInfo = &descriptor.handle.descriptor;
             write_descriptor_sets.push_back(write_descriptor_set);
@@ -592,8 +595,8 @@ class GPUSimulation {
         */
         VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
         pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipeline_layout_create_info.setLayoutCount = 1;
-        pipeline_layout_create_info.pSetLayouts = &descriptor_set_layout;
+        pipeline_layout_create_info.setLayoutCount = MAX_DESCRIPTOR_SETS;
+        pipeline_layout_create_info.pSetLayouts = descriptor_set_layouts.data();
         pipeline_layout_create_info.pushConstantRangeCount = 1;
         pipeline_layout_create_info.pPushConstantRanges = &push_constant_range;
         VK_CHECK(vkCreatePipelineLayout(context.device, &pipeline_layout_create_info, NULL, &pipeline_layout));
@@ -645,16 +648,10 @@ class GPUSimulation {
     }
 
     void record_command_buffer(Pipeline pipeline, int command_idx, int wg_x, int wg_y, int width, int height) {
-        /*
-        We need to bind a pipeline, AND a descriptor set before we dispatch.
 
-        The validation layer will NOT give warnings if you forget these, so be very careful not to forget them.
-        */
         vkCmdBindPipeline(context.command_buffer[command_idx], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
-
         vkCmdBindDescriptorSets(context.command_buffer[command_idx], VK_PIPELINE_BIND_POINT_COMPUTE,
-                                pipeline.pipeline_layout, 0, 1, &descriptor_set, 0, NULL);
-
+                                pipeline.pipeline_layout, 0, descriptor_sets.size(), descriptor_sets.data(), 0, NULL);
         vkCmdPushConstants(context.command_buffer[command_idx], pipeline.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT,
                            0, sizeof(UBOData), &data);
         const auto num_wg_x = (uint32_t)ceil(width / float(wg_x));
@@ -704,7 +701,9 @@ class GPUSimulation {
             vkDestroyShaderModule(context.device, pipeline.shader_module, NULL);
         }
         vkDestroyDescriptorPool(context.device, descriptor_pool, NULL);
-        vkDestroyDescriptorSetLayout(context.device, descriptor_set_layout, NULL);
+        for (int i = 0; i < MAX_DESCRIPTOR_SETS; i++) {
+            vkDestroyDescriptorSetLayout(context.device, descriptor_set_layouts[i], NULL);
+        }
         for (auto pipeline : pipelines) {
             vkDestroyPipelineLayout(context.device, pipeline.pipeline_layout, NULL);
         }
@@ -726,8 +725,8 @@ class GPUSimulation {
     // VkPipelineLayout pipeline_layout;
     // VkShaderModule compute_shader_module;
     VkDescriptorPool descriptor_pool;
-    VkDescriptorSet descriptor_set;
-    VkDescriptorSetLayout descriptor_set_layout;
+    std::vector<VkDescriptorSet> descriptor_sets;
+    std::vector<VkDescriptorSetLayout> descriptor_set_layouts;
     VkFence fence;
     // VkBuffer buffer;
     // VkDeviceMemory buffer_memory;
@@ -779,7 +778,7 @@ void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &pipeli
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
     int num_wgs = ceil(dim / 1024.0f);
-   
+
     while (num_wgs != 1) {
         simulation.data.num_wgs = num_wgs;
         simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
@@ -792,8 +791,7 @@ void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &pipeli
 }
 
 void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &min_max_uv_pipeline,
-            Pipeline &reduce_pipeline,
-            int command_idx, int dim) {
+            Pipeline &reduce_pipeline, int command_idx, int dim) {
     vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size, 0);
     VkBufferMemoryBarrier fill_barrier =
         buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
@@ -818,7 +816,6 @@ void scalar_div(GPUSimulation &simulation, Pipeline &pipeline, int command_idx) 
     simulation.record_command_buffer(pipeline, command_idx, 1, 1, 1, 1);
 }
 
-void vec_saxpy(GPUSimulation &simulation, Pipeline &pipeline, int command_idx,
-               int dim) {
+void vec_saxpy(GPUSimulation &simulation, Pipeline &pipeline, int command_idx, int dim) {
     simulation.record_command_buffer(pipeline, command_idx, 1024, 1, dim, 1);
 }
