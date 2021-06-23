@@ -29,7 +29,7 @@ namespace filesystem = std::filesystem;
 
 #define ENABLE_CG_CPU 0
 
-#define ENABLE_PRECOND 1
+#define ENABLE_PRECOND 0
 Case::Case(std::string file_name, int argn, char **args) {
 
     // Set up logging functionality
@@ -403,10 +403,13 @@ void Case::simulate() {
     Pipeline saxpy_2_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 2);
     Pipeline vec_dot_vec_0_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 0);
     Pipeline vec_dot_vec_1_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 1);
-#ifdef ENABLE_PRECOND
-    Pipeline vec_dot_vec_2_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 2);
-    Pipeline spmv_m_pipeline = simulation.create_compute_pipeline("src/shaders/spmv.comp.spv", 1);
-    Pipeline saxpy_3_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 3);
+    Pipeline vec_dot_vec_2_pipeline;
+    Pipeline spmv_m_pipeline;
+    Pipeline saxpy_3_pipeline;
+#if ENABLE_PRECOND
+    vec_dot_vec_2_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 2);
+    spmv_m_pipeline = simulation.create_compute_pipeline("src/shaders/spmv.comp.spv", 1);
+    saxpy_3_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 3);
 #endif
     Pipeline div_pipeline = simulation.create_compute_pipeline("src/shaders/div.comp.spv", 0);
     Pipeline div_store_pipeline = simulation.create_compute_pipeline("src/shaders/div.comp.spv", 1);
@@ -558,7 +561,7 @@ void Case::simulate() {
         {residual_buffer, 14},
         {r_buffer, 15},
         {p_buffer, 16},
-#ifdef ENABLE_PRECOND
+#if ENABLE_PRECOND
         {z_buffer, 17},
         {m_data_buffer, 18},
         {m_offset_buffer, 19},
@@ -858,7 +861,7 @@ void Case::simulate() {
     cell_buffer.destroy();
     a_data_buffer.destroy();
     a_offset_buffer.destroy();
-#ifdef ENABLE_PRECOND
+#if ENABLE_PRECOND
     m_data_buffer.destroy();
     m_offset_buffer.destroy();
     z_buffer.destroy();
@@ -898,7 +901,7 @@ void Case::simulate() {
                         reduce_pipeline,
                         vec_dot_vec_0_pipeline,
                         vec_dot_vec_1_pipeline,
-#ifdef ENABLE_PRECOND
+#if ENABLE_PRECOND
                         vec_dot_vec_2_pipeline,
                         spmv_m_pipeline,
                         saxpy_3_pipeline,
