@@ -15,4 +15,5 @@ layout(push_constant) uniform UBOData {
     float VI;
     float tau;
     int num_wgs;
+    int num_diags;
 };

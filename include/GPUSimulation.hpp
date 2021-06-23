@@ -13,6 +13,26 @@ enum CommandBufferIndex {
     COMMAND_BUFFER_IDX_3,
 };
 
+struct UBOData {
+    int imax;
+    int jmax;
+    int size;
+    float nu;
+    float dx;
+    float dy;
+    float dx2;
+    float dy2;
+    float inv_dx;
+    float inv_dy;
+    float gamma;
+    float PI;
+    float UI;
+    float VI;
+    float tau;
+    int num_wgs;
+    int num_diags;
+};
+
 #define VK_CHECK(f)                                                                                                    \
     {                                                                                                                  \
         VkResult res = (f);                                                                                            \
@@ -78,25 +98,6 @@ VkBufferMemoryBarrier buffer_barrier(VkBuffer handle, VkAccessFlags src_access_m
     result.size = VK_WHOLE_SIZE;
     return result;
 }
-
-struct UBOData {
-    int imax;
-    int jmax;
-    int size;
-    float nu;
-    float dx;
-    float dy;
-    float dx2;
-    float dy2;
-    float inv_dx;
-    float inv_dy;
-    float gamma;
-    float PI;
-    float UI;
-    float VI;
-    float tau;
-    int num_wgs;
-};
 
 struct Pipeline {
     VkPipeline pipeline;
@@ -817,7 +818,7 @@ void scalar_div(GPUSimulation &simulation, Pipeline &pipeline, int command_idx) 
     simulation.record_command_buffer(pipeline, command_idx, 1, 1, 1, 1);
 }
 
-void vec_saxpy(GPUSimulation &simulation, Pipeline &pipeline, Buffer &v1, Buffer &v2, Buffer &out, int command_idx,
+void vec_saxpy(GPUSimulation &simulation, Pipeline &pipeline, int command_idx,
                int dim) {
     simulation.record_command_buffer(pipeline, command_idx, 1024, 1, dim, 1);
 }

@@ -41,9 +41,8 @@ Real SOR::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Bou
 
 PCG::PCG(int dim_x, int dim_y, Real dx, Real dy, Fields &field, Grid &grid,
          const std::vector<std::unique_ptr<Boundary>> &boundaries)
-    : dim(dim_x * dim_y), dim_x(dim_x), dim_y(dim_y), A(dim), U(dim), V(dim) {
+    : dim(dim_x * dim_y), dim_x(dim_x), dim_y(dim_y), A(dim_x * dim_y), U(dim_x * dim_y), V(dim_x * dim_y) {
     build_matrix(dx, dy, field, grid, boundaries);
-    create_diagonal_matrix();
 }
 
 Real PCG::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries, uint32_t iters,
@@ -99,8 +98,7 @@ void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
                 // Outlet
                 A.set_element(loc, loc, 1);
                 field.rs(i, j) = field._PI;
-            }
-            break;
+            } break;
             case 1: {
                 // Inlet
                 auto inlet_vel_u = static_cast<InletBoundary *>(boundary.get())->_inlet_U[id];
@@ -236,7 +234,6 @@ void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
                     V.set_element(loc, at(i - 1, j), -1);
                 }
             }
-
             break;
             case 3: {
             }
@@ -266,17 +263,87 @@ void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
     V_fixed.construct_from_matrix(V);
 }
 
-void PCG::create_diagonal_matrix() {
-    A_diag.dim = dim;
-    A_diag.offsets = {-dim_x, -1, 0, 1, dim_x};
-    A_diag.data.resize(5 * dim);
+DiagonalSparseMatrix<Real> create_diagonal_matrix(const SparseMatrix<Real> &A, int dim_x, int dim_y,
+                                                  const std::vector<int> offsets) {
+    DiagonalSparseMatrix<Real> A_diag;
+    A_diag.dim = A.n;
+    A_diag.offsets = offsets;
+    A_diag.num_diags = offsets.size();
+    A_diag.data.resize(offsets.size() * A.n);
     int cnt = 0;
-    for (auto r = 0; r < dim; r++) {
+    for (auto r = 0; r < A.n; r++) {
         for (int n = 0; n < A_diag.num_diags; n++) {
             auto c = A_diag.offsets[n] + r;
-            if (c >= 0 && c < dim) {
-                A_diag.data[dim * n + r] = A(r, c);
+            if (c >= 0 && c < A.n) {
+                A_diag.data[A.n * n + r] = A(r, c);
             }
         }
     }
+    return A_diag;
+}
+
+DiagonalSparseMatrix<Real> create_preconditioner_spai(const SparseMatrix<Real> &A, int dim_x, int dim_y) {
+    constexpr int PRECOND_TYPE = 1;
+    std::vector<int> diag_offsets;
+    SparseMatrix<Real> result(dim_x * dim_y);
+    if (PRECOND_TYPE == 0) {
+        const float omg = 0.5;
+        SparseMatrix<Real> diag(dim_x * dim_y);
+        SparseMatrix<Real> j_a(dim_x * dim_y);
+        SparseMatrix<Real> j_a_j(dim_x * dim_y);
+        // From "Algorithm for Sparse Approximate Inverse Preconditioners in the Conjugate Gradient Method",
+        // https://interval.louisiana.edu/reliable-computing-journal/volume-19/reliable-computing-19-pp-120-126.pdf
+        for (int i = 0; i < A.n; i++) {
+            diag.set_element(i, i, 1 / A(i, i));
+        }
+        mat_mat_multiply(diag, A, j_a);
+        mat_mat_multiply(j_a, diag, j_a_j);
+        for (int i = 0; i < j_a_j.n; i++) {
+            for (const int j : j_a_j.index[i]) {
+                auto elem = j_a_j(i, j);
+                float diag = 0;
+                if (i == j) {
+                    diag = 2 / A(i, i);
+                }
+                result.set_element(i, j, diag - elem);
+            }
+        }
+        for (int i = 0; i < result.n; i++) {
+            for (const int j : result.index[i]) {
+                auto a = result(i, j);
+                Real d = 0;
+                if (i == j) {
+                    d = diag(i, i);
+                }
+                result.set_element(i, j, omg * d + (1 - omg) * result(i, j));
+            }
+        }
+        diag_offsets = {-dim_x, -1, 0, 1, dim_x};
+    } else if (PRECOND_TYPE == 1) {
+        const float omg = 0.5;
+        SparseMatrix<Real> K_inv(dim_x * dim_y);
+        SparseMatrix<Real> K_inv_T(dim_x * dim_y);
+        // SSOR preconditioner from "Parallel preconditioned conjugate gradient algorithm on GPU"
+        for (int i = 0; i < A.n; i++) {
+            for (const int j : A.index[i]) {
+                if (j > i) {
+                    continue;
+                }
+                auto delta = i == j;
+                auto term = omg * A(i, j) / A(j, j);
+                K_inv.set_element(i, j, sqrt(2 - omg) * sqrt(omg / A(i, i)) * (delta - term));
+            }
+        }
+        mat_transpose(K_inv, K_inv_T);
+        // Calculate M_inv = K_inv_T * K_inv
+        mat_mat_multiply(K_inv_T, K_inv, result);
+        // diag_offsets = {-dim_x + 1, 0, dim_x - 1};
+        diag_offsets = {-dim_x, -dim_x + 1, -1, 0, 1, dim_x - 1, dim_x};
+    } else if (PRECOND_TYPE == 2) {
+        for (int i = 0; i < A.n; i++) {
+            result.set_element(i, i, 1 / A(i, i));
+        }
+        diag_offsets = {0};
+    }
+    return create_diagonal_matrix(result, dim_x, dim_y, diag_offsets);
 }

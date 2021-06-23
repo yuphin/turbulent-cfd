@@ -5,9 +5,9 @@
 layout(constant_id = 0) const uint STORE = 0;
 layout(local_size_x = 1, local_size_y =1, local_size_z = 1) in;
 
-layout(binding = 14) buffer R
+layout(binding = 14) buffer Residual
 {
-	float r[];
+	float res[];
 };
 
 layout(binding = 30) buffer Deltas
@@ -18,11 +18,11 @@ layout(binding = 30) buffer Deltas
 
 void main(){
 	if(STORE == 0){
-		r[0] =  d[0] / r[0];
+		res[0] =  d[0] / res[0];
 	} else {
 		d[1] = d[0]; // old
-		d[0] = r[0]; // new
-		r[0] = r[0] / d[1];
+		d[0] = res[0]; // new
+		res[0] = res[0] / d[1];
 	}
 
 }

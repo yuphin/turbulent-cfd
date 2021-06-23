@@ -25,6 +25,10 @@ layout(binding = 15) buffer R // r
 	float r[];
 };
 
+layout(binding = 17) buffer Z // z
+{
+	float z[];
+};
 shared float data[32];
 
 void main() {
@@ -36,8 +40,9 @@ void main() {
 			sum =  v1[idx] * v2[idx];
 		} else if(MODE == 1){
 			sum =  r[idx] * r[idx];
+		} else if(MODE == 2){
+			sum =  z[idx] * r[idx];
 		}
-		
 	} 
 	sum = subgroupAdd(sum);
 	if (gl_SubgroupInvocationID == 0) {

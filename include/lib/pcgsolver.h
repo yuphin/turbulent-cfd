@@ -1,7 +1,7 @@
 //
 //  Preconditioned conjugate gradient solver
 //
-//  Created by Robert Bridson, Ryoichi Ando and Nils Thuerey
+//  Created by Robert Bridson, Ryoichi Ando and Nils Thuerey and Fluidchen Team
 //
 
 #ifndef RCMATRIX3_H
@@ -290,6 +290,33 @@ void multiply(const SparseMatrix<T> &matrix, const std::vector<T> &x, std::vecto
 	} parallel_end
 }
 
+template <class T>
+void mat_mat_multiply(const SparseMatrix<T> &m1, const SparseMatrix<T> &m2, SparseMatrix<T> &result) {
+    for (int i = 0; i < m1.n; ++i) {
+        for (int j = 0; j < m2.n; ++j) {
+            T value = 0;
+            int c = 0;
+            for (const int k : m1.index[i]) {
+                //value += m1.value[i][c] * m2(k, j);
+                value += m1(i,k) * m2(k, j);
+                c++;
+            }
+            if (value != 0) {
+                result.set_element(i, j, value);
+            }
+        }
+    }
+}
+
+template <class T>
+void mat_transpose(const SparseMatrix<T> &m1, SparseMatrix<T> &result) {
+    for (int i = 0; i < m1.n; ++i) {
+        for (const int k : m1.index[i]) {
+            result.set_element(k, i, m1(i, k));
+        }
+    }
+}
+
 // perform result=result-matrix*x
 template<class T>
 void multiply_and_subtract(const SparseMatrix<T> &matrix, const std::vector<T> &x, std::vector<T> &result)
@@ -378,6 +405,7 @@ struct FixedSparseMatrix
 };
 
 
+
 // perform result=matrix*x
 template<class T>
 void multiply(const FixedSparseMatrix<T> &matrix, const std::vector<T> &x, std::vector<T> &result)
@@ -393,6 +421,40 @@ void multiply(const FixedSparseMatrix<T> &matrix, const std::vector<T> &x, std::
 		}
 		result[i]=value;
 	} parallel_end
+}
+
+template <class T>
+void mat_mat_multiply(const FixedSparseMatrix<T> &m1, const FixedSparseMatrix<T> &m2, FixedSparseMatrix<T> &result) {
+    result.resize(m1.n);
+    result.rowstart[0] = 0;
+    auto get_col = [&](const FixedSparseMatrix<T> &m, int row, int col) -> int {
+        for (int i = m.rowstart[row]; i < m.rowstart[row + 1]; i++) {
+            if (m.colindex[i] == col) {
+                return i;
+            }
+        }
+        return -1;
+    };
+    for (int i = 0; i < m1.n; ++i) {
+        int added = 0;
+        for (int j = 0; j < m2.n; ++j) {
+            T value = 0;
+            for (int k = m1.rowstart[i]; k < m1.rowstart[i + 1]; ++k) {
+                auto col_m1 = m1.colindex[k];
+                auto col = get_col(m2, col_m1, j);
+                if (col == -1) {
+                    continue;
+                }
+                value += m1.value[k] * m2.value[col];
+            }
+            if (value != 0) {
+                result.value.push_back(value);
+                result.colindex.push_back(j);
+                added++;
+            } 
+        }
+        result.rowstart[i + 1] = result.rowstart[i] + added;
+    }
 }
 
 // perform result=result-matrix*x

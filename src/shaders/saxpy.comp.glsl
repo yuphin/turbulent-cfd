@@ -31,6 +31,11 @@ layout(binding = 16) buffer P // p
 	float p[];
 };
 
+layout(binding = 17) buffer Z // z
+{
+	float z[];
+};
+
 void main() {
 	uint idx = gl_GlobalInvocationID.x;
 	// res = 0
@@ -45,6 +50,9 @@ void main() {
 				break;
 			case 2:
 				v1[idx] = r[idx] + alpha * v1[idx];
+				break;
+			case 3:
+				v1[idx] = z[idx] + alpha * v1[idx];
 				break;
 		}
 		
