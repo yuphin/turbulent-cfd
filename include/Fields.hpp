@@ -30,6 +30,9 @@ class Fields {
 
 
     void calculate_epsilon(Grid &grid);
+
+    void calculate_k(Grid &grid);
+
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
      * direction based on explicit discretization of the momentum equations

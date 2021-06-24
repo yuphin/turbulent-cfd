@@ -34,6 +34,18 @@ void Fields::calculate_epsilon(Grid &grid) {
     }
 }
 
+void Fields::calculate_k(Grid &grid) {
+    auto K_OLD = _K;
+    for (const auto &current_cell : grid.fluid_cells()) {
+        int i = current_cell->i();
+        int j = current_cell->j();
+
+        k(i, j) = k(i, j) + _dt * ( (_nu + nu_t(i, j) / 1.0) * Discretization::laplacian(K_OLD, i, j) - 
+                                        Discretization::convection_uT(_U, K_OLD, i, j) - Discretization::convection_vT(_U, K_OLD, i, j) -
+                                        eps(i, j) + nu_t(i, j) * Discretization::mean_strain_rate_squared(_U, _V, i, j));
+    }
+}
+
 void Fields::calculate_fluxes(Grid &grid, bool calc_temp) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
