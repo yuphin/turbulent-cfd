@@ -93,6 +93,15 @@ class Fields {
     /// y-momentum flux index based access and modify
     Real &g(int i, int j);
 
+    /// turbulent kinetic energy index based access and modify
+    Real &k(int i, int j);
+
+    /// dissipation rate index based access and modify
+    Real &eps(int i, int j);
+
+    /// turbulent viscosity index based access and modify
+    Real &nu_t(int i, int j);
+
     /// get timestep size
     Real dt() const;
 
@@ -113,6 +122,15 @@ class Fields {
 
     /// y-momentum flux matrix
     Matrix<Real> &g_matrix();
+
+    /// turbulent kinetic energy matrix
+    Matrix<Real> &k_matrix();
+
+    /// dissipation rate matrix
+    Matrix<Real> &eps_matrix();
+
+    /// turbulent energy matrix
+    Matrix<Real> &nu_t_matrix();
 
     /// initial pressure
     Real _PI;
@@ -135,6 +153,12 @@ class Fields {
     Matrix<Real> _G;
     /// right hand side matrix
     Matrix<Real> _RS;
+    /// turbulent kinetic energy
+    Matrix<Real> _K;
+    /// dissipation of _K
+    Matrix<Real> _EPS;
+    /// turbulent viscosity
+    Matrix<Real> _NU_T;
 
     /// kinematic viscosity
     Real _nu;

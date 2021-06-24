@@ -112,6 +112,9 @@ Real &Fields::t(int i, int j) { return _T(i, j); }
 Real &Fields::f(int i, int j) { return _F(i, j); }
 Real &Fields::g(int i, int j) { return _G(i, j); }
 Real &Fields::rs(int i, int j) { return _RS(i, j); }
+Real &Fields::k(int i, int j) { return _K(i, j); }
+Real &Fields::eps(int i, int j) { return _EPS(i, j); }
+Real &Fields::nu_t(int i, int j) { return _NU_T(i, j); }
 
 Matrix<Real> &Fields::p_matrix() { return _P; }
 Matrix<Real> &Fields::u_matrix() { return _U; }
@@ -119,5 +122,8 @@ Matrix<Real> &Fields::v_matrix() { return _V; }
 Matrix<Real> &Fields::t_matrix() { return _T; }
 Matrix<Real> &Fields::f_matrix() { return _F; }
 Matrix<Real> &Fields::g_matrix() { return _G; }
+Matrix<Real> &Fields::k_matrix() { return _K; }
+Matrix<Real> &Fields::eps_matrix() { return _EPS; }
+Matrix<Real> &Fields::nu_t_matrix() { return _NU_T; }
 
 Real Fields::dt() const { return _dt; }
