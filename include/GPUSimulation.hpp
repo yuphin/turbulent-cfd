@@ -35,7 +35,6 @@ struct UBOData {
     float UI;
     float VI;
     float tau;
-    int num_wgs;
     int num_diags;
 };
 
@@ -53,9 +52,12 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(VkDebugReportFlagsEX
                                                             size_t location, int32_t messageCode,
                                                             const char *pLayerPrefix, const char *pMessage,
                                                             void *pUserData) {
-
+    // Work around errors regarding specialization constants and different buffers in the same shader
+    if (strstr(pMessage, "The Vulkan spec states: Descriptors in each bound descriptor set, specified via "
+                         "vkCmdBindDescriptorSets, must be valid"))
+        return VK_FALSE;
     printf("Debug Report: %s: %s\n", pLayerPrefix, pMessage);
-
+    if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) assert(!"Validation error encountered!");
     return VK_FALSE;
 }
 
@@ -658,6 +660,7 @@ class GPUSimulation {
             }
             func(instance, debug_report_callback, NULL);
         }
+
         for (auto pipeline : pipelines) {
             vkDestroyShaderModule(context.device, pipeline.shader_module, NULL);
         }
@@ -726,8 +729,8 @@ Real vec_dp_immediate(GPUSimulation &simulation, Buffer &v1, Buffer &v2, Buffer 
     return *(Real *)scratch_buffer.data;
 }
 
-void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &pipeline, Pipeline &reduce_pipeline,
-            int command_idx, int dim) {
+void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer, Pipeline &pipeline,
+            Pipeline &reduce_pipeline, int command_idx, int dim) {
     vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size, 0);
     VkBufferMemoryBarrier fill_barrier =
         buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
@@ -739,20 +742,24 @@ void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &pipeli
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
     int num_wgs = ceil(dim / 1024.0f);
-
+    vkCmdFillBuffer(simulation.context.command_buffer[command_idx], counter_buffer.handle, 0, counter_buffer.size, 1);
+    fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                  VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+    std::array<VkBufferMemoryBarrier, 2> barriers{res_barrier, fill_barrier};
     while (num_wgs != 1) {
-        simulation.data.num_wgs = num_wgs;
         simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
         num_wgs = ceil(num_wgs / 1024.0f);
         if (num_wgs > 1) {
             vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, barriers.data(), 0, 0);
         }
     }
 }
 
-void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &min_max_uv_pipeline,
-            Pipeline &reduce_pipeline, int command_idx, int dim) {
+void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer, Pipeline &min_max_uv_pipeline,
+            Pipeline &reduce_u_pipeline, Pipeline &reduce_v_pipeline, int command_idx, int dim) {
     vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size, 0);
     VkBufferMemoryBarrier fill_barrier =
         buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
@@ -761,14 +768,22 @@ void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Pipeline &min_ma
     VkBufferMemoryBarrier res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
                                                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
     simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, dim, 1);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
     int num_wgs = ceil(dim / 1024.0f);
-    simulation.data.num_wgs = num_wgs;
+    vkCmdFillBuffer(simulation.context.command_buffer[command_idx], counter_buffer.handle, 0, counter_buffer.size, 1);
+    fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                  VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+    std::array<VkBufferMemoryBarrier, 2> barriers{res_barrier, fill_barrier};
     while (num_wgs != 1) {
-        simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
+        simulation.record_command_buffer(reduce_u_pipeline, command_idx, 1024, 1, num_wgs, 1);
+        simulation.record_command_buffer(reduce_v_pipeline, command_idx, 1024, 1, num_wgs, 1);
         num_wgs = ceil(num_wgs / 1024.0f);
         if (num_wgs > 1) {
             vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, barriers.data(), 0, 0);
         }
     }
 }

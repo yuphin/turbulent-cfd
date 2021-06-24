@@ -29,7 +29,7 @@ namespace filesystem = std::filesystem;
 
 #define ENABLE_CG_CPU 0
 
-#define ENABLE_PRECOND 0
+#define ENABLE_PRECOND 1
 Case::Case(std::string file_name, int argn, char **args) {
 
     // Set up logging functionality
@@ -412,6 +412,8 @@ void Case::simulate() {
     Pipeline vec_dot_vec_2_pipeline;
     Pipeline spmv_m_pipeline;
     Pipeline saxpy_3_pipeline;
+    Pipeline calc_t_pipeline;
+    Pipeline boundary_t_branchless;
 #if ENABLE_PRECOND
     vec_dot_vec_2_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 2);
     spmv_m_pipeline = simulation.create_compute_pipeline("src/shaders/spmv.comp.spv", 1);
@@ -423,12 +425,15 @@ void Case::simulate() {
     Pipeline inc_pipeline = simulation.create_compute_pipeline("src/shaders/increment.comp.spv");
     Pipeline negate_pipeline = simulation.create_compute_pipeline("src/shaders/negate.comp.spv");
     Pipeline min_max_uv_pipeline = simulation.create_compute_pipeline("src/shaders/min_max_uv.comp.spv");
-    Pipeline reduce_uv_pipeline = simulation.create_compute_pipeline("src/shaders/reduce_uv.comp.spv");
+    Pipeline reduce_u_pipeline = simulation.create_compute_pipeline("src/shaders/reduce_uv.comp.spv", 0);
+    Pipeline reduce_v_pipeline = simulation.create_compute_pipeline("src/shaders/reduce_uv.comp.spv", 1);
     Pipeline calc_dt_pipeline = simulation.create_compute_pipeline("src/shaders/calc_dt.comp.spv", _calc_temp);
     Pipeline boundary_uv_branchless_pipeline =
         simulation.create_compute_pipeline("src/shaders/boundary_uv_branchless.comp.spv");
-    Pipeline calc_t_pipeline = simulation.create_compute_pipeline("src/shaders/calc_temp.comp.spv");
-    Pipeline boundary_t_branchless = simulation.create_compute_pipeline("src/shaders/boundary_t_branchless.comp.spv");
+    if (_calc_temp) {
+        calc_t_pipeline = simulation.create_compute_pipeline("src/shaders/calc_temp.comp.spv");
+        boundary_t_branchless = simulation.create_compute_pipeline("src/shaders/boundary_t_branchless.comp.spv");
+    }
 
     cell_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                        VK_SHARING_MODE_EXCLUSIVE, sizeof(Real) * _field.f_matrix().size(), is_fluid.data(), true);
@@ -495,8 +500,8 @@ void Case::simulate() {
     spmv_result_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
                               _field.p_matrix().size() * sizeof(Real));
-    counter_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                          VK_SHARING_MODE_EXCLUSIVE, sizeof(int));
+    counter_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, sizeof(int));
     /*counter_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                          VK_SHARING_MODE_EXCLUSIVE, sizeof(int));
@@ -606,7 +611,8 @@ void Case::simulate() {
     auto record_simulation_step = [&](int command_idx) {
         simulation.begin_recording(command_idx, 0);
         simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, grid_size, 1);
-        uv_max(simulation, residual_buffer, min_max_uv_pipeline, reduce_uv_pipeline, command_idx, grid_size);
+        uv_max(simulation, residual_buffer, counter_buffer, min_max_uv_pipeline, reduce_u_pipeline, reduce_v_pipeline,
+               command_idx, grid_size);
         barrier(simulation, residual_buffer, command_idx);
         simulation.record_command_buffer(calc_dt_pipeline, command_idx, 1, 1, 1, 1);
         barrier(simulation, dt_buffer, command_idx);
@@ -650,12 +656,14 @@ void Case::simulate() {
             // z_buffer.copy(d_buffer, command_idx, false);
             rs_buffer.copy(d_buffer, command_idx, false);
 
-            vec_dp(simulation, residual_buffer, vec_dot_vec_1_pipeline, reduce_pipeline, command_idx, grid_size);
+            vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_1_pipeline, reduce_pipeline, command_idx,
+                   grid_size);
         } else {
             simulation.record_command_buffer(spmv_m_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
             barrier(simulation, z_buffer, command_idx);
             z_buffer.copy(d_buffer, command_idx, false);
-            vec_dp(simulation, residual_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx, grid_size);
+            vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx,
+                   grid_size);
         }
         barrier(simulation, residual_buffer, command_idx);
         residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(Real));
@@ -670,7 +678,8 @@ void Case::simulate() {
         simulation.record_command_buffer(spmv_a_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
         barrier(simulation, spmv_result_buffer, command_idx);
         // Store d^T dot q scalar in the residual buffer
-        vec_dp(simulation, residual_buffer, vec_dot_vec_0_pipeline, reduce_pipeline, command_idx, grid_size);
+        vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_0_pipeline, reduce_pipeline, command_idx,
+               grid_size);
         barrier(simulation, residual_buffer, command_idx);
 
         // alpha = delta_new / dt_dotq
@@ -691,9 +700,11 @@ void Case::simulate() {
             simulation.record_command_buffer(spmv_m_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
             barrier(simulation, z_buffer, command_idx);
 
-            vec_dp(simulation, residual_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx, grid_size);
+            vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx,
+                   grid_size);
         } else {
-            vec_dp(simulation, residual_buffer, vec_dot_vec_1_pipeline, reduce_pipeline, command_idx, grid_size);
+            vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_1_pipeline, reduce_pipeline, command_idx,
+                   grid_size);
         }
 
         barrier(simulation, residual_buffer, command_idx);
@@ -925,20 +936,43 @@ void Case::simulate() {
     logger.finish();
     // Output u,v,p
     output_vtk(timestep);
-    if (_calc_temp) {
-        vkDestroyPipeline(simulation.context.device, calc_t_pipeline.pipeline, NULL);
-        vkDestroyPipeline(simulation.context.device, boundary_t_branchless.pipeline, NULL);
-    }
-    simulation.cleanup({
-        fg_pipeline, rs_pipeline, vel_pipeline, p_pipeline_red, p_pipeline_black, residual_pipeline,
-            p_boundary_pipeline, v_boundary_pipeline, fg_boundary_pipeline, spmv_a_pipeline, saxpy_0_pipeline,
-            saxpy_1_pipeline, saxpy_2_pipeline, reduce_pipeline, vec_dot_vec_0_pipeline, vec_dot_vec_1_pipeline,
+    std::vector<Pipeline> pipelines_to_destroy = {
+        fg_pipeline,
+        rs_pipeline,
+        vel_pipeline,
+        p_pipeline_red,
+        p_pipeline_black,
+        residual_pipeline,
+        p_boundary_pipeline,
+        v_boundary_pipeline,
+        fg_boundary_pipeline,
+        spmv_a_pipeline,
+        saxpy_0_pipeline,
+        saxpy_1_pipeline,
+        saxpy_2_pipeline,
+        reduce_pipeline,
+        vec_dot_vec_0_pipeline,
+        vec_dot_vec_1_pipeline,
 #if ENABLE_PRECOND
-            vec_dot_vec_2_pipeline, spmv_m_pipeline, saxpy_3_pipeline,
+        vec_dot_vec_2_pipeline,
+        spmv_m_pipeline,
+        saxpy_3_pipeline,
 #endif
-            div_pipeline, div_store_pipeline, inc_pipeline, negate_pipeline, min_max_uv_pipeline, reduce_uv_pipeline,
-            calc_dt_pipeline, boundary_uv_branchless_pipeline
-    });
+        div_pipeline,
+        div_store_pipeline,
+        inc_pipeline,
+        negate_pipeline,
+        min_max_uv_pipeline,
+        reduce_u_pipeline,
+        reduce_v_pipeline,
+        calc_dt_pipeline,
+        boundary_uv_branchless_pipeline
+    };
+    if (_calc_temp) {
+        pipelines_to_destroy.push_back(calc_t_pipeline);
+        pipelines_to_destroy.push_back(boundary_t_branchless);
+    }
+    simulation.cleanup(pipelines_to_destroy);
 }
 
 void Case::output_vtk(int timestep, int my_rank) {

@@ -10,12 +10,18 @@ layout(binding = 14) buffer Residual
 	float res[];
 };
 
+layout(binding = 31) buffer Counter
+{
+	int cnt;
+};
+
 shared float data[32];
 
 void main(){
 	uint idx = gl_GlobalInvocationID.x;
 	float sum = 0;
-	if(idx < num_wgs){
+	int limit = ((size + 1023) >> (10 * cnt));
+	if(idx < limit){
 		sum = res[idx];
 	}
 
@@ -37,5 +43,8 @@ void main(){
 	if (gl_LocalInvocationID.x == 0) {
         res[gl_WorkGroupID.x] = sum;
     }
+	if(idx == 0){
+		cnt = cnt + 1;
+	}
 }
 
