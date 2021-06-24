@@ -3,6 +3,10 @@ layout(push_constant) uniform UBOData {
     int jmax;
     int size;
     float nu;
+    float alpha;
+    float beta;
+    float gx;
+    float gy;
     float dx;
     float dy;
     float dx2;

@@ -175,7 +175,7 @@ Case::Case(std::string file_name, int argn, char **args) {
 
     _grid = Grid(_geom_name, domain);
     _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, alpha, beta, GX, GY);
-
+    _field.calc_temp = _calc_temp;
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     _pressure_solver_sor = std::make_unique<SOR>(omg);
     _max_iter = itermax;
@@ -282,6 +282,8 @@ void Case::simulate() {
     Buffer v_buffer;
     Buffer f_buffer;
     Buffer g_buffer;
+    Buffer t_new_buffer;
+    Buffer t_old_buffer;
     Buffer rs_buffer;
     Buffer p_buffer;
     Buffer residual_buffer;
@@ -363,6 +365,10 @@ void Case::simulate() {
                     _grid.jmaxb(),
                     _grid.imaxb() * _grid.jmaxb(),
                     _field._nu,
+                    _field._alpha,
+                    _field._beta,
+                    _field._gx,
+                    _field._gy,
                     _grid.dx(),
                     _grid.dy(),
                     _grid.dx() * _grid.dx(),
@@ -388,7 +394,7 @@ void Case::simulate() {
     simulation.create_descriptor_set_layout(set_layout_bindings);
     simulation.create_command_pool();
     simulation.create_fences();
-    Pipeline fg_pipeline = simulation.create_compute_pipeline("src/shaders/calc_fg.comp.spv");
+    Pipeline fg_pipeline = simulation.create_compute_pipeline("src/shaders/calc_fg.comp.spv", _calc_temp);
     Pipeline rs_pipeline = simulation.create_compute_pipeline("src/shaders/calc_rs.comp.spv");
     Pipeline vel_pipeline = simulation.create_compute_pipeline("src/shaders/calc_vel.comp.spv");
     Pipeline p_pipeline_red = simulation.create_compute_pipeline("src/shaders/calc_p_redblack_gs.comp.spv", 0);
@@ -418,9 +424,11 @@ void Case::simulate() {
     Pipeline negate_pipeline = simulation.create_compute_pipeline("src/shaders/negate.comp.spv");
     Pipeline min_max_uv_pipeline = simulation.create_compute_pipeline("src/shaders/min_max_uv.comp.spv");
     Pipeline reduce_uv_pipeline = simulation.create_compute_pipeline("src/shaders/reduce_uv.comp.spv");
-    Pipeline calc_dt_pipeline = simulation.create_compute_pipeline("src/shaders/calc_dt.comp.spv");
+    Pipeline calc_dt_pipeline = simulation.create_compute_pipeline("src/shaders/calc_dt.comp.spv", _calc_temp);
     Pipeline boundary_uv_branchless_pipeline =
         simulation.create_compute_pipeline("src/shaders/boundary_uv_branchless.comp.spv");
+    Pipeline calc_t_pipeline = simulation.create_compute_pipeline("src/shaders/calc_temp.comp.spv");
+    Pipeline boundary_t_branchless = simulation.create_compute_pipeline("src/shaders/boundary_t_branchless.comp.spv");
 
     cell_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                        VK_SHARING_MODE_EXCLUSIVE, sizeof(Real) * _field.f_matrix().size(), is_fluid.data(), true);
@@ -506,6 +514,10 @@ void Case::simulate() {
     dt_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                      VK_SHARING_MODE_EXCLUSIVE, sizeof(Real));
+    Buffer t_rhs_buffer;
+    Buffer t_row_start;
+    Buffer t_col_index;
+    Buffer t_boundary_matrix_buffer;
 
     auto pcg_solver = (PCG *)_pressure_solver_pcg.get();
     auto u_matrix_data = pcg_solver->U_fixed.value.data();
@@ -544,40 +556,52 @@ void Case::simulate() {
     v_col_index.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                        VK_SHARING_MODE_EXCLUSIVE, v_col_idx_size * sizeof(int), v_col_idx_data, true);
 
+    if (_calc_temp) {
+        auto t_matrix_data = pcg_solver->T_fixed.value.data();
+        auto t_matrix_size = pcg_solver->T_fixed.value.size();
+        auto t_row_start_data = pcg_solver->T_fixed.rowstart.data();
+        auto t_row_start_size = pcg_solver->T_fixed.rowstart.size();
+        auto t_col_idx_data = pcg_solver->T_fixed.colindex.data();
+        auto t_col_idx_size = pcg_solver->T_fixed.colindex.size();
+        auto t_rhs_data = pcg_solver->T_RHS.data();
+        auto t_rhs_size = pcg_solver->T_RHS.size();
+        t_new_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                            _field.t_matrix().size() * sizeof(Real), _field._T._container.data(), true);
+        t_old_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                            _field.t_matrix().size() * sizeof(Real));
+        t_boundary_matrix_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                                        t_matrix_size * sizeof(Real), t_matrix_data, true);
+        t_rhs_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, t_rhs_size * sizeof(Real),
+                            t_rhs_data, true);
+        t_row_start.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                           VK_SHARING_MODE_EXCLUSIVE, t_row_start_size * sizeof(int), t_row_start_data, true);
+        t_col_index.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                           VK_SHARING_MODE_EXCLUSIVE, t_col_idx_size * sizeof(int), t_col_idx_data, true);
+    }
+
     simulation.push_descriptors({
-        {u_buffer, 0},
-        {v_buffer, 1},
-        {f_buffer, 2},
-        {g_buffer, 3},
-        {cell_buffer, 5},
-        {rs_buffer, 6},
-        {p_buffer, 7},
-        {residual_buffer, 8},
-        {neighborhood_buffer, 9},
-        {a_data_buffer, 10},
-        {a_offset_buffer, 11},
-        {d_buffer, 12},
-        {spmv_result_buffer, 13},
-        {residual_buffer, 14},
-        {r_buffer, 15},
-        {p_buffer, 16},
+        {u_buffer, 0}, {v_buffer, 1}, {f_buffer, 2}, {g_buffer, 3}, {cell_buffer, 5}, {rs_buffer, 6}, {p_buffer, 7},
+            {residual_buffer, 8}, {neighborhood_buffer, 9}, {a_data_buffer, 10}, {a_offset_buffer, 11}, {d_buffer, 12},
+            {spmv_result_buffer, 13}, {residual_buffer, 14}, {r_buffer, 15}, {p_buffer, 16},
 #if ENABLE_PRECOND
-        {z_buffer, 17},
-        {m_data_buffer, 18},
-        {m_offset_buffer, 19},
+            {z_buffer, 17}, {m_data_buffer, 18}, {m_offset_buffer, 19},
 #endif
-        {dt_buffer, 21},
-        {deltas_buffer, 30},
-        {counter_buffer, 31},
-        {u_boundary_matrix_buffer, 0, 1},
-        {v_boundary_matrix_buffer, 1, 1},
-        {u_rhs_buffer, 2, 1},
-        {v_rhs_buffer, 3, 1},
-        {u_row_start, 4, 1},
-        {v_row_start, 5, 1},
-        {u_col_index, 6, 1},
-        {v_col_index, 7, 1},
+            {dt_buffer, 21}, {deltas_buffer, 30}, {counter_buffer, 31}, {u_boundary_matrix_buffer, 0, 1},
+            {v_boundary_matrix_buffer, 1, 1}, {u_rhs_buffer, 2, 1}, {v_rhs_buffer, 3, 1}, {u_row_start, 4, 1},
+            {v_row_start, 5, 1}, {u_col_index, 6, 1}, {v_col_index, 7, 1},
     });
+    if (_calc_temp) {
+        simulation.push_descriptors({{t_old_buffer, 22},
+                                     {t_new_buffer, 23},
+                                     {t_boundary_matrix_buffer, 8, 1},
+                                     {t_rhs_buffer, 9, 1},
+                                     {t_row_start, 10, 1},
+                                     {t_col_index, 11, 1}});
+    }
 
     auto record_simulation_step = [&](int command_idx) {
         simulation.begin_recording(command_idx, 0);
@@ -595,7 +619,11 @@ void Case::simulate() {
         vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers.data(), 0, 0);
         if (_calc_temp) {
-            // TODO: Implement convection
+            t_new_buffer.copy(t_old_buffer, command_idx, false);
+            simulation.record_command_buffer(boundary_t_branchless, command_idx, 1024, 1, grid_size, 1);
+            barrier(simulation, t_new_buffer, command_idx);
+            simulation.record_command_buffer(calc_t_pipeline, command_idx, 32, 32, grid_x, grid_y);
+            barrier(simulation, t_new_buffer, command_idx);
         }
         // Compute F & G and enforce boundary conditions
         simulation.record_command_buffer(fg_boundary_pipeline, command_idx, 32, 32, grid_x, grid_y);
@@ -839,6 +867,10 @@ void Case::simulate() {
         _field._V._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._V.size());
         p_buffer.copy(scratch_buffer, 3);
         _field._P._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._P.size());
+        if (_calc_temp) {
+            t_new_buffer.copy(scratch_buffer, 3);
+            _field._T._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._T.size());
+        }
 
         // Output u,v,p
         if (t >= output_counter * _output_freq) {
@@ -881,39 +913,32 @@ void Case::simulate() {
     v_row_start.destroy();
     u_col_index.destroy();
     v_col_index.destroy();
+    if (_calc_temp) {
+        t_new_buffer.destroy();
+        t_old_buffer.destroy();
+        t_rhs_buffer.destroy();
+        t_row_start.destroy();
+        t_col_index.destroy();
+        t_boundary_matrix_buffer.destroy();
+    }
     // Print Summary
     logger.finish();
     // Output u,v,p
     output_vtk(timestep);
-    simulation.cleanup({fg_pipeline,
-                        rs_pipeline,
-                        vel_pipeline,
-                        p_pipeline_red,
-                        p_pipeline_black,
-                        residual_pipeline,
-                        p_boundary_pipeline,
-                        v_boundary_pipeline,
-                        fg_boundary_pipeline,
-                        spmv_a_pipeline,
-                        saxpy_0_pipeline,
-                        saxpy_1_pipeline,
-                        saxpy_2_pipeline,
-                        reduce_pipeline,
-                        vec_dot_vec_0_pipeline,
-                        vec_dot_vec_1_pipeline,
+    if (_calc_temp) {
+        vkDestroyPipeline(simulation.context.device, calc_t_pipeline.pipeline, NULL);
+        vkDestroyPipeline(simulation.context.device, boundary_t_branchless.pipeline, NULL);
+    }
+    simulation.cleanup({
+        fg_pipeline, rs_pipeline, vel_pipeline, p_pipeline_red, p_pipeline_black, residual_pipeline,
+            p_boundary_pipeline, v_boundary_pipeline, fg_boundary_pipeline, spmv_a_pipeline, saxpy_0_pipeline,
+            saxpy_1_pipeline, saxpy_2_pipeline, reduce_pipeline, vec_dot_vec_0_pipeline, vec_dot_vec_1_pipeline,
 #if ENABLE_PRECOND
-                        vec_dot_vec_2_pipeline,
-                        spmv_m_pipeline,
-                        saxpy_3_pipeline,
+            vec_dot_vec_2_pipeline, spmv_m_pipeline, saxpy_3_pipeline,
 #endif
-                        div_pipeline,
-                        div_store_pipeline,
-                        inc_pipeline,
-                        negate_pipeline,
-                        min_max_uv_pipeline,
-                        reduce_uv_pipeline,
-                        calc_dt_pipeline,
-                        boundary_uv_branchless_pipeline});
+            div_pipeline, div_store_pipeline, inc_pipeline, negate_pipeline, min_max_uv_pipeline, reduce_uv_pipeline,
+            calc_dt_pipeline, boundary_uv_branchless_pipeline
+    });
 }
 
 void Case::output_vtk(int timestep, int my_rank) {

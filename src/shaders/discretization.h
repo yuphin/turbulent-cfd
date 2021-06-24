@@ -33,6 +33,32 @@ float convection_u(float U[6], float V[6]) {
     return result;
 
 }
+
+float convection_uT(float U[2], float T[5]) {
+    float result = 0.0;
+    
+    float interp1 = (T[1] + T[0]) / 2;
+    float interp2 = (T[2] + T[1]) / 2;
+    float interp3 = (T[1] - T[0]) / 2;
+    float interp4 = (T[2] - T[1]) /2;
+
+    return inv_dx * ((U[1] * interp1 - U[0] * interp2) + 
+            gamma * (abs(U[1]) * interp3 - abs(U[0]) * interp4));
+}
+
+float convection_vT(float V[2], float T[5]) {
+    float result = 0.0;
+    
+    float interp1 = (T[1] + T[3]) / 2;
+    float interp2 = (T[4] + T[1]) / 2;
+    float interp3 = (T[1] - T[3]) / 2;
+    float interp4 = (T[4] - T[1]) /2;
+
+    return inv_dy * ((V[1] * interp1 - V[0] * interp2) + 
+            gamma * (abs(V[1]) * interp3 - abs(V[0]) * interp4));
+}
+
+
 float convection_v(float U[6], float V[6]) {
     float result = 0.0;
     float interp1 = (V[3] + V[1]) / 2;
@@ -65,6 +91,14 @@ float convection_v(float U[6], float V[6]) {
 }
 
 float laplacian(float ar[6]) {
+    float inv_dx2 = inv_dx * inv_dx;
+    float inv_dy2 = inv_dy * inv_dy;
+    float result = (ar[0] - 2. * ar[1] + ar[2]) * inv_dx2 +
+                   (ar[3] - 2. * ar[1] + ar[4]) * inv_dy2 ;
+    return result;
+}
+
+float laplacian_5(float ar[5]) {
     float inv_dx2 = inv_dx * inv_dx;
     float inv_dy2 = inv_dy * inv_dy;
     float result = (ar[0] - 2. * ar[1] + ar[2]) * inv_dx2 +

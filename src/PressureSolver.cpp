@@ -41,7 +41,8 @@ Real SOR::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Bou
 
 PCG::PCG(int dim_x, int dim_y, Real dx, Real dy, Fields &field, Grid &grid,
          const std::vector<std::unique_ptr<Boundary>> &boundaries)
-    : dim(dim_x * dim_y), dim_x(dim_x), dim_y(dim_y), A(dim_x * dim_y), U(dim_x * dim_y), V(dim_x * dim_y) {
+    : dim(dim_x * dim_y), dim_x(dim_x), dim_y(dim_y), A(dim_x * dim_y), U(dim_x * dim_y), V(dim_x * dim_y),
+      T(dim_x * dim_y) {
     build_matrix(dx, dy, field, grid, boundaries);
 }
 
@@ -233,15 +234,206 @@ void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
                     U.set_element(loc, at(i, j - 1), -1);
                     V.set_element(loc, at(i - 1, j), -1);
                 }
-            }
-            break;
+            } break;
             case 3: {
-            }
-            // FreeSlip
-            // Velocity
-            break;
+                // FreeSlip
+            } break;
             default:
                 break;
+            }
+        }
+    }
+    if (field.calc_temp) {
+        T_RHS.resize(dim);
+        for (auto &boundary : boundaries) {
+            for (auto &cell : *boundary->_cells) {
+                int i = cell->i();
+                int j = cell->j();
+                int id = cell->id();
+                auto loc = at(i, j);
+                switch (boundary->get_type()) {
+                case 0: {
+                    // Outlet
+                    if (cell->is_border(border_position::RIGHT)) {
+                        // T
+                        T.set_element(loc, at(i + 1, j), 1);
+                    } else if (cell->is_border(border_position::LEFT)) {
+                        // T
+                        T.set_element(loc, at(i - 1, j), 1);
+                    } else if (cell->is_border(border_position::TOP)) {
+                        // T
+                        T.set_element(loc, at(i, j + 1), 1);
+                    } else if (cell->is_border(border_position::BOTTOM)) {
+                        // T
+                        T.set_element(loc, at(i, j - 1), 1);
+                    }
+                } break;
+                case 1: {
+                    // Inlet
+                    auto wt = static_cast<InletBoundary *>(boundary.get())->_wall_temperature[id];
+                    T_RHS[loc] += wt;
+                    if (cell->is_border(border_position::RIGHT)) {
+                        // T
+                        T.set_element(loc, at(i + 1, j), -1);
+                    } else if (cell->is_border(border_position::LEFT)) {
+                        // T
+                        T.set_element(loc, at(i - 1, j), -1);
+                    } else if (cell->is_border(border_position::TOP)) {
+                        // T
+                        T.set_element(loc, at(i, j + 1), -1);
+                    } else if (cell->is_border(border_position::BOTTOM)) {
+                        // T
+                        T.set_element(loc, at(i, j - 1), -1);
+                    }
+                }
+
+                break;
+                case 2: {
+                    // NoSlip
+                    auto wt = static_cast<InletBoundary *>(boundary.get())->_wall_temperature[id];
+                    if (cell->is_border(border_position::RIGHT)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i + 1, j), -1);
+                        } else {
+                            T.set_element(loc, at(i + 1, j), 1);
+                        }
+                    } else if (cell->is_border(border_position::LEFT)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i - 1, j), -1);
+                        } else {
+                            T.set_element(loc, at(i - 1, j), 1);
+                        }
+                    } else if (cell->is_border(border_position::TOP)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i, j + 1), -1);
+                        } else {
+                            T.set_element(loc, at(i, j + 1), 1);
+                        }
+                    } else if (cell->is_border(border_position::BOTTOM)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i, j - 1), -1);
+                        } else {
+                            T.set_element(loc, at(i, j - 1), 1);
+                        }
+                    }
+                    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i + 1, j), -0.5);
+                            T.set_element(loc, at(i, j + 1), -0.5);
+                        } else {
+                        }
+                    }
+                    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i + 1, j), -0.5);
+                            T.set_element(loc, at(i, j - 1), -0.5);
+                        } else {
+                        }
+                    }
+                    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i - 1, j), -0.5);
+                            T.set_element(loc, at(i, j + 1), -0.5);
+                        } else {
+                        }
+                    }
+                    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i - 1, j), -0.5);
+                            T.set_element(loc, at(i, j - 1), -0.5);
+                        } else {
+                        }
+                    }
+                } break;
+                case 3: {
+                    // FreeSlip
+                    auto wt = static_cast<InletBoundary *>(boundary.get())->_wall_temperature[id];
+                    if (cell->is_border(border_position::RIGHT)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i + 1, j), -1);
+                        } else {
+                            T.set_element(loc, at(i + 1, j), 1);
+                        }
+                    } else if (cell->is_border(border_position::LEFT)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i - 1, j), -1);
+                        } else {
+                            T.set_element(loc, at(i - 1, j), 1);
+                        }
+                    } else if (cell->is_border(border_position::TOP)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i, j + 1), -1);
+                        } else {
+                            T.set_element(loc, at(i, j + 1), 1);
+                        }
+                    } else if (cell->is_border(border_position::BOTTOM)) {
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i, j - 1), -1);
+                        } else {
+                            T.set_element(loc, at(i, j - 1), 1);
+                        }
+                    }
+                    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                        // T
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i + 1, j), -0.5);
+                            T.set_element(loc, at(i, j + 1), -0.5);
+                        } else {
+                        }
+                    }
+                    if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i + 1, j), -0.5);
+                            T.set_element(loc, at(i, j - 1), -0.5);
+                        } else {
+                        }
+                    }
+                    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i - 1, j), -0.5);
+                            T.set_element(loc, at(i, j + 1), -0.5);
+                        } else {
+                        }
+                    }
+                    if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                        if (wt != -1) {
+                            T_RHS[loc] += wt;
+                            T.set_element(loc, at(i - 1, j), -0.5);
+                            T.set_element(loc, at(i, j - 1), -0.5);
+                        } else {
+                        }
+                    }
+                }
+                break;
+                default:
+                    break;
+                }
             }
         }
     }
@@ -261,6 +453,7 @@ void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
 
     U_fixed.construct_from_matrix(U);
     V_fixed.construct_from_matrix(V);
+    T_fixed.construct_from_matrix(T);
 }
 
 DiagonalSparseMatrix<Real> create_diagonal_matrix(const SparseMatrix<Real> &A, int dim_x, int dim_y,

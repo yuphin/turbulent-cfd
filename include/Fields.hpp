@@ -155,4 +155,6 @@ class Fields {
     Real _beta;
     /// thermal diffusivity
     Real _alpha;
+    /// Whether we are solving the energy equation
+    bool calc_temp;
 };

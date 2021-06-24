@@ -22,14 +22,14 @@ jmax        18
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end       45000
+t_end       20000
 tau          0.5
 
 #--------------------------------------------
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     100
+dt_value     1000
 
 #--------------------------------------------
 #               pressure
@@ -81,8 +81,8 @@ alpha       0.00000237
 #--------------------------------------------
 num_walls       3
 
-wall_temp_12    	291.20
-wall_temp_11    	294.78
+wall_temp_12    291.20
+wall_temp_11    294.78
 wall_temp_10     -1  
 
 wall_vel_12      0
