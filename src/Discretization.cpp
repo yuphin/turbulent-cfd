@@ -89,6 +89,13 @@ Real Discretization::convection_vT(const Matrix<Real> &V, const Matrix<Real> &T,
     return result;
 }
 
+Real Discretization::mean_strain_rate_squared(const Matrix<Real> &U, const Matrix<Real> &V, int i, int j) {
+    Real dudy = (interpolate(U, i - 1, j + 1, 1, 0) - interpolate(U, i - 1, j - 1, 1, 0)) / (2 * _dy);
+    Real dvdx = (interpolate(V, i + 1, j - 1, 0, 1) - interpolate(V, i - 1, j - 1, 0, 1)) / (2 * _dx);
+    Real result = 2 * (dudy + dvdx) * (dudy + dvdx);
+    return result;
+}
+
 Real Discretization::diffusion(const Matrix<Real> &A, int i, int j) {
     // Same as laplacian?
     Real result = (A(i + 1, j) - 2.0 * A(i, j) + A(i - 1, j)) / (_dx * _dx) +

@@ -28,6 +28,8 @@ class Fields {
     Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real _alpha,
            Real _beta, Real _gx, Real _gy);
 
+
+    void calculate_epsilon(Grid &grid);
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
      * direction based on explicit discretization of the momentum equations

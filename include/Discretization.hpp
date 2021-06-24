@@ -77,6 +77,7 @@ class Discretization {
      */
     static Real convection_vT(const Matrix<Real> &V, const Matrix<Real> &T, int i, int j);
 
+    static Real mean_strain_rate_squared(const Matrix<Real> &U,  const Matrix<Real> &V, int i, int j);
     /**
      * @brief Laplacian term discretization using central difference
      *
