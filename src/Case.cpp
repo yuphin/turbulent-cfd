@@ -29,7 +29,7 @@ namespace filesystem = std::filesystem;
 
 #define ENABLE_CG_CPU 0
 
-#define ENABLE_PRECOND 1
+#define ENABLE_PRECOND 0
 Case::Case(std::string file_name, int argn, char **args) {
 
     // Set up logging functionality
