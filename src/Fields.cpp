@@ -21,16 +21,14 @@ Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI,
     _TI = TI;
 }
 
-void Fields::calculate_epsilon(Grid &grid) {
-    auto EPS_OLD = _EPS;
+void Fields::calculate_nu_t(Grid &grid) {
+    calculate_k(grid);
+    calculate_epsilon(grid);
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
 
-        eps(i, j) = eps(i, j) + _dt * ( (_nu + nu_t(i, j) / 1.3) * Discretization::laplacian(EPS_OLD, i, j) - 
-                                        Discretization::convection_uT(_U, EPS_OLD, i, j) - Discretization::convection_vT(_U, EPS_OLD, i, j) -
-                                        1.92 * eps(i, j) * eps(i, j) / k(i, j) + 
-                                        1.44 * eps(i, j) / k(i, j) * nu_t(i, j) * Discretization::mean_strain_rate_squared(_U, _V, i, j));
+        nu_t(i, j) = 0.09 * k(i, j) * k(i, j) / eps(i, j);
     }
 }
 
@@ -46,13 +44,28 @@ void Fields::calculate_k(Grid &grid) {
     }
 }
 
+void Fields::calculate_epsilon(Grid &grid) {
+    auto EPS_OLD = _EPS;
+    for (const auto &current_cell : grid.fluid_cells()) {
+        int i = current_cell->i();
+        int j = current_cell->j();
+
+        eps(i, j) = eps(i, j) + _dt * ( (_nu + nu_t(i, j) / 1.3) * Discretization::laplacian(EPS_OLD, i, j) - 
+                                        Discretization::convection_uT(_U, EPS_OLD, i, j) - Discretization::convection_vT(_U, EPS_OLD, i, j) -
+                                        1.92 * eps(i, j) * eps(i, j) / k(i, j) + 
+                                        1.44 * eps(i, j) / k(i, j) * nu_t(i, j) * Discretization::mean_strain_rate_squared(_U, _V, i, j));
+    }
+}
+
 void Fields::calculate_fluxes(Grid &grid, bool calc_temp) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-        f(i, j) = u(i, j) + dt() * (_nu * Discretization::diffusion(u_matrix(), i, j) -
+        f(i, j) = u(i, j) + dt() * ((_nu + Discretization::interpolate(nu_t_matrix(), i, j, 1, 0)) * 
+                                    Discretization::diffusion(u_matrix(), i, j) -
                                     Discretization::convection_u(u_matrix(), v_matrix(), i, j));
-        g(i, j) = v(i, j) + dt() * (_nu * Discretization::diffusion(v_matrix(), i, j) -
+        g(i, j) = v(i, j) + dt() * ((_nu +Discretization::interpolate(nu_t_matrix(), i, j, 0, 1)) * 
+                                    Discretization::diffusion(v_matrix(), i, j) -
                                     Discretization::convection_v(u_matrix(), v_matrix(), i, j));
 
         if (calc_temp) {

@@ -29,9 +29,11 @@ class Fields {
            Real _beta, Real _gx, Real _gy);
 
 
-    void calculate_epsilon(Grid &grid);
+    void calculate_nu_t(Grid &grid);
 
     void calculate_k(Grid &grid);
+    
+    void calculate_epsilon(Grid &grid);
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
