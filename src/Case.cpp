@@ -53,11 +53,16 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     Real TI = REAL_MAX;    /* Temperature */
     Real alpha = REAL_MAX; /* Thermal diffusivity */
     Real DP = REAL_MAX;    /* Pressure differential between the two ends */
+    Real KI;
+    Real EPSI;
+    int refine = 0;
     std::unordered_map<int, Real> wall_temps;
     std::unordered_map<int, Real> wall_vels;
     std::unordered_map<int, Real> inlet_Us;
     std::unordered_map<int, Real> inlet_Vs;
     std::unordered_map<int, Real> inlet_Ts;
+    std::unordered_map<int, Real> inlet_Ks;
+    std::unordered_map<int, Real> inlet_EPSs;
     if (file.is_open()) {
 
         std::string var;
@@ -93,6 +98,9 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
                 if (var == "DELTA_P") file >> DP;
                 if (var == "iproc") file >> params.iproc;
                 if (var == "jproc") file >> params.jproc;
+                if (var == "refine") file >> refine;
+                if (var == "KI") file >> KI;
+                if (var == "EPSI") file >> EPSI;
                 if (!var.compare(0, 10, "wall_temp_")) {
                     Real temp;
                     file >> temp;
@@ -120,6 +128,16 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
                     file >> t;
                     inlet_Ts.insert({std::stoi(var.substr(4)), t});
                 }
+                if (!var.compare(0, 4, "KIN_")) {
+                    Real k;
+                    file >> k;
+                    inlet_Ks.insert({std::stoi(var.substr(4)), k});
+                }
+                if (!var.compare(0, 4, "EPSIN_")) {
+                    Real eps;
+                    file >> eps;
+                    inlet_EPSs.insert({std::stoi(var.substr(4)), eps});
+                }               
             }
         }
     }
@@ -166,8 +184,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     // Create log file in output dir
     logger.create_log(_dict_name, _case_name, params);
 
-    global_size_x = imax;
-    global_size_y = jmax;
+
     std::vector<std::vector<int>> global_geometry;
     if (_geom_name.compare("NONE")) {
 
@@ -175,6 +192,11 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     } else {
         global_geometry = build_lid_driven_cavity(imax, jmax);
     }
+
+    global_geometry = refine_geometry(global_geometry, refine, imax, jmax);
+    std::cout << imax << std::endl;
+    global_size_x = imax;
+    global_size_y = jmax;
     Communication::init_params(&params, imax, jmax);
 
     auto local_geometry = partition(global_geometry, params.imin, params.imax, params.jmin, params.jmax);
@@ -190,7 +212,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     build_domain(domain, params.size_x, params.size_y);
 
     _grid = Grid(_geom_name, domain, local_geometry);
-    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, alpha, beta, GX, GY);
+    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, KI, EPSI, alpha, beta, GX, GY);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     _pressure_solver = std::make_unique<SOR>(omg);
@@ -209,7 +231,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
         _boundaries.push_back(std::make_unique<OutletBoundary>(&_grid.outlet_cells()));
     }
     if (!_grid.inlet_cells().empty()) {
-        _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts, DP));
+        _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts, inlet_Ks, inlet_EPSs, DP));
     }
 }
 
@@ -309,7 +331,17 @@ void Case::simulate(Params &params) {
             // Communicate temperatures
             Communication::communicate(&params, _field.t_matrix());
         }
-
+        
+        // Compute turbulent viscosity and set boundary conditions
+        _field.calculate_nu_t(_grid);
+        for (const auto &boundary : _boundaries) {
+            boundary->enforce_nu_t(_field);
+        }
+        // Communicate turbulence quantities
+        Communication::communicate(&params, _field.nu_t_matrix());
+        Communication::communicate(&params, _field.k_matrix());
+        Communication::communicate(&params, _field.eps_matrix());
+        
         // Compute F & G and enforce boundary conditions
         _field.calculate_fluxes(_grid, _calc_temp);
         for (const auto &boundary : _boundaries) {
@@ -355,6 +387,7 @@ void Case::simulate(Params &params) {
 
         t += dt;
         timestep++;
+        // output_vtk(timestep, params); // output every timestep for debugging
     }
     // Print Summary
     if (params.world_rank == 0) logger.finish();

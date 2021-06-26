@@ -10,7 +10,8 @@ OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 
 InletBoundary::InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> inlet_U,
-                             std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, Real DP)
+                             std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, 
+                             std::unordered_map<int, Real> inlet_K, std::unordered_map<int, Real> inlet_EPS, Real DP)
     : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_DP(DP) {}
 
 NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
@@ -183,6 +184,33 @@ void Boundary::enforce_t_adiabatic_diag(Fields &field, Cell *cell) {
     }
 }
 
+void Boundary::enforce_nu_t(Fields &field) {
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        if (cell->is_border(border_position::RIGHT)) {
+            field.k(i, j) = field.k(i + 1, j);
+            field.eps(i, j) = field.eps(i + 1, j);
+            field.nu_t(i, j) = field.nu_t(i + 1, j);
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.k(i, j) = field.k(i - 1, j);
+            field.eps(i, j) = field.eps(i - 1, j);
+            field.nu_t(i, j) = field.nu_t(i - 1, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.k(i, j) = field.k(i, j + 1);
+            field.eps(i, j) = field.eps(i, j + 1);
+            field.nu_t(i, j) = field.nu_t(i, j + 1);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.k(i, j) = field.k(i, j - 1);
+            field.eps(i, j) = field.eps(i, j - 1);
+            field.nu_t(i, j) = field.nu_t(i, j - 1);
+        }
+    }
+}
+
 /////////// Outlet ///////////
 void OutletBoundary::enforce_p(Fields &field) {
     for (auto &cell : *_cells) {
@@ -253,6 +281,35 @@ void InletBoundary::enforce_t(Fields &field) {
             field.t(i, j) = 2 * wt - field.t(i, j - 1);
         }
     }
+}
+
+void InletBoundary::enforce_nu_t(Fields &field) {
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        auto wk = _inlet_K[cell->id()];
+        auto weps = _inlet_EPS[cell->id()];
+        if (cell->is_border(border_position::RIGHT)) {
+            field.k(i, j) = 2 * wk - field.k(i + 1, j);
+            field.eps(i, j) = 2 * weps - field.eps(i + 1, j);
+            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j);
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            field.k(i, j) = 2 * wk - field.k(i + 1, j);
+            field.eps(i, j) = 2 * weps - field.eps(i + 1, j);
+            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j);
+        }
+        if (cell->is_border(border_position::TOP)) {
+            field.k(i, j) = 2 * wk - field.k(i + 1, j);
+            field.eps(i, j) = 2 * weps - field.eps(i + 1, j);
+            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j);
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            field.k(i, j) = 2 * wk - field.k(i + 1, j);
+            field.eps(i, j) = 2 * weps - field.eps(i + 1, j);
+            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j);
+        }
+    }    
 }
 
 /////////// NoSlip Walls ///////////

@@ -25,7 +25,7 @@ class Fields {
      * @param[in] initial pressure
      *
      */
-    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real _alpha,
+    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real KI, Real EPSI, Real _alpha,
            Real _beta, Real _gx, Real _gy);
 
 
@@ -34,6 +34,10 @@ class Fields {
     void calculate_k(Grid &grid);
     
     void calculate_epsilon(Grid &grid);
+
+    Real damp_f2(int i, int j);
+
+    Real damp_fnu(int i, int j);
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y

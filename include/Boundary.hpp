@@ -24,6 +24,7 @@ class Boundary {
     virtual void enforce_fg(Fields &field);
     virtual void enforce_p(Fields &field);
     virtual void enforce_t(Fields &field);
+    void enforce_nu_t(Fields &field);    
     virtual ~Boundary() = default;
     std::vector<Cell *> *_cells;
     std::unordered_map<int, Real> _wall_temperature;
@@ -57,16 +58,20 @@ class InletBoundary : public Boundary {
   public:
     InletBoundary(std::vector<Cell *> *cells);
     InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> inlet_U,
-                  std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, Real DP);
+                  std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, 
+                  std::unordered_map<int, Real> inlet_K, std::unordered_map<int, Real> inlet_EPS, Real DP);
     virtual ~InletBoundary() = default;
     void enforce_uv(Fields &field) override;
     void enforce_p(Fields &field) override;    
     void enforce_t(Fields &field) override;
+    void enforce_nu_t(Fields &field);
 
   private:
     std::unordered_map<int, Real> _inlet_U;
     std::unordered_map<int, Real> _inlet_V;
     std::unordered_map<int, Real> _inlet_T;
+    std::unordered_map<int, Real> _inlet_K;
+    std::unordered_map<int, Real> _inlet_EPS;
     Real _inlet_DP = REAL_MAX;
 };
 

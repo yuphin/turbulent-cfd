@@ -92,7 +92,9 @@ Real Discretization::convection_vT(const Matrix<Real> &V, const Matrix<Real> &T,
 Real Discretization::mean_strain_rate_squared(const Matrix<Real> &U, const Matrix<Real> &V, int i, int j) {
     Real dudy = (interpolate(U, i - 1, j + 1, 1, 0) - interpolate(U, i - 1, j - 1, 1, 0)) / (2 * _dy);
     Real dvdx = (interpolate(V, i + 1, j - 1, 0, 1) - interpolate(V, i - 1, j - 1, 0, 1)) / (2 * _dx);
-    Real result = 2 * (dudy + dvdx) * (dudy + dvdx);
+    Real dudx = (2/3) *(U(i, j) - U(i - 1, j)) / _dx;
+    Real dvdy = (2/3) *(V(i, j) - V(i, j - 1)) / _dx;
+    Real result = 2 * (dudy + dvdx + dudx + dvdy) * (dudy + dvdx + dudx + dvdy);
     return result;
 }
 

@@ -5,7 +5,7 @@
 #include <iostream>
 #include <math.h>
 
-Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real alpha,
+Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real KI, Real EPSI, Real alpha,
                Real beta, Real gx, Real gy)
     : _nu(nu), _dt(dt), _tau(tau), _alpha(alpha), _beta(beta), _gx(gx), _gy(gy) {
     _U = Matrix<Real>(imax + 2, jmax + 2, UI);
@@ -17,13 +17,18 @@ Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI,
     _G = Matrix<Real>(imax + 2, jmax + 2, 0.0);
     _RS = Matrix<Real>(imax + 2, jmax + 2, 0.0);
 
+    _NU_T = Matrix<Real>(imax + 2, jmax + 2, 0.0);
+    _K = Matrix<Real>(imax + 2, jmax + 2, KI);
+    _EPS = Matrix<Real>(imax + 2, jmax + 2, EPSI);
+
     _PI = PI;
     _TI = TI;
 }
 
 void Fields::calculate_nu_t(Grid &grid) {
     calculate_k(grid);
-    calculate_epsilon(grid);
+    calculate_epsilon(grid);    
+
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
@@ -34,6 +39,7 @@ void Fields::calculate_nu_t(Grid &grid) {
 
 void Fields::calculate_k(Grid &grid) {
     auto K_OLD = _K;
+
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
@@ -46,6 +52,7 @@ void Fields::calculate_k(Grid &grid) {
 
 void Fields::calculate_epsilon(Grid &grid) {
     auto EPS_OLD = _EPS;
+
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
@@ -55,6 +62,14 @@ void Fields::calculate_epsilon(Grid &grid) {
                                         1.92 * eps(i, j) * eps(i, j) / k(i, j) + 
                                         1.44 * eps(i, j) / k(i, j) * nu_t(i, j) * Discretization::mean_strain_rate_squared(_U, _V, i, j));
     }
+}
+
+Real Fields::damp_f2(int i, int j) {
+    return 1 - 0.3 * std::exp(- std::pow(k(i, j) * k(i, j) / (_nu * eps(i, j)), 2));
+}
+
+Real Fields::damp_fnu(int i, int j) {
+    return std::exp(- 3.4 / (std::pow(k(i, j) * k(i, j) / (_nu * eps(i, j) * 50), 2)));
 }
 
 void Fields::calculate_fluxes(Grid &grid, bool calc_temp) {
@@ -121,7 +136,6 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
     // Get the global maximums
     maxAbsU = Communication::reduce_all(maxAbsU, MPI_MAX);
     maxAbsV = Communication::reduce_all(maxAbsV, MPI_MAX);
-
 
     Real cond_2 = grid.dx() / maxAbsU;
     Real cond_3 = grid.dy() / maxAbsV;
