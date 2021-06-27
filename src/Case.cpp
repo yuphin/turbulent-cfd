@@ -435,6 +435,17 @@ void Case::output_vtk(int timestep, Params &params) {
     Pressure->SetName("pressure");
     Pressure->SetNumberOfComponents(1);
 
+    VTK_Array *KValue = VTK_Array::New();
+    KValue->SetName("kvalue");
+    KValue->SetNumberOfComponents(1);
+
+    VTK_Array *EpsValue = VTK_Array::New();
+    EpsValue->SetName("epsvalue");
+    EpsValue->SetNumberOfComponents(1);
+
+    VTK_Array *TurbViscosity = VTK_Array::New();
+    TurbViscosity->SetName("nu_t");
+    TurbViscosity->SetNumberOfComponents(1);
     // Velocity Array
     VTK_Array *Velocity = VTK_Array::New();
     Velocity->SetName("velocity");
@@ -445,7 +456,12 @@ void Case::output_vtk(int timestep, Params &params) {
         for (int i = 1; i < _grid.domain().size_x + 1; i++) {
             Real pressure = _field.p(i, j);
             Pressure->InsertNextTuple(&pressure);
-
+            Real kval = _field.k(i, j);
+            KValue->InsertNextTuple(&kval);
+            Real epsval = _field.eps(i, j);
+            EpsValue->InsertNextTuple(&epsval);
+            Real nu_t = _field.nu_t(i, j);
+            TurbViscosity->InsertNextTuple(&nu_t);
             // Insert blank cells at obstacles
             if (_grid.cell(i, j).type() != cell_type::FLUID) {
                 structuredGrid->BlankCell((j - 1) * _grid.domain().domain_size_x + (i - 1));
@@ -468,6 +484,10 @@ void Case::output_vtk(int timestep, Params &params) {
 
     // Add Pressure to Structured Grid
     structuredGrid->GetCellData()->AddArray(Pressure);
+
+    structuredGrid->GetCellData()->AddArray(KValue);
+    structuredGrid->GetCellData()->AddArray(EpsValue);
+    structuredGrid->GetCellData()->AddArray(TurbViscosity);
 
     // Add Velocity to Structured Grid
     structuredGrid->GetPointData()->AddArray(Velocity);
