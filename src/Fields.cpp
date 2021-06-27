@@ -45,7 +45,7 @@ void Fields::calculate_k(Grid &grid) {
         int j = current_cell->j();
 
         k(i, j) = k(i, j) + _dt * ( (_nu + nu_t(i, j) / 1.0) * Discretization::laplacian(K_OLD, i, j) - 
-                                        Discretization::convection_uT(_U, K_OLD, i, j) - Discretization::convection_vT(_U, K_OLD, i, j) -
+                                        Discretization::convection_uT(_U, K_OLD, i, j) - Discretization::convection_vT(_V, K_OLD, i, j) -
                                         eps(i, j) + nu_t(i, j) * Discretization::mean_strain_rate_squared(_U, _V, i, j));
     }
 }
@@ -58,7 +58,7 @@ void Fields::calculate_epsilon(Grid &grid) {
         int j = current_cell->j();
 
         eps(i, j) = eps(i, j) + _dt * ( (_nu + nu_t(i, j) / 1.3) * Discretization::laplacian(EPS_OLD, i, j) - 
-                                        Discretization::convection_uT(_U, EPS_OLD, i, j) - Discretization::convection_vT(_U, EPS_OLD, i, j) -
+                                        Discretization::convection_uT(_U, EPS_OLD, i, j) - Discretization::convection_vT(_V, EPS_OLD, i, j) -
                                         1.92 * eps(i, j) * eps(i, j) / k(i, j) + 
                                         1.44 * eps(i, j) / k(i, j) * nu_t(i, j) * Discretization::mean_strain_rate_squared(_U, _V, i, j));
     }

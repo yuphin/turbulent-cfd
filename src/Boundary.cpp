@@ -12,7 +12,7 @@ InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 InletBoundary::InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> inlet_U,
                              std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, 
                              std::unordered_map<int, Real> inlet_K, std::unordered_map<int, Real> inlet_EPS, Real DP)
-    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_DP(DP) {}
+    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_K(inlet_K), _inlet_EPS(inlet_EPS), _inlet_DP(DP) {}
 
 NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
 

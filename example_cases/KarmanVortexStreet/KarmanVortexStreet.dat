@@ -83,7 +83,7 @@ jproc         1
 #       turbulence parameters
 #--------------------------------------------
 
-KI          0.012;
-EPSI        0.0015;
-KIN         0.012
-EPSIN       0.0015
+KI            0.012
+EPSI          0.0015
+KIN_2         0.012
+EPSIN_2       0.0015

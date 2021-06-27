@@ -133,10 +133,10 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
                     file >> k;
                     inlet_Ks.insert({std::stoi(var.substr(4)), k});
                 }
-                if (!var.compare(0, 4, "EPSIN_")) {
+                if (!var.compare(0,  6, "EPSIN_")) {
                     Real eps;
                     file >> eps;
-                    inlet_EPSs.insert({std::stoi(var.substr(4)), eps});
+                    inlet_EPSs.insert({std::stoi(var.substr(6)), eps});
                 }               
             }
         }
