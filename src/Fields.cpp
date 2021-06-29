@@ -155,6 +155,19 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
     Real vMin = *std::min_element(_V.data(), _V.data() + _V.size());
     Real maxAbsU = fabs(uMax) > fabs(uMin) ? fabs(uMax) : fabs(uMin);
     Real maxAbsV = fabs(vMax) > fabs(vMin) ? fabs(vMax) : fabs(vMin);
+    Real nu_min = REAL_MAX;
+    Real k_max = *std::max_element(_K.data(), _K.data() + _K.size());
+    Real eps_max = *std::max_element(_EPS.data(), _EPS.data() + _EPS.size());
+
+    for (auto &cell : grid.fluid_cells()) {
+        int i = cell->i();
+        int j = cell->j();
+        auto nut = nu_t(i, j);
+        if (nut != 0 && nut < nu_min) {
+            nu_min = nut;
+        }
+    }
+    nu_min = nu_min == REAL_MAX ? _nu : nu_min;
 
     // Get the global maximums
     maxAbsU = Communication::reduce_all(maxAbsU, MPI_MAX);
@@ -176,6 +189,10 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
         Real cond_4 = 1 / (2 * _alpha * (1 / dx2 + 1 / dy2));
         minimum = std::min(minimum, cond_4);
     }
+    Real cond_5 = 1 / (2 * k_max * (1 / dx2 + 1 / dy2));
+    Real cond_6 = 1 / (2 * eps_max * (1 / dx2 + 1 / dy2));
+    minimum = std::min(minimum, cond_5);
+    minimum = std::min(minimum, cond_6);
     _dt = _tau * minimum;
     return _dt;
 }
