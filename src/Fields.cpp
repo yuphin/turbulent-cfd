@@ -99,10 +99,10 @@ void Fields::calculate_fluxes(Grid &grid, bool calc_temp) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-        f(i, j) = u(i, j) + dt() * ((_nu + Discretization::interpolate(nu_t_matrix(), i, j, 1, 0)) * 
+        f(i, j) = u(i, j) + dt() * ((nu_t(i,j) * Discretization::interpolate(nu_t_matrix(), i, j, 1, 0)) * 
                                     Discretization::diffusion(u_matrix(), i, j) -
                                     Discretization::convection_u(u_matrix(), v_matrix(), i, j));
-        g(i, j) = v(i, j) + dt() * ((_nu +Discretization::interpolate(nu_t_matrix(), i, j, 0, 1)) * 
+        g(i, j) = v(i, j) + dt() * ((nu_t(i,j) * Discretization::interpolate(nu_t_matrix(), i, j, 0, 1)) * 
                                     Discretization::diffusion(v_matrix(), i, j) -
                                     Discretization::convection_v(u_matrix(), v_matrix(), i, j));
 
@@ -179,7 +179,7 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
     Real minimum = std::min(cond_2, cond_3);
 
     // viscosity limit
-    if (_nu != 0.0) {
+    if (nu_min != 0.0) {
         Real cond_1 = 1.0 / (2.0 * _nu) * ((dx2 * dy2) / (dx2 + dy2));
         minimum = std::min(minimum, cond_1);
     }
