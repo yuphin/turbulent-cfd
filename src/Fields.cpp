@@ -50,8 +50,8 @@ void Fields::calculate_nu_t(Grid &grid) {
         auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
         auto num_j = (k(i, j) + k(i, j + 1)) / 2;
         auto denom_j = (eps(i, j) + eps(i, j + 1)) / 2;
-        nu_i(i, j) = fnu_coeff * 0.09 * num_i * num_i / denom_i + _nu;
-        nu_j(i, j) = fnu_coeff * 0.09 * num_j * num_j / denom_j + _nu;
+        nu_i(i, j) = fnu_coeff * 0.09 * num_i * num_i / denom_i;
+        nu_j(i, j) = fnu_coeff * 0.09 * num_j * num_j / denom_j;
     }
     calculate_k_and_epsilon(grid);
 }
@@ -72,8 +72,8 @@ void Fields::calculate_k_and_epsilon(Grid &grid) {
         auto e1_1 = Discretization::convection_uKEPS(_U, EPS_OLD, i, j);
         auto e1_2 = Discretization::convection_vKEPS(_V, EPS_OLD, i, j);
       
-        auto k2 = Discretization::laplacian_nu(K_OLD, _NU_I, _NU_J, i, j);
-        auto e2 = Discretization::laplacian_nu(EPS_OLD, _NU_I, _NU_J, i, j, 1.3);
+        auto k2 = Discretization::laplacian_nu(K_OLD, _nu, _NU_I, _NU_J, i, j);
+        auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j, 1.3);
        
         auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, i, j);
         auto e3 = 1.44 * eij * k3 / kij;

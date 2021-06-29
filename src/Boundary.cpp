@@ -209,8 +209,8 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto denom_j = (eps_interp + field.eps(i, j + 1)) / 2;
                 assert(denom_i);
                 assert(denom_j);
-                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i + field._nu;
-                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j + field._nu;
+                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i;
+                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j;
             }
             if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
                 auto k_interp = (field.k(i + 1, j) + field.k(i, j - 1)) / 2.0;
@@ -224,8 +224,8 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto denom_j = (eps_interp + field.eps(i, j - 1)) / 2;
                 assert(denom_i);
                 assert(denom_j);
-                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i + field._nu;
-                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j + field._nu;
+                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i;
+                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j;
             }
             if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
                 auto k_interp = (field.k(i - 1, j) + field.k(i, j + 1)) / 2.0;
@@ -239,8 +239,8 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto denom_j = (eps_interp + field.eps(i, j + 1)) / 2;
                 assert(denom_i);
                 assert(denom_j);
-                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i + field._nu;
-                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j + field._nu;
+                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i;
+                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j;
             }
             if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
                 auto k_interp = (field.k(i - 1, j) + field.k(i, j - 1)) / 2.0;
@@ -254,8 +254,8 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto denom_j = (eps_interp + field.eps(i, j - 1)) / 2;
                 assert(denom_i);
                 assert(denom_j);
-                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i + field._nu;
-                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j + field._nu;
+                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i;
+                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j;
             }
         } else if (cell->borders().size() == 1) {
             if (cell->is_border(border_position::RIGHT)) {
@@ -267,7 +267,7 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto num_i = (k + field.k(i + 1, j)) / 2;
                 auto denom_i = (eps + field.eps(i + 1, j)) / 2;
                 assert(denom_i);
-                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i + field._nu;
+                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i;
             }
             if (cell->is_border(border_position::LEFT)) {
                 auto k = field.k(i - 1, j);
@@ -278,7 +278,7 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto num_i = (k + field.k(i - 1, j)) / 2;
                 auto denom_i = (eps + field.eps(i - 1, j)) / 2;
                 assert(denom_i);
-                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i + field._nu;
+                field.nu_i(i, j) = 0.09 * num_i * num_i / denom_i;
             }
             if (cell->is_border(border_position::TOP)) {
                 auto k = field.k(i, j + 1);
@@ -289,7 +289,7 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto num_j = (k + field.k(i, j + 1)) / 2;
                 auto denom_j = (eps + field.eps(i, j + 1)) / 2;
                 assert(denom_j);
-                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j + field._nu;
+                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j;
             }
             if (cell->is_border(border_position::BOTTOM)) {
                 auto k = field.k(i, j - 1);
@@ -300,7 +300,7 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto num_j = (k + field.k(i, j - 1)) / 2;
                 auto denom_j = (eps + field.eps(i, j - 1)) / 2;
                 assert(denom_j);
-                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j + field._nu;
+                field.nu_j(i, j) = 0.09 * num_j * num_j / denom_j;
             }
         }
     }
@@ -393,7 +393,7 @@ void InletBoundary::enforce_nu_t(Fields &field) {
             field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
             /*   auto num_i = (k + field.k(i + 1, j)) / 2;
                auto denom_i = (eps + field.eps(i + 1, j)) / 2;
-               field.nu_i(i, j) = num_i * num_i / denom_i + field._nu;*/
+               field.nu_i(i, j) = num_i * num_i / denom_i*/
         }
         if (cell->is_border(border_position::LEFT)) {
             auto k = 2 * wk - field.k(i - 1, j);
@@ -403,7 +403,7 @@ void InletBoundary::enforce_nu_t(Fields &field) {
             field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
             /*  auto num_i = (k + field.k(i - 1, j)) / 2;
               auto denom_i = (eps + field.eps(i - 1, j)) / 2;
-              field.nu_i(i, j) = num_i * num_i / denom_i + field._nu;*/
+              field.nu_i(i, j) = num_i * num_i / denom_i*/
         }
         if (cell->is_border(border_position::TOP)) {
             auto k = 2 * wk - field.k(i, j + 1);
@@ -413,7 +413,7 @@ void InletBoundary::enforce_nu_t(Fields &field) {
             field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
             /*  auto num_j = (k + field.k(i, j + 1)) / 2;
               auto denom_j = (eps + field.eps(i, j + 1)) / 2;
-              field.nu_j(i, j) = num_j * num_j / denom_j + field._nu;*/
+              field.nu_j(i, j) = num_j * num_j / denom_j*/
         }
         if (cell->is_border(border_position::BOTTOM)) {
             auto k = 2 * wk - field.k(i, j - 1);
@@ -423,7 +423,7 @@ void InletBoundary::enforce_nu_t(Fields &field) {
             field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
             /* auto num_j = (k + field.k(i, j - 1)) / 2;
              auto denom_j = (eps + field.eps(i, j - 1)) / 2;
-             field.nu_j(i, j) = num_j * num_j / denom_j + field._nu;*/
+             field.nu_j(i, j) = num_j * num_j / denom_j*/
         }
     }
 }

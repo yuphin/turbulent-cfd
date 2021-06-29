@@ -123,19 +123,20 @@ Real Discretization::convection_vKEPS(const Matrix<Real> &V, const Matrix<Real> 
     return result;
 }
 
-Real Discretization::laplacian_nu(const Matrix<Real> &P, const Matrix<Real> &nu_i, const Matrix<Real> &nu_j, int i,
-                                  int j, Real coeff) {
+Real Discretization::laplacian_nu(const Matrix<Real> &P, Real nu, const Matrix<Real> &nu_i, const Matrix<Real> &nu_j,
+                                  int i, int j, Real coeff) {
     auto dx = _dx;
     auto dy = _dy;
     auto invdx = 1 / dx;
     auto invdx2 = invdx * invdx;
     auto invdy = 1 / dy;
     auto invdy2 = invdy * invdy;
-    auto i_diff = nu_i(i, j) * (P(i + 1, j) - P(i, j)) - nu_i(i - 1, j) * (P(i, j) - P(i - 1, j));
-    auto j_diff = nu_j(i, j) * (P(i, j + 1) - P(i, j)) - nu_j(i, j - 1) * (P(i, j) - P(i, j - 1));
-    Real result = 1 / coeff *
-                  ((nu_i(i, j) * (P(i + 1, j) - P(i, j)) - nu_i(i - 1, j) * (P(i, j) - P(i - 1, j))) * invdx2 +
-                   (nu_j(i, j) * (P(i, j + 1) - P(i, j)) - nu_j(i, j - 1) * (P(i, j) - P(i, j - 1))) * invdy2);
+    auto i_diff = (nu + nu_i(i, j)) * (P(i + 1, j) - P(i, j)) - (nu + nu_i(i - 1, j)) * (P(i, j) - P(i - 1, j));
+    auto j_diff = (nu + nu_j(i, j)) * (P(i, j + 1) - P(i, j)) - (nu + nu_j(i, j - 1)) * (P(i, j) - P(i, j - 1));
+    Real result =
+        1 / coeff *
+        (((nu + nu_i(i, j)) * (P(i + 1, j) - P(i, j)) - (nu + nu_i(i - 1, j)) * (P(i, j) - P(i - 1, j))) * invdx2 +
+         ((nu + nu_j(i, j)) * (P(i, j + 1) - P(i, j)) - (nu + nu_j(i, j - 1)) * (P(i, j) - P(i, j - 1))) * invdy2);
     return result;
 }
 
