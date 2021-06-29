@@ -5,29 +5,34 @@
 #include <mpi.h>
 
 /////////// Constructors ///////////
-OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 0; }
 
-InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 1; }
 
 InletBoundary::InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> inlet_U,
-                             std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, 
+                             std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T,
                              std::unordered_map<int, Real> inlet_K, std::unordered_map<int, Real> inlet_EPS, Real DP)
-    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_K(inlet_K), _inlet_EPS(inlet_EPS), _inlet_DP(DP) {}
+    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_K(inlet_K),
+      _inlet_EPS(inlet_EPS) {
+    _type = 1;
+}
 
-NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 2; }
 
 NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
                                        std::unordered_map<int, Real> wall_temperature)
     : Boundary(cells), _wall_velocity(wall_velocity) {
     _wall_temperature = wall_temperature;
+    _type = 2;
 }
 
-FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 3; }
 
 FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
                                            std::unordered_map<int, Real> wall_temperature)
     : Boundary(cells), _wall_velocity(wall_velocity) {
     _wall_temperature = wall_temperature;
+    _type = 3;
 }
 
 /////////// Main Boundary ///////////

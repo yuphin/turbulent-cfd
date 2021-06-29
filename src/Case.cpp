@@ -55,6 +55,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     Real DP = REAL_MAX;    /* Pressure differential between the two ends */
     Real KI;
     Real EPSI;
+    int solver = 0;
     int refine = 0;
     std::unordered_map<int, Real> wall_temps;
     std::unordered_map<int, Real> wall_vels;
@@ -101,6 +102,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
                 if (var == "refine") file >> refine;
                 if (var == "KI") file >> KI;
                 if (var == "EPSI") file >> EPSI;
+                if (var == "solver") file >> solver;
                 if (!var.compare(0, 10, "wall_temp_")) {
                     Real temp;
                     file >> temp;
@@ -133,18 +135,18 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
                     file >> k;
                     inlet_Ks.insert({std::stoi(var.substr(4)), k});
                 }
-                if (!var.compare(0,  6, "EPSIN_")) {
+                if (!var.compare(0, 6, "EPSIN_")) {
                     Real eps;
                     file >> eps;
                     inlet_EPSs.insert({std::stoi(var.substr(6)), eps});
-                }               
+                }
             }
         }
     }
     file.close();
 
     if (params.iproc * params.jproc != params.world_size) {
-        if (params.world_rank == 0) 
+        if (params.world_rank == 0)
             std::cout << "ERROR: Number of MPI processes doesn't match iproc * jproc! \nAborting... " << std::endl;
         Communication::finalize();
         std::exit(0);
@@ -184,7 +186,6 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     // Create log file in output dir
     logger.create_log(_dict_name, _case_name, params);
 
-
     std::vector<std::vector<int>> global_geometry;
     if (_geom_name.compare("NONE")) {
 
@@ -212,10 +213,10 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     build_domain(domain, params.size_x, params.size_y);
 
     _grid = Grid(_geom_name, domain, local_geometry);
-    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, KI, EPSI, alpha, beta, GX, GY);
+    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, KI, EPSI, alpha, beta,
+                    GX, GY);
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
-    _pressure_solver = std::make_unique<SOR>(omg);
     _max_iter = itermax;
     _tolerance = eps;
 
@@ -231,8 +232,26 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
         _boundaries.push_back(std::make_unique<OutletBoundary>(&_grid.outlet_cells()));
     }
     if (!_grid.inlet_cells().empty()) {
-        _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts, inlet_Ks, inlet_EPSs, DP));
+        _boundaries.push_back(std::make_unique<InletBoundary>(&_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts,
+                                                              inlet_Ks, inlet_EPSs, DP));
     }
+
+    switch (solver) {
+    case 0: {
+
+        _pressure_solver = std::make_unique<SOR>(omg);
+        break;
+    }
+    case 1: {
+        _pressure_solver =
+            std::make_unique<PCG>(_grid.imaxb(), _grid.jmaxb(), _grid.dx(), _grid.dy(), _field, _grid, _boundaries);
+        break;
+    }
+    default:
+        break;
+    }
+
+   
 }
 
 void Case::set_file_names(std::string file_name) {
@@ -331,17 +350,17 @@ void Case::simulate(Params &params) {
             // Communicate temperatures
             Communication::communicate(&params, _field.t_matrix());
         }
-        
+
         // Compute turbulent viscosity and set boundary conditions
-        _field.calculate_nu_t(_grid);
-        for (const auto &boundary : _boundaries) {
-            boundary->enforce_nu_t(_field);
-        }
+        /* _field.calculate_nu_t(_grid);
+         for (const auto &boundary : _boundaries) {
+             boundary->enforce_nu_t(_field);
+         }*/
         // Communicate turbulence quantities
         Communication::communicate(&params, _field.nu_t_matrix());
         Communication::communicate(&params, _field.k_matrix());
         Communication::communicate(&params, _field.eps_matrix());
-        
+
         // Compute F & G and enforce boundary conditions
         _field.calculate_fluxes(_grid, _calc_temp);
         for (const auto &boundary : _boundaries) {
@@ -356,17 +375,10 @@ void Case::simulate(Params &params) {
         // Perform pressure solve
         uint32_t it = 0;
         Real res = REAL_MAX;
+        res = _pressure_solver->solve(_field, _grid, _boundaries, params, _max_iter, _tolerance, it);
 
-        while (it < _max_iter && res > _tolerance) {
-            res = _pressure_solver->solve(_field, _grid, _boundaries, params);
-            // Enforce boundary conditions
-            for (const auto &boundary : _boundaries) {
-                boundary->enforce_p(_field);
-            }
-            it++;
-        }
+       
         // Check if max_iter was reached
-        
         if (params.world_rank == 0 && it == _max_iter) {
             logger.max_iter_warning();
         }
@@ -407,8 +419,8 @@ void Case::output_vtk(int timestep, Params &params) {
     int i = params.world_rank % params.iproc;
     int j = params.world_rank / params.iproc;
 
-    Real base_x = i * ((int) (global_size_x / params.iproc)) * dx + dx;
-    Real base_y = j * ((int) (global_size_y / params.jproc)) * dy + dy;
+    Real base_x = i * ((int)(global_size_x / params.iproc)) * dx + dx;
+    Real base_y = j * ((int)(global_size_y / params.jproc)) * dy + dy;
 
     Real z = 0;
     Real y = base_y;
@@ -512,8 +524,8 @@ void Case::output_vtk(int timestep, Params &params) {
     vtkSmartPointer<vtkStructuredGridWriter> writer = vtkSmartPointer<vtkStructuredGridWriter>::New();
 
     // Create Filename
-    std::string outputname =
-        _dict_name + '/' + _case_name + "_" + std::to_string(params.world_rank) + "." + std::to_string(timestep) + ".vtk";
+    std::string outputname = _dict_name + '/' + _case_name + "_" + std::to_string(params.world_rank) + "." +
+                             std::to_string(timestep) + ".vtk";
 
     writer->SetFileName(outputname.c_str());
     writer->SetInputData(structuredGrid);
