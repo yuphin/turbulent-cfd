@@ -351,16 +351,6 @@ void Case::simulate(Params &params) {
             Communication::communicate(&params, _field.t_matrix());
         }
 
-        // Compute turbulent viscosity and set boundary conditions
-        /* _field.calculate_nu_t(_grid);
-         for (const auto &boundary : _boundaries) {
-             boundary->enforce_nu_t(_field);
-         }*/
-        // Communicate turbulence quantities
-        Communication::communicate(&params, _field.nu_t_matrix());
-        Communication::communicate(&params, _field.k_matrix());
-        Communication::communicate(&params, _field.eps_matrix());
-
         // Compute F & G and enforce boundary conditions
         _field.calculate_fluxes(_grid, _calc_temp);
         for (const auto &boundary : _boundaries) {
@@ -390,6 +380,16 @@ void Case::simulate(Params &params) {
         // Communicate velocities
         Communication::communicate(&params, _field.u_matrix());
         Communication::communicate(&params, _field.v_matrix());
+
+         // Compute turbulent viscosity and set boundary conditions
+        _field.calculate_nu_t(_grid);
+        for (const auto &boundary : _boundaries) {
+            boundary->enforce_nu_t(_field);
+        }
+        // Communicate turbulence quantities
+        Communication::communicate(&params, _field.nu_t_matrix());
+        Communication::communicate(&params, _field.k_matrix());
+        Communication::communicate(&params, _field.eps_matrix());
 
         // Output u,v,p
         if (t >= output_counter * _output_freq) {

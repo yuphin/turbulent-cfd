@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <iostream>
 #include <math.h>
+#include <assert.h>
 
 Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real KI, Real EPSI, Real alpha,
                Real beta, Real gx, Real gy)
@@ -18,6 +19,8 @@ Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI,
     _RS = Matrix<Real>(imax + 2, jmax + 2, 0.0);
 
     _NU_T = Matrix<Real>(imax + 2, jmax + 2, 0.0);
+    _NU_I = Matrix<Real>(imax + 2, jmax + 2, 0.0);
+    _NU_J = Matrix<Real>(imax + 2, jmax + 2, 0.0);
     _K = Matrix<Real>(imax + 2, jmax + 2, KI);
     _EPS = Matrix<Real>(imax + 2, jmax + 2, EPSI);
 
@@ -26,41 +29,61 @@ Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI,
 }
 
 void Fields::calculate_nu_t(Grid &grid) {
-    calculate_k(grid);
-    calculate_epsilon(grid);    
-
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
 
-        nu_t(i, j) = 0.09 * k(i, j) * k(i, j) / eps(i, j);
+        Real fnu_coeff = 1;
+        auto kij = k(i, j);
+        auto epsij = eps(i, j);
+        nu_t(i, j) = fnu_coeff * 0.09 * kij * kij / epsij + _nu;
+        assert(!isnan(nu_t(i, j)));
+        assert(!isinf(nu_t(i, j)));
+        assert(nu_t(i, j) > 0);
     }
+    for (const auto &current_cell : grid.fluid_cells()) {
+        int i = current_cell->i();
+        int j = current_cell->j();
+        Real fnu_coeff = 1;
+     
+        auto num_i = (k(i, j) + k(i + 1, j)) / 2;
+        auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
+        auto num_j = (k(i, j) + k(i, j + 1)) / 2;
+        auto denom_j = (eps(i, j) + eps(i, j + 1)) / 2;
+        nu_i(i, j) = fnu_coeff * 0.09 * num_i * num_i / denom_i + _nu;
+        nu_j(i, j) = fnu_coeff * 0.09 * num_j * num_j / denom_j + _nu;
+    }
+    calculate_k_and_epsilon(grid);
 }
 
-void Fields::calculate_k(Grid &grid) {
+void Fields::calculate_k_and_epsilon(Grid &grid) {
     auto K_OLD = _K;
-
-    for (const auto &current_cell : grid.fluid_cells()) {
-        int i = current_cell->i();
-        int j = current_cell->j();
-
-        k(i, j) = k(i, j) + _dt * ( (_nu + nu_t(i, j) / 1.0) * Discretization::laplacian(K_OLD, i, j) - 
-                                        Discretization::convection_uT(_U, K_OLD, i, j) - Discretization::convection_vT(_V, K_OLD, i, j) -
-                                        eps(i, j) + nu_t(i, j) * Discretization::mean_strain_rate_squared(_U, _V, i, j));
-    }
-}
-
-void Fields::calculate_epsilon(Grid &grid) {
     auto EPS_OLD = _EPS;
 
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-
-        eps(i, j) = eps(i, j) + _dt * ( (_nu + nu_t(i, j) / 1.3) * Discretization::laplacian(EPS_OLD, i, j) - 
-                                        Discretization::convection_uT(_U, EPS_OLD, i, j) - Discretization::convection_vT(_V, EPS_OLD, i, j) -
-                                        1.92 * eps(i, j) * eps(i, j) / k(i, j) + 
-                                        1.44 * eps(i, j) / k(i, j) * nu_t(i, j) * Discretization::mean_strain_rate_squared(_U, _V, i, j));
+        Real f2_coeff = 1;
+        auto nut = nu_t(i, j);
+        auto kij = K_OLD(i, j);
+        auto eij = EPS_OLD(i, j);
+        auto k1_1 = Discretization::convection_uKEPS(_U, K_OLD, i, j);
+        auto k1_2 = Discretization::convection_vKEPS(_V, K_OLD, i, j);
+        auto e1_1 = Discretization::convection_uKEPS(_U, EPS_OLD, i, j);
+        auto e1_2 = Discretization::convection_vKEPS(_V, EPS_OLD, i, j);
+      
+        auto k2 = Discretization::laplacian_nu(K_OLD, _NU_I, _NU_J, i, j);
+        auto e2 = Discretization::laplacian_nu(EPS_OLD, _NU_I, _NU_J, i, j, 1.3);
+       
+        auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, i, j);
+        auto e3 = 1.44 * eij * k3 / kij;
+        auto e4 = f2_coeff * 1.92 * eij * eij / kij;
+        auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - eij);
+        auto epsij_new = eij + _dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
+        k(i, j) = kij_new;
+        eps(i, j) = epsij_new;
+        assert(kij_new > 0);
+        assert(epsij_new > 0);
     }
 }
 
@@ -167,6 +190,8 @@ Real &Fields::rs(int i, int j) { return _RS(i, j); }
 Real &Fields::k(int i, int j) { return _K(i, j); }
 Real &Fields::eps(int i, int j) { return _EPS(i, j); }
 Real &Fields::nu_t(int i, int j) { return _NU_T(i, j); }
+Real &Fields::nu_i(int i, int j) { return _NU_I(i, j); }
+Real &Fields::nu_j(int i, int j) { return _NU_J(i, j); }
 
 Matrix<Real> &Fields::p_matrix() { return _P; }
 Matrix<Real> &Fields::u_matrix() { return _U; }

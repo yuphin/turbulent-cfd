@@ -31,9 +31,7 @@ class Fields {
 
     void calculate_nu_t(Grid &grid);
 
-    void calculate_k(Grid &grid);
-    
-    void calculate_epsilon(Grid &grid);
+   void calculate_k_and_epsilon(Grid &grid);
 
     Real damp_f2(int i, int j);
 
@@ -112,6 +110,8 @@ class Fields {
 
     /// turbulent viscosity index based access and modify
     Real &nu_t(int i, int j);
+    Real &nu_i(int i, int j);
+    Real &nu_j(int i, int j);
 
     /// get timestep size
     Real dt() const;
@@ -168,6 +168,8 @@ class Fields {
     Matrix<Real> _EPS;
     /// turbulent viscosity
     Matrix<Real> _NU_T;
+    Matrix<Real> _NU_I;
+    Matrix<Real> _NU_J;
 
     /// kinematic viscosity
     Real _nu;
