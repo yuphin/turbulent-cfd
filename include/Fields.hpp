@@ -25,8 +25,17 @@ class Fields {
      * @param[in] initial pressure
      *
      */
-    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real _alpha,
+    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real KI, Real EPSI, Real _alpha,
            Real _beta, Real _gx, Real _gy);
+
+
+    void calculate_nu_t(Grid &grid);
+
+   void calculate_k_and_epsilon(Grid &grid);
+
+    Real damp_f2(int i, int j);
+
+    Real damp_fnu(int i, int j);
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
@@ -101,6 +110,8 @@ class Fields {
 
     /// turbulent viscosity index based access and modify
     Real &nu_t(int i, int j);
+    Real &nu_i(int i, int j);
+    Real &nu_j(int i, int j);
 
     /// get timestep size
     Real dt() const;
@@ -137,8 +148,6 @@ class Fields {
 
     /// initial temperature
     Real _TI;
-
-  private:
     /// x-velocity matrix
     Matrix<Real> _U;
     /// y-velocity matrix
@@ -159,6 +168,8 @@ class Fields {
     Matrix<Real> _EPS;
     /// turbulent viscosity
     Matrix<Real> _NU_T;
+    Matrix<Real> _NU_I;
+    Matrix<Real> _NU_J;
 
     /// kinematic viscosity
     Real _nu;

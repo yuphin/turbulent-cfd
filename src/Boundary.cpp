@@ -5,28 +5,34 @@
 #include <mpi.h>
 
 /////////// Constructors ///////////
-OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 0; }
 
-InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+InletBoundary::InletBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 1; }
 
 InletBoundary::InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> inlet_U,
-                             std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, Real DP)
-    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_DP(DP) {}
+                             std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T,
+                             std::unordered_map<int, Real> inlet_K, std::unordered_map<int, Real> inlet_EPS, Real DP)
+    : Boundary(cells), _inlet_U(inlet_U), _inlet_V(inlet_V), _inlet_T(inlet_T), _inlet_K(inlet_K),
+      _inlet_EPS(inlet_EPS) {
+    _type = 1;
+}
 
-NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 2; }
 
 NoSlipWallBoundary::NoSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
                                        std::unordered_map<int, Real> wall_temperature)
     : Boundary(cells), _wall_velocity(wall_velocity) {
     _wall_temperature = wall_temperature;
+    _type = 2;
 }
 
-FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) {}
+FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 3; }
 
 FreeSlipWallBoundary::FreeSlipWallBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> wall_velocity,
                                            std::unordered_map<int, Real> wall_temperature)
     : Boundary(cells), _wall_velocity(wall_velocity) {
     _wall_temperature = wall_temperature;
+    _type = 3;
 }
 
 /////////// Main Boundary ///////////
@@ -183,6 +189,75 @@ void Boundary::enforce_t_adiabatic_diag(Fields &field, Cell *cell) {
     }
 }
 
+void Boundary::enforce_nu_t(Fields &field) {
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+        if (cell->borders().size() > 2) {
+            std::cerr << "Forbidden cells!!" << std::endl;
+            assert(false);
+        } else if (cell->borders().size() == 2) {
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                auto k_interp = (field.k(i + 1, j) + field.k(i, j + 1)) / 2.0;
+                auto eps_interp = (field.eps(i + 1, j) + field.eps(i, j + 1)) / 2.0;
+                field.k(i, j) = k_interp;
+                field.eps(i, j) = eps_interp;
+                field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                auto k_interp = (field.k(i + 1, j) + field.k(i, j - 1)) / 2.0;
+                auto eps_interp = (field.eps(i + 1, j) + field.eps(i, j - 1)) / 2.0;
+                field.k(i, j) = k_interp;
+                field.eps(i, j) = eps_interp;
+                field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                auto k_interp = (field.k(i - 1, j) + field.k(i, j + 1)) / 2.0;
+                auto eps_interp = (field.eps(i - 1, j) + field.eps(i, j + 1)) / 2.0;
+                field.k(i, j) = k_interp;
+                field.eps(i, j) = eps_interp;
+                field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                auto k_interp = (field.k(i - 1, j) + field.k(i, j - 1)) / 2.0;
+                auto eps_interp = (field.eps(i - 1, j) + field.eps(i, j - 1)) / 2.0;
+                field.k(i, j) = k_interp;
+                field.eps(i, j) = eps_interp;
+                field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+            }
+        } else if (cell->borders().size() == 1) {
+            if (cell->is_border(border_position::RIGHT)) {
+                auto k = field.k(i + 1, j);
+                auto eps = field.eps(i + 1, j);
+                field.k(i, j) = k;
+                field.eps(i, j) = eps;
+                field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+            }
+            if (cell->is_border(border_position::LEFT)) {
+                auto k = field.k(i - 1, j);
+                auto eps = field.eps(i - 1, j);
+                field.k(i, j) = k;
+                field.eps(i, j) = eps;
+                field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+            }
+            if (cell->is_border(border_position::TOP)) {
+                auto k = field.k(i, j + 1);
+                auto eps = field.eps(i, j + 1);
+                field.k(i, j) = k;
+                field.eps(i, j) = eps;
+                field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+            }
+            if (cell->is_border(border_position::BOTTOM)) {
+                auto k = field.k(i, j - 1);
+                auto eps = field.eps(i, j - 1);
+                field.k(i, j) = k;
+                field.eps(i, j) = eps;
+                field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+            }
+        }
+    }
+}
+
 /////////// Outlet ///////////
 void OutletBoundary::enforce_p(Fields &field) {
     for (auto &cell : *_cells) {
@@ -251,6 +326,44 @@ void InletBoundary::enforce_t(Fields &field) {
         }
         if (cell->is_border(border_position::BOTTOM)) {
             field.t(i, j) = 2 * wt - field.t(i, j - 1);
+        }
+    }
+}
+
+void InletBoundary::enforce_nu_t(Fields &field) {
+    for (auto &cell : *_cells) {
+        int i = cell->i();
+        int j = cell->j();
+       
+        auto wk = _inlet_K[cell->id()];
+        auto weps = _inlet_EPS[cell->id()];
+        if (cell->is_border(border_position::RIGHT)) {
+            auto k = 2 * wk - field.k(i + 1, j);
+            auto eps = 2 * weps - field.eps(i + 1, j);
+            field.k(i, j) = k;
+            field.eps(i, j) = eps;
+            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+        }
+        if (cell->is_border(border_position::LEFT)) {
+            auto k = 2 * wk - field.k(i - 1, j);
+            auto eps = 2 * weps - field.eps(i - 1, j);
+            field.k(i, j) = k;
+            field.eps(i, j) = eps;
+            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+        }
+        if (cell->is_border(border_position::TOP)) {
+            auto k = 2 * wk - field.k(i, j + 1);
+            auto eps = 2 * weps - field.eps(i, j + 1);
+            field.k(i, j) = k;
+            field.eps(i, j) = eps;
+            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+        }
+        if (cell->is_border(border_position::BOTTOM)) {
+            auto k = 2 * wk - field.k(i, j - 1);
+            auto eps = 2 * weps - field.eps(i, j - 1);
+            field.k(i, j) = k;
+            field.eps(i, j) = eps;
+            field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
         }
     }
 }

@@ -1,5 +1,7 @@
 #include "Utilities.hpp"
 #include <sstream>
+#include <cmath>
+
 std::vector<std::vector<int>> parse_geometry_file(std::string filedoc, int xdim, int ydim) {
     std::vector<std::vector<int>> geometry_data(xdim + 2, std::vector<int>(ydim + 2, 0));
     int numcols, numrows, depth;
@@ -62,6 +64,62 @@ std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec
         for (int j = 0; j < ydim; j++) {
             result[i][j] = vec[i + imin][j + jmin];
         }
-    }   
+    }
     return result;
+}
+
+std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>> &vec, int refine, int &imax, int &jmax)
+{
+    int iold = imax;
+    int jold = jmax;
+    imax = (imax + 1) * std::pow(2, refine) - 1;
+    jmax = (jmax + 1) * std::pow(2, refine) - 1;
+
+    int steps = std::pow(2, refine);
+
+    std::vector<std::vector<int>> geometry_data(imax + 2, std::vector<int>(jmax + 2, 0));
+    for (int i = 0; i < iold + 1; i++) {
+        for (int j = 0; j < jold + 1; j++) {
+            for (int ii = 0; ii < steps; ii++) {
+                for (int jj = 0; jj < steps; jj++) {
+                    geometry_data[i*steps + ii][j*steps + jj] = vec[i][j];
+                }
+            }
+        }
+    }
+
+    for (int j = 0; j < jold + 1; j++) {
+        for (int jj = 0; jj < steps; jj++) {
+            geometry_data[imax+1][j*steps + jj] = vec[iold+1][j];
+        }
+    }
+
+    for (int i = 0; i < iold + 1; i++) {
+        for (int ii = 0; ii < steps; ii++) {
+            geometry_data[i*steps+ii][jmax+1] = vec[i][jold+1];
+        }
+    }
+    /*
+    for (int j = 0; j < jold + 1; j++) {
+        for (int jj = 0; jj < steps; jj++) {
+            for (int ii = 1; ii < steps; ii++) {
+                if (vec[1][j] == 0) {
+                    geometry_data[ii][j*steps + jj] = 0;
+                }                
+            }
+        }
+    }
+
+    for (int i = 0; i < iold + 1; i++) {
+        for (int ii = 0; ii < steps; ii++) {
+            for (int jj = 1; jj < steps; jj++) {
+                if (vec[i][1] == 0) {
+                    geometry_data[i*steps+ii][jj] = 0;
+                }                
+            }
+        }
+    }
+    */
+
+    return geometry_data;
 }
