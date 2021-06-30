@@ -138,22 +138,22 @@ void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
                     A.set_element(loc, at(i, j - 1), -inv_dy2);
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }
@@ -183,25 +183,25 @@ void PCG::build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
                     // Pressure
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
                     // Pressure
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
                     // Pressure
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
                     // Pressure
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }

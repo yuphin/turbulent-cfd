@@ -325,32 +325,46 @@ void Case::simulate() {
         for (auto &cell : *cells) {
             int i = cell->i();
             int j = cell->j();
-            data.neighborhood |= (-1 & 0xFF);
+            if (j == 1 && i == 64) {
+                int a = 4;
+            }
+            BoundaryData data;
+            uint32_t type = boundary->get_type();
+            data.neighborhood |= type << 8;
             // data.idx = _grid.imaxb() * j + i;
             if (cell->is_border(border_position::RIGHT)) {
-                data.neighborhood = (data.neighborhood & (-1 << 8)) | 0;
+                data.neighborhood |= data.neighborhood | 1;
             }
             if (cell->is_border(border_position::LEFT)) {
-                data.neighborhood = (data.neighborhood & (-1 << 8)) | 1;
+                data.neighborhood |= data.neighborhood | 2;
             }
             if (cell->is_border(border_position::TOP)) {
-                data.neighborhood = (data.neighborhood & (-1 << 8)) | 2;
+                data.neighborhood |= data.neighborhood | 4;
             }
             if (cell->is_border(border_position::BOTTOM)) {
-                data.neighborhood = (data.neighborhood & (-1 << 8)) | 3;
+                data.neighborhood |= data.neighborhood | 8;
             }
-            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
-                data.neighborhood = (data.neighborhood & (-1 << 8)) | 4;
-            }
-            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
-                data.neighborhood = (data.neighborhood & (-1 << 8)) | 5;
-            }
-            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
-                data.neighborhood = (data.neighborhood & (-1 << 8)) | 6;
-            }
-            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
-                data.neighborhood = (data.neighborhood & (-1 << 8)) | 7;
-            }
+            /*  if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                  data.neighborhood = (data.neighborhood & (-1 << 8)) | 4;
+              }
+              if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                  data.neighborhood = (data.neighborhood & (-1 << 8)) | 5;
+              }
+              if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                  data.neighborhood = (data.neighborhood & (-1 << 8)) | 6;
+              }*/
+            //if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+            //    uint32_t type = data.neighborhood >> 8;
+            //    uint32_t neighbors = data.neighborhood & 0xFF;
+
+            //    // data.neighborhood = (data.neighborhood & (-1 << 8)) | 7;
+            //    if ((data.neighborhood & 0x2) == 2) {
+            //        int a = 4;
+            //    }
+            //    if ((data.neighborhood & 0x8) == 8) {
+            //        int a = 4;
+            //    }
+            //}
             boundaries[j * _grid.imaxb() + i] = data;
         }
     }
@@ -573,7 +587,9 @@ void Case::simulate() {
         t_new_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
                             _field.t_matrix().size() * sizeof(Real), _field._T._container.data(), true);
-        t_old_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        t_old_buffer.create(
+            &simulation.context,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
                             _field.t_matrix().size() * sizeof(Real));
         t_boundary_matrix_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,

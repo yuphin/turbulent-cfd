@@ -44,30 +44,17 @@ void main() {
     }
 	uint type = at(neighborhood, i, j) >> 8;
 	uint neighbors = at(neighborhood, i, j) & 0xFF;
-	if(neighbors == 0xFF) {
-		return;
-	}
 
-	switch(neighbors){
-			case 0: 
-			{
-				at(f, i, j) = at(u, i, j);
-			}
-			break;
-			case 1: 
-			{
-				at(f, i-1, j) = at(u, i-1, j);
-			}
-			break;
-			case 2: 
-			{
-				at(g, i, j) = at(v, i, j);
-			}
-			break;
-			case 3: 
-			{
-				at(g, i, j-1) = at(v, i, j-1);
-			}
-			break;
-	}
+		if((neighbors & 0x1) == 1){
+			at(f, i, j) = at(u, i, j);
+		}
+		if((neighbors & 0x2) == 2){
+			at(f, i-1, j) = at(u, i-1, j);
+		}
+		if((neighbors & 0x4) == 4){
+			at(g, i, j) = at(v, i, j);
+		}
+		if((neighbors & 0x8) == 8){
+			at(g, i, j-1) = at(v, i, j-1);
+		}
 }
