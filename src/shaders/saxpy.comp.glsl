@@ -8,12 +8,12 @@ layout(constant_id = 0) const uint MODE = 0;
 
 layout(binding = 12) buffer V1 // d
 {
-	float v1[];
+	float d[];
 };
 
 layout(binding = 13) buffer V2 // spmv
 {
-	float v2[];
+	float q[];
 };
 
 layout(binding = 14) buffer Res // res
@@ -43,16 +43,16 @@ void main() {
 		float alpha =  res[0];
 		switch(MODE){
 			case 0:
-				p[idx] = p[idx] + alpha * v1[idx];
+				p[idx] = p[idx] + alpha * d[idx];
 				break;
 			case 1:
-				r[idx] = r[idx] - alpha * v2[idx];
+				r[idx] = r[idx] - alpha * q[idx];
 				break;
 			case 2:
-				v1[idx] = r[idx] + alpha * v1[idx];
+				d[idx] = r[idx] + alpha * d[idx];
 				break;
 			case 3:
-				v1[idx] = z[idx] + alpha * v1[idx];
+				d[idx] = z[idx] + alpha * d[idx];
 				break;
 		}
 		

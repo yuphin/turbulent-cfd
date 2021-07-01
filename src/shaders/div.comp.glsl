@@ -12,17 +12,17 @@ layout(binding = 14) buffer Residual
 
 layout(binding = 30) buffer Deltas
 {
-	float d[];
+	float deltas[];
 };
 
 
 void main(){
 	if(STORE == 0){
-		res[0] =  d[0] / res[0];
+		res[0] =  deltas[0] / res[0];
 	} else {
-		d[1] = d[0]; // old
-		d[0] = res[0]; // new
-		res[0] = res[0] / d[1];
+		deltas[1] = deltas[0]; // old
+		deltas[0] = res[0]; // new
+		res[0] = res[0] / deltas[1];
 	}
 
 }

@@ -30,7 +30,7 @@ namespace filesystem = std::filesystem;
 
 #define ENABLE_CG_CPU 0
 
-#define ENABLE_PRECOND 0
+#define ENABLE_PRECOND 1
 Case::Case(std::string file_name, int argn, char **args) {
 
     // Set up logging functionality
@@ -676,7 +676,7 @@ void Case::simulate() {
         simulation.write_timestamp(command_idx, 2);
         // q <- A *d
         simulation.record_command_buffer(spmv_a_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
-        barrier(simulation, spmv_result_buffer, command_idx);
+        barrier(simulation, spmv_result_buffer, command_idx, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
         // Store d^T dot q scalar in the residual buffer
         vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_0_pipeline, reduce_pipeline, command_idx,
                grid_size);
@@ -688,17 +688,18 @@ void Case::simulate() {
 
         // x <- x + alpha * d
         vec_saxpy(simulation, saxpy_0_pipeline, command_idx, grid_size);
-        barrier(simulation, p_buffer, command_idx);
+        //barrier(simulation, p_buffer, command_idx);
         // r <- r - alpha * q
         vec_saxpy(simulation, saxpy_1_pipeline, command_idx, grid_size);
-        barrier(simulation, r_buffer, command_idx);
+        barrier(simulation, r_buffer, command_idx, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+       
         // simulation.record_command_buffer(inc_pipeline, command_idx, 1, 1, 1, 1);
-        barrier(simulation, counter_buffer, command_idx);
+        // barrier(simulation, counter_buffer, command_idx);
         if (ENABLE_PRECOND) {
             // Preconditioning
             // z <- M *r
             simulation.record_command_buffer(spmv_m_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
-            barrier(simulation, z_buffer, command_idx);
+            barrier(simulation, z_buffer, command_idx, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
 
             vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx,
                    grid_size);
@@ -713,22 +714,22 @@ void Case::simulate() {
                              reduce_pipeline);
           Real beta = delta_new / delta_old;*/
         scalar_div(simulation, div_store_pipeline, command_idx);
-        barrier(simulation, residual_buffer, command_idx);
-        barrier(simulation, d_buffer, command_idx);
+        barrier(simulation, residual_buffer, command_idx, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
         if (ENABLE_PRECOND) {
+            // d <- z + beta * d;
             vec_saxpy(simulation, saxpy_3_pipeline, command_idx, grid_size);
         } else {
             // d <- r + beta * d;
             vec_saxpy(simulation, saxpy_2_pipeline, command_idx, grid_size);
         }
 
-        barrier(simulation, d_buffer, command_idx);
         // simulation.record_command_buffer(inc_pipeline, command_idx, 1, 1, 1, 1);
-        barrier(simulation, counter_buffer, command_idx);
+        // barrier(simulation, counter_buffer, command_idx);
         VkBufferCopy copy_region;
         copy_region.srcOffset = 0;
         copy_region.dstOffset = 0;
         copy_region.size = deltas_buffer.size;
+        barrier(simulation, deltas_buffer, command_idx, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
         vkCmdCopyBuffer(simulation.context.command_buffer[command_idx], deltas_buffer.handle, scratch_buffer.handle, 1,
                         &copy_region);
         simulation.write_timestamp(command_idx, 3);
@@ -767,7 +768,7 @@ void Case::simulate() {
              boundary->enforce_uv(_field);
          } */
 
-        //if (_calc_temp) {
+        // if (_calc_temp) {
         //    // Enforce temperature boundary conditions
         //    for (const auto &boundary : _boundaries) {
         //        boundary->enforce_t(_field);
@@ -912,7 +913,7 @@ void Case::simulate() {
         timestep++;
         auto c_end = std::chrono::high_resolution_clock::now();
         auto time = std::chrono::duration_cast<std::chrono::milliseconds>(c_end - c_start);
-        //auto time = std::chrono::duration_cast<std::chrono::milliseconds>(ptimecpu);
+        // auto time = std::chrono::duration_cast<std::chrono::milliseconds>(ptimecpu);
         printf("\rIter: %d, first pass time %.2f ms, pressure time %.2f ms, post pressure %.2f ms, CPU: %ld ms", it,
                end - begin, pressure_time, post_end - post_begin, time.count());
         // Print progress bar
