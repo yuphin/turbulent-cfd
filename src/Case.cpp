@@ -666,12 +666,11 @@ void Case::simulate() {
         residual_buffer.copy(deltas_buffer, command_idx, false, 0, 0, sizeof(Real));
         // Calculate delta_new(r_norm) = r_t dot r
         simulation.write_timestamp(command_idx, 1);
-
         simulation.end_recording(command_idx);
     };
 
     auto record_conjugate_gradient_solver = [&](int command_idx = 0) {
-        simulation.begin_recording(command_idx, 0);
+        simulation.begin_recording(command_idx, VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
         vkCmdResetQueryPool(simulation.context.command_buffer[command_idx], simulation.query_pool, 0, 6);
         simulation.write_timestamp(command_idx, 2);
         // q <- A *d
@@ -725,13 +724,8 @@ void Case::simulate() {
 
         // simulation.record_command_buffer(inc_pipeline, command_idx, 1, 1, 1, 1);
         // barrier(simulation, counter_buffer, command_idx);
-        VkBufferCopy copy_region;
-        copy_region.srcOffset = 0;
-        copy_region.dstOffset = 0;
-        copy_region.size = deltas_buffer.size;
-        barrier(simulation, deltas_buffer, command_idx, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-        vkCmdCopyBuffer(simulation.context.command_buffer[command_idx], deltas_buffer.handle, scratch_buffer.handle, 1,
-                        &copy_region);
+       
+      
         simulation.write_timestamp(command_idx, 3);
         simulation.end_recording(command_idx);
     };
@@ -864,18 +858,37 @@ void Case::simulate() {
         Real cond = _tolerance * _tolerance * delta_zero;
         double pressure_time = 0;
         std::chrono::nanoseconds ptimecpu(0);
+        uint8_t sem_idx = 0;
+        VkBufferCopy copy_region;
+        copy_region.srcOffset = 0;
+        copy_region.dstOffset = 0;
+        copy_region.size = deltas_buffer.size;
         while (it < _max_iter && delta_new > cond) {
-            auto pcpub = std::chrono::high_resolution_clock::now();
-            simulation.run_command_buffer(1);
-            auto pcpue = std::chrono::high_resolution_clock::now();
+            for (int i = 0; i < 35; i++) {
+                VkSubmitInfo submit_info = {};
+                submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                submit_info.commandBufferCount = 1;
+                submit_info.pCommandBuffers = &simulation.context.command_buffer[1];
+                submit_info.pWaitSemaphores = i == 0 ? 0 : &simulation.semaphores[sem_idx]; 
+                submit_info.pSignalSemaphores = &simulation.semaphores[sem_idx ^ 1]; 
+                VK_CHECK(vkQueueSubmit(simulation.context.compute_queue, 1, &submit_info, simulation.fences[i]));
+                sem_idx ^= 1;
+            }
+            it += 35;
+            vkWaitForFences(simulation.context.device, simulation.fences.size(), simulation.fences.data(), true,
+                            100000000000);
+            vkResetFences(simulation.context.device, simulation.fences.size(), simulation.fences.data());
             simulation.get_query_results(COUNTOF(timestamps), timestamps);
             double pbegin = double(timestamps[2]) * simulation.props.limits.timestampPeriod * 1e-6;
             double pend = double(timestamps[3]) * simulation.props.limits.timestampPeriod * 1e-6;
             pressure_time += pend - pbegin;
+            simulation.begin_recording(3, 0);
+            barrier(simulation, deltas_buffer, 3, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+            vkCmdCopyBuffer(simulation.context.command_buffer[3], deltas_buffer.handle, scratch_buffer.handle,
+                            1, &copy_region);
+            simulation.end_recording(3);
+            simulation.run_command_buffer(3);
             delta_new = *(Real *)scratch_buffer.data;
-            delta_old = ((Real *)scratch_buffer.data)[1];
-            it++;
-            ptimecpu += pcpue - pcpub;
         }
         if (it == _max_iter) {
             // std::cout << " ------ " << it << " " << res;
@@ -914,7 +927,7 @@ void Case::simulate() {
         auto c_end = std::chrono::high_resolution_clock::now();
         auto time = std::chrono::duration_cast<std::chrono::milliseconds>(c_end - c_start);
         // auto time = std::chrono::duration_cast<std::chrono::milliseconds>(ptimecpu);
-        printf("\rIter: %d, first pass time %.2f ms, pressure time %.2f ms, post pressure %.2f ms, CPU: %ld ms", it,
+        printf("\rIter: %d, first pass time %.2f ms, pressure time %.2f ms, post pressure %.2f ms, CPU total: %ld ms", it,
                end - begin, pressure_time, post_end - post_begin, time.count());
         // Print progress bar
         logger.progress_bar(t, _t_end);

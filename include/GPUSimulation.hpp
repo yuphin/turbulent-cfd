@@ -305,6 +305,11 @@ class GPUSimulation {
         descriptor_sets.resize(MAX_DESCRIPTOR_SETS);
         descriptor_set_layouts.resize(MAX_DESCRIPTOR_SETS);
         vkGetPhysicalDeviceProperties(context.physical_device, &props);
+        VkSemaphoreCreateInfo semaphore_info{};
+        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        for (int i = 0; i < 2; i++) {
+            VK_CHECK(vkCreateSemaphore(context.device, &semaphore_info, 0, &semaphores[i]));
+        }
     }
     void create_instance() {
         std::vector<const char *> enabled_extensions;
@@ -659,6 +664,9 @@ class GPUSimulation {
         fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fence_create_info.flags = 0;
         VK_CHECK(vkCreateFence(context.device, &fence_create_info, NULL, &fence));
+        for (int i = 0; i < fences.size(); i++) {
+            VK_CHECK(vkCreateFence(context.device, &fence_create_info, NULL, &fences[i]));
+        }
     }
 
     void run_command_buffer(int command_idx) {
@@ -696,6 +704,9 @@ class GPUSimulation {
             vkDestroyPipeline(context.device, pipeline.pipeline, NULL);
         }
         vkDestroyFence(context.device, fence, NULL);
+        for (int i = 0; i < fences.size(); i++){
+            vkDestroyFence(context.device, fences[i], NULL);
+        }
         vkDestroyQueryPool(context.device, query_pool, 0);
         vkDestroyCommandPool(context.device, context.command_pool, NULL);
         vkDestroyDevice(context.device, NULL);
@@ -705,6 +716,8 @@ class GPUSimulation {
     UBOData data;
     VkQueryPool query_pool;
     VkPhysicalDeviceProperties props = {};
+    std::array<VkSemaphore, 2> semaphores = {};
+    std::array<VkFence, 35> fences;
 
   private:
     VkInstance instance;
@@ -755,11 +768,10 @@ Real vec_dp_immediate(GPUSimulation &simulation, Buffer &v1, Buffer &v2, Buffer 
 
 void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer, Pipeline &pipeline,
             Pipeline &reduce_pipeline, int command_idx, int dim) {
-   /* vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size, 0);
-    VkBufferMemoryBarrier fill_barrier =
-        buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT);
-    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);*/
+    /* vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size,
+     0); VkBufferMemoryBarrier fill_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
+     VK_ACCESS_SHADER_WRITE_BIT); vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx],
+     VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);*/
     vkCmdFillBuffer(simulation.context.command_buffer[command_idx], counter_buffer.handle, 0, counter_buffer.size, 1);
     simulation.record_command_buffer(pipeline, command_idx, 1024, 1, dim, 1);
     VkBufferMemoryBarrier res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
@@ -767,9 +779,9 @@ void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
     int num_wgs = ceil(dim / 1024.0f);
-    
+
     VkBufferMemoryBarrier fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                  VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+                                                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
     std::array<VkBufferMemoryBarrier, 2> barriers{res_barrier, fill_barrier};
