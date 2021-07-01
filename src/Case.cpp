@@ -3,6 +3,7 @@
 #include "GPUSimulation.hpp"
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 #include <execution>
 #include <filesystem>
 #include <fstream>
@@ -384,6 +385,8 @@ void Case::simulate() {
     simulation.create_descriptor_set_layout(set_layout_bindings);
     simulation.create_command_pool();
     simulation.create_fences();
+    simulation.create_query_pool(32, VK_QUERY_TYPE_TIMESTAMP);
+
     Pipeline fg_pipeline = simulation.create_compute_pipeline("src/shaders/calc_fg.comp.spv", _calc_temp);
     Pipeline rs_pipeline = simulation.create_compute_pipeline("src/shaders/calc_rs.comp.spv");
     Pipeline vel_pipeline = simulation.create_compute_pipeline("src/shaders/calc_vel.comp.spv");
@@ -566,8 +569,7 @@ void Case::simulate() {
         t_old_buffer.create(
             &simulation.context,
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-                            _field.t_matrix().size() * sizeof(Real));
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, _field.t_matrix().size() * sizeof(Real));
         t_boundary_matrix_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
                                         t_matrix_size * sizeof(Real), t_matrix_data, true);
@@ -602,6 +604,8 @@ void Case::simulate() {
 
     auto record_simulation_step = [&](int command_idx) {
         simulation.begin_recording(command_idx, 0);
+        vkCmdResetQueryPool(simulation.context.command_buffer[command_idx], simulation.query_pool, 0, 6);
+        simulation.write_timestamp(command_idx, 0);
         simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, grid_size, 1);
         uv_max(simulation, residual_buffer, counter_buffer, min_max_uv_pipeline, reduce_u_pipeline, reduce_v_pipeline,
                command_idx, grid_size);
@@ -661,11 +665,15 @@ void Case::simulate() {
         residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(Real));
         residual_buffer.copy(deltas_buffer, command_idx, false, 0, 0, sizeof(Real));
         // Calculate delta_new(r_norm) = r_t dot r
+        simulation.write_timestamp(command_idx, 1);
+
         simulation.end_recording(command_idx);
     };
 
     auto record_conjugate_gradient_solver = [&](int command_idx = 0) {
         simulation.begin_recording(command_idx, 0);
+        vkCmdResetQueryPool(simulation.context.command_buffer[command_idx], simulation.query_pool, 0, 6);
+        simulation.write_timestamp(command_idx, 2);
         // q <- A *d
         simulation.record_command_buffer(spmv_a_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
         barrier(simulation, spmv_result_buffer, command_idx);
@@ -723,11 +731,14 @@ void Case::simulate() {
         copy_region.size = deltas_buffer.size;
         vkCmdCopyBuffer(simulation.context.command_buffer[command_idx], deltas_buffer.handle, scratch_buffer.handle, 1,
                         &copy_region);
+        simulation.write_timestamp(command_idx, 3);
         simulation.end_recording(command_idx);
     };
 
     auto record_post_pressure = [&](int command_idx) {
         simulation.begin_recording(command_idx, 0);
+        vkCmdResetQueryPool(simulation.context.command_buffer[command_idx], simulation.query_pool, 0, 6);
+        simulation.write_timestamp(command_idx, 4);
         simulation.record_command_buffer(negate_pipeline, command_idx, 1024, 1, grid_size, 1);
         barrier(simulation, p_buffer, command_idx);
         simulation.record_command_buffer(vel_pipeline, command_idx, 32, 32, grid_x, grid_y);
@@ -738,15 +749,15 @@ void Case::simulate() {
                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, uv_barriers.data(), 0, 0);
         // simulation.record_command_buffer(v_boundary_pipeline);
         simulation.record_command_buffer(boundary_uv_branchless_pipeline, command_idx, 1024, 1, grid_size, 1);
+        simulation.write_timestamp(command_idx, 5);
         simulation.end_recording(command_idx);
     };
     record_simulation_step(0);
     record_conjugate_gradient_solver(1);
     record_post_pressure(2);
     while (t < _t_end) {
+        auto c_start = std::chrono::high_resolution_clock::now();
 
-        // Print progress bar
-        logger.progress_bar(t, _t_end);
         // std::cout << t << "/" << _t_end;
         // Select dt
         // dt = _field.calculate_dt(_grid, _calc_temp);
@@ -756,14 +767,14 @@ void Case::simulate() {
              boundary->enforce_uv(_field);
          } */
 
-        if (_calc_temp) {
-            // Enforce temperature boundary conditions
-            for (const auto &boundary : _boundaries) {
-                boundary->enforce_t(_field);
-            }
-            // Compute temperatures
-            _field.calculate_temperatures(_grid);
-        }
+        //if (_calc_temp) {
+        //    // Enforce temperature boundary conditions
+        //    for (const auto &boundary : _boundaries) {
+        //        boundary->enforce_t(_field);
+        //    }
+        //    // Compute temperatures
+        //    _field.calculate_temperatures(_grid);
+        //}
 
         // Compute F & G and enforce boundary conditions
         //_field.calculate_fluxes(_grid, _calc_temp);
@@ -834,6 +845,11 @@ void Case::simulate() {
 #endif
 
         simulation.run_command_buffer(0);
+        uint64_t timestamps[6] = {};
+        simulation.get_query_results(COUNTOF(timestamps), timestamps);
+        double begin = double(timestamps[0]) * simulation.props.limits.timestampPeriod * 1e-6;
+        double end = double(timestamps[1]) * simulation.props.limits.timestampPeriod * 1e-6;
+
         /*  auto dtgpu = *(Real *)dt_buffer.data;
           std::vector<Real> umaxbuf(32);
           std::vector<Real> vmaxbuf(32);
@@ -845,13 +861,21 @@ void Case::simulate() {
         Real delta_old = delta_new;
         Real delta_zero = delta_new;
         Real cond = _tolerance * _tolerance * delta_zero;
+        double pressure_time = 0;
+        std::chrono::nanoseconds ptimecpu(0);
         while (it < _max_iter && delta_new > cond) {
+            auto pcpub = std::chrono::high_resolution_clock::now();
             simulation.run_command_buffer(1);
+            auto pcpue = std::chrono::high_resolution_clock::now();
+            simulation.get_query_results(COUNTOF(timestamps), timestamps);
+            double pbegin = double(timestamps[2]) * simulation.props.limits.timestampPeriod * 1e-6;
+            double pend = double(timestamps[3]) * simulation.props.limits.timestampPeriod * 1e-6;
+            pressure_time += pend - pbegin;
             delta_new = *(Real *)scratch_buffer.data;
             delta_old = ((Real *)scratch_buffer.data)[1];
             it++;
+            ptimecpu += pcpue - pcpub;
         }
-        std::cout << it;
         if (it == _max_iter) {
             // std::cout << " ------ " << it << " " << res;
             logger.max_iter_warning();
@@ -863,6 +887,9 @@ void Case::simulate() {
         //_field.calculate_velocities(_grid);
 
         simulation.run_command_buffer(2);
+        simulation.get_query_results(COUNTOF(timestamps), timestamps);
+        double post_begin = double(timestamps[4]) * simulation.props.limits.timestampPeriod * 1e-6;
+        double post_end = double(timestamps[5]) * simulation.props.limits.timestampPeriod * 1e-6;
 
         u_buffer.copy(scratch_buffer, 3);
         _field._U._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._U.size());
@@ -883,6 +910,13 @@ void Case::simulate() {
         dt = *(Real *)dt_buffer.data;
         t += dt;
         timestep++;
+        auto c_end = std::chrono::high_resolution_clock::now();
+        auto time = std::chrono::duration_cast<std::chrono::milliseconds>(c_end - c_start);
+        //auto time = std::chrono::duration_cast<std::chrono::milliseconds>(ptimecpu);
+        printf("\rIter: %d, first pass time %.2f ms, pressure time %.2f ms, post pressure %.2f ms, CPU: %ld ms", it,
+               end - begin, pressure_time, post_end - post_begin, time.count());
+        // Print progress bar
+        logger.progress_bar(t, _t_end);
     }
     scratch_buffer.destroy();
     rs_buffer.destroy();

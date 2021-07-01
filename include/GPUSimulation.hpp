@@ -38,6 +38,9 @@ struct UBOData {
     int num_diags;
 };
 
+template <typename T, size_t Size> char (*countof_helper(T (&_Array)[Size]))[Size];
+#define COUNTOF(array) (sizeof(*countof_helper(array)) + 0)
+
 #define VK_CHECK(f)                                                                                                    \
     {                                                                                                                  \
         VkResult res = (f);                                                                                            \
@@ -57,8 +60,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(VkDebugReportFlagsEX
                          "vkCmdBindDescriptorSets, must be valid"))
         return VK_FALSE;
     // Work around errors regarding unupdated descriptor sets
-    if (strstr(pMessage, "is being used in draw but has not been updated")) 
-        return VK_FALSE;
+    if (strstr(pMessage, "is being used in draw but has not been updated")) return VK_FALSE;
     printf("Debug Report: %s: %s\n", pLayerPrefix, pMessage);
     return VK_FALSE;
 }
@@ -302,6 +304,7 @@ class GPUSimulation {
         this->data = data;
         descriptor_sets.resize(MAX_DESCRIPTOR_SETS);
         descriptor_set_layouts.resize(MAX_DESCRIPTOR_SETS);
+        vkGetPhysicalDeviceProperties(context.physical_device, &props);
     }
     void create_instance() {
         std::vector<const char *> enabled_extensions;
@@ -486,6 +489,22 @@ class GPUSimulation {
 
             VK_CHECK(vkAllocateDescriptorSets(context.device, &descriptor_set_allocate_info, &descriptor_sets[i]));
         }
+    }
+
+    void create_query_pool(uint32_t query_count, VkQueryType query_type) {
+        VkQueryPoolCreateInfo query_info = {VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+        query_info.queryType = query_type;
+        query_info.queryCount = query_count;
+        VK_CHECK(vkCreateQueryPool(context.device, &query_info, 0, &query_pool));
+    }
+
+    void get_query_results(int size, uint64_t *arr) {
+        vkGetQueryPoolResults(context.device, query_pool, 0, size, 8 * size, arr, 8, VK_QUERY_RESULT_64_BIT);
+    }
+
+    void write_timestamp(int command_idx, int query_idx,
+                         VkPipelineStageFlagBits stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT) {
+        vkCmdWriteTimestamp(context.command_buffer[command_idx], stage, query_pool, query_idx);
     }
 
     void push_descriptors(const std::vector<Descriptor> &descriptors) {
@@ -677,12 +696,15 @@ class GPUSimulation {
             vkDestroyPipeline(context.device, pipeline.pipeline, NULL);
         }
         vkDestroyFence(context.device, fence, NULL);
+        vkDestroyQueryPool(context.device, query_pool, 0);
         vkDestroyCommandPool(context.device, context.command_pool, NULL);
         vkDestroyDevice(context.device, NULL);
         vkDestroyInstance(instance, NULL);
     }
     Context context;
     UBOData data;
+    VkQueryPool query_pool;
+    VkPhysicalDeviceProperties props = {};
 
   private:
     VkInstance instance;

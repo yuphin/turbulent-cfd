@@ -66,8 +66,8 @@ class Logger {
     void progress_bar(double t, double t_end) {
         double progress = t / t_end;
         int pos = static_cast<int>(progress * _bar_width);
-        std::cout << " Time: |";
-        for (int i = 0; i < _bar_width; ++i) {
+        std::cout << ", time: ";
+      /*  for (int i = 0; i < _bar_width; ++i) {
 #ifndef WIN32
             if (i <= pos)
                 std::cout << "\u25A0";
@@ -80,7 +80,7 @@ class Logger {
                 std::cout << "-";
 #endif
         }
-        std::cout << "|";
+        std::cout << "|";*/
         std::cout << std::setw(5) << std::fixed << std::setprecision(2) << t;
         std::cout << " / " << t_end << "\r";
         std::cout << std::flush;
