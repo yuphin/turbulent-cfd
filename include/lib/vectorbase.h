@@ -43,18 +43,6 @@
 #   define FLOATINGPOINT_PRECISION 1
 #endif
 
-// VECTOR_EPSILON is the minimal vector length
-// In order to be able to discriminate floating point values near zero, and
-// to be sure not to fail a comparison because of roundoff errors, use this
-// value as a threshold.
-#if FLOATINGPOINT_PRECISION==1
-	typedef float Real;
-#   define VECTOR_EPSILON (1e-6f)
-#else
-	typedef double Real;
-#   define VECTOR_EPSILON (1e-10)
-#endif
-
 #ifndef M_PI
 #   define M_PI 3.1415926536
 #endif

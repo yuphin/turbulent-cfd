@@ -9,7 +9,7 @@
 #include "Cell.hpp"
 #include "Datastructures.hpp"
 #include "Domain.hpp"
-#include "Enums.hpp"
+#include "Utilities.hpp"
 
 /**
  * @brief Data structure holds cells and related sub-containers
@@ -29,7 +29,8 @@ class Grid {
      * @param[in] cell size in y direction
      *
      */
-    Grid(std::string geom_name, Domain &domain);
+    Grid(std::string geom_name, Domain &domain, 
+         std::vector<std::vector<int>> &geometry_data);
 
     /// index based cell access
     Cell cell(int i, int j) const;
@@ -86,18 +87,11 @@ class Grid {
      */
     std::vector<Cell *> &freeslip_wall_cells();
 
-  private:
-    /**@brief Default lid driven cavity case generator
-     *
-     * This function creates default lid driven cavity
-     * case without need for a pgm file
-     */
-    void build_lid_driven_cavity();
+    Domain _domain;
 
+  private:
     /// Build cell data structures with given geometrical data
     void assign_cell_types(std::vector<std::vector<int>> &geometry_data);
-    /// Extract geometry from pgm file and create geometrical data
-    void parse_geometry_file(std::string filedoc, std::vector<std::vector<int>> &geometry_data);
 
     Matrix<Cell> _cells;
     std::vector<Cell *> _fluid_cells;
@@ -106,7 +100,6 @@ class Grid {
     std::vector<Cell *> _freeslip_wall_cells;
     std::vector<Cell *> _noslip_wall_cells;
 
-    Domain _domain;
 
     Real _dx;
     Real _dy;

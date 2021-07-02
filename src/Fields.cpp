@@ -1,4 +1,5 @@
 #include "Fields.hpp"
+#include "Communication.hpp"
 
 #include <algorithm>
 #include <iostream>
@@ -58,16 +59,18 @@ void Fields::calculate_velocities(Grid &grid) {
 }
 
 void Fields::calculate_temperatures(Grid &grid) {
+    auto T_old = _T;
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
         t(i, j) =
-            t(i, j) + _dt * (_alpha * Discretization::laplacian(_T, i, j) -
-                             Discretization::convection_uT(_U, _T, i, j) - Discretization::convection_vT(_V, _T, i, j));
+            t(i, j) + _dt * (_alpha * Discretization::laplacian(T_old, i, j) -
+                             Discretization::convection_uT(_U, T_old, i, j) - Discretization::convection_vT(_V, T_old, i, j));
     }
 }
 
 Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
+
     Real dx2 = grid.dx() * grid.dx();
     Real dy2 = grid.dy() * grid.dy();
 
@@ -78,6 +81,12 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
     Real vMin = *std::min_element(_V.data(), _V.data() + _V.size());
     Real maxAbsU = fabs(uMax) > fabs(uMin) ? fabs(uMax) : fabs(uMin);
     Real maxAbsV = fabs(vMax) > fabs(vMin) ? fabs(vMax) : fabs(vMin);
+
+    // Get the global maximums
+    maxAbsU = Communication::reduce_all(maxAbsU, MPI_MAX);
+    maxAbsV = Communication::reduce_all(maxAbsV, MPI_MAX);
+
+
     Real cond_2 = grid.dx() / maxAbsU;
     Real cond_3 = grid.dy() / maxAbsV;
 
@@ -95,7 +104,6 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp) {
         minimum = std::min(minimum, cond_4);
     }
     _dt = _tau * minimum;
-
     return _dt;
 }
 

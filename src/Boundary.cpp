@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <mpi.h>
 
 /////////// Constructors ///////////
 OutletBoundary::OutletBoundary(std::vector<Cell *> *cells) : Boundary(cells) { _type = 0; }
@@ -260,6 +261,7 @@ void InletBoundary::enforce_t(Fields &field) {
 
 /////////// NoSlip Walls ///////////
 void NoSlipWallBoundary::enforce_uv(Fields &field) {
+
     for (auto &cell : *_cells) {
         if (cell->borders().size() > 2) {
             std::cerr << "Forbidden cells!!" << std::endl;
@@ -280,19 +282,15 @@ void NoSlipWallBoundary::enforce_uv_main(Fields &field, Cell *cell) {
     if (cell->is_border(border_position::RIGHT)) {
         field.u(i, j) = 0;
         field.v(i, j) = 2 * _wall_velocity[id] - field.v(i + 1, j);
-        field.v(i, j - 1) = 2 * _wall_velocity[id] - field.v(i + 1, j - 1);
     } else if (cell->is_border(border_position::LEFT)) {
         field.u(i - 1, j) = 0;
         field.v(i, j) = 2 * _wall_velocity[id] - field.v(i - 1, j);
-        field.v(i, j - 1) = 2 * _wall_velocity[id] - field.v(i - 1, j - 1);
     } else if (cell->is_border(border_position::TOP)) {
         field.v(i, j) = 0;
         field.u(i, j) = 2 * _wall_velocity[id] - field.u(i, j + 1);
-        field.u(i - 1, j) = 2 * _wall_velocity[id] - field.u(i - 1, j + 1);
     } else if (cell->is_border(border_position::BOTTOM)) {
         field.v(i, j - 1) = 0;
         field.u(i, j) = 2 * _wall_velocity[id] - field.u(i, j - 1);
-        field.u(i - 1, j) = 2 * _wall_velocity[id] - field.u(i - 1, j - 1);
     }
 }
 
@@ -300,6 +298,8 @@ void NoSlipWallBoundary::enforce_uv_diagonal(Fields &field, Cell *cell) {
     int i = cell->i();
     int j = cell->j();
     int id = cell->id();
+    // This shouldn't happen since index 0 is a ghost cell
+    assert(!(i == 0 && j == 0) && "Illegal index");
 
     if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
         field.u(i, j) = 0;

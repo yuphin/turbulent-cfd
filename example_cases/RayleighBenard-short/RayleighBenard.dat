@@ -88,3 +88,10 @@ wall_temp_10     -1
 wall_vel_12      0
 wall_vel_11      0
 wall_vel_10      0  
+
+#--------------------------------------------
+#       number of processes in x and y direction
+#--------------------------------------------
+
+iproc         1
+jproc         1

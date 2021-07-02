@@ -1,5 +1,5 @@
 #pragma once
-#include "Enums.hpp"
+#include "Utilities.hpp"
 #include <mpi.h>
 
 /**
@@ -32,4 +32,11 @@ struct Domain {
     int domain_size_x{-1};
     /// Number of cells in y direction, not-decomposed
     int domain_size_y{-1};
+
+    /// Domain length in x direction
+    Real x_length;
+    /// Domain length in y direction
+    Real y_length;
+
+    int total_size;
 };

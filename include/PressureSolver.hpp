@@ -22,8 +22,8 @@ class PressureSolver {
      * @param[in] grid to be used
      * @param[in] boundary to be used
      */
-    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries,
-                       uint32_t iters, Real tolerance) = 0;
+    virtual Real solve(Fields& field, Grid& grid, const std::vector<std::unique_ptr<Boundary>>& boundaries,
+                       Params& params, uint32_t iters, Real tolerance, uint32_t& it) = 0;
 };
 
 /**
@@ -51,8 +51,8 @@ class SOR : public PressureSolver {
      * @param[in] grid to be used
      * @param[in] boundary to be used
      */
-    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries,
-                       uint32_t iters, Real tolerance);
+    Real solve(Fields& field, Grid& grid, const std::vector<std::unique_ptr<Boundary>>& boundaries, Params& params,
+               uint32_t iters, Real tolerance, uint32_t& it) override;
 
   private:
     Real _omega;
@@ -63,8 +63,8 @@ class PCG : public PressureSolver {
     PCG(int dim_x, int dim_y, Real dx, Real dy, Fields &field, Grid &grid,
         const std::vector<std::unique_ptr<Boundary>> &boundaries);
 
-    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries,
-                       uint32_t iters, Real tolerance);
+    Real solve(Fields& field, Grid& grid, const std::vector<std::unique_ptr<Boundary>>& boundaries, Params& params,
+               uint32_t iters, Real tolerance, uint32_t& it) override;
     SparseMatrix<Real> A;
     SparseMatrix<Real> &get_a() { return A; }
     FixedSparseMatrix<Real> U_fixed;

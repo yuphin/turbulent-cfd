@@ -10,23 +10,28 @@
 #include "Fields.hpp"
 #include "Grid.hpp"
 #include "PressureSolver.hpp"
+#include "Solver.hpp"
 #include "Utilities.hpp"
+#include "Communication.hpp"
+#include "Utilities.hpp"
+#include "CPUSolver.hpp"
+#include "VulkanSolver.hpp"
 
 /**
  * @brief Class to hold and orchestrate the simulation flow.
  *
  */
-class Case {
+class Simulation {
   public:
     /**
-     * @brief Parallel constructor for the Case.
+     * @brief Parallel constructor for the Simulation.
      *
      * Reads input file, creates Fields, Grid, Boundary, Solver and sets
      * Discretization parameters Creates output directory
      *
      * @param[in] Input file name
      */
-    Case(std::string file_name, int argn, char **args);
+    Simulation(std::string file_name, int argn, char **args, Params &params);
 
     /**
      * @brief Main function to simulate the flow until the end time.
@@ -37,7 +42,7 @@ class Case {
      * Calculates velocities
      * Outputs the solution files
      */
-    void simulate();
+    void simulate(Params &params);
 
   private:
     /// Plain case name without paths
@@ -54,24 +59,14 @@ class Case {
     /// Solution file outputting frequency
     Real _output_freq;
 
-    Fields _field;
-    Grid _grid;
-    Discretization _discretization;
-    std::unique_ptr<PressureSolver> _pressure_solver_sor;
-    std::unique_ptr<PressureSolver> _pressure_solver_pcg;
-    std::vector<std::unique_ptr<Boundary>> _boundaries;
-
-    /// Solver convergence tolerance
-    Real _tolerance;
-
-    /// Maximum number of iterations for the solver
-    uint32_t _max_iter;
-
-    /// Whether to include temperatures
-    bool _calc_temp = false;
+    std::unique_ptr<Solver> _solver;
 
     friend class Logger;
     Logger logger = Logger();
+
+    // global grid sizes without boundaries, needed for vtk output
+    Real global_size_x;
+    Real global_size_y;
 
     /**
      * @brief Creating file names from given input data file
@@ -92,7 +87,7 @@ class Case {
      *
      * @param[in] Timestep of the solution
      */
-    void output_vtk(int t, int my_rank = 0);
+    void output_vtk(int t, Params &params);
 
     void build_domain(Domain &domain, int imax_domain, int jmax_domain);
 };

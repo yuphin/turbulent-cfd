@@ -13,6 +13,7 @@
 #include <fstream>
 #include <cmath>
 #include <functional>
+#include "Communication.hpp"
 
 // index type 
 #define int_index long long
@@ -699,7 +700,7 @@ struct SparsePCGSolver
       min_diagonal_ratio=min_diagonal_ratio_;
    }
 
-   bool solve(const SparseMatrix<T> &matrix, const std::vector<T> &rhs, std::vector<T> &result, T &relative_residual_out, int &iterations_out, int precondition=2)
+   bool solve(const SparseMatrix<T> &matrix, const std::vector<T> &rhs, std::vector<T> &result, T &relative_residual_out, int &iterations_out, int precondition=2, int num_local_iters = 1)
    {
       int n=matrix.n;
       if((int)m.size()!=n){ m.resize(n); s.resize(n); z.resize(n); r.resize(n); }
@@ -741,6 +742,7 @@ struct SparsePCGSolver
          double beta=rho_new/rho;
          InstantBLAS<int,T>::add_scaled(beta, s, z); s.swap(z); // s=beta*s+z
          rho=rho_new;
+       
       }
       iterations_out=iteration;
 	  relative_residual_out = residual_out / residual_0;
