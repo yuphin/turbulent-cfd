@@ -205,13 +205,13 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     domain.size_x = params.size_x;
     domain.size_y = params.size_y;
     domain.total_size = domain.imax * domain.jmax;
-   
 
     _solver->_grid = Grid(_geom_name, domain, local_geometry);
     _solver->_field = Fields(nu, dt, tau, domain.size_x, domain.size_y, UI, VI, PI, TI, alpha, beta, GX, GY);
     _solver->_discretization = Discretization(domain.dx, domain.dy, gamma);
     _solver->_max_iter = itermax;
     _solver->_tolerance = eps;
+    _solver->params = params;
 
     // Construct boundaries
     if (!_solver->_grid.noslip_wall_cells().empty()) {
