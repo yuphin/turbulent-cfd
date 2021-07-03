@@ -223,6 +223,6 @@ Real PCG::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Bou
         field._P._container[i] = -p[i];
     }
     it = pcg_iters;
-    std::cout << it;
+    std::cout << "pcg iters: " << it << ", ";
     return pcg_residual;
 }

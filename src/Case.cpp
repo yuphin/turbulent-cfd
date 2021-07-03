@@ -53,8 +53,8 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     Real TI = REAL_MAX;    /* Temperature */
     Real alpha = REAL_MAX; /* Thermal diffusivity */
     Real DP = REAL_MAX;    /* Pressure differential between the two ends */
-    Real KI;
-    Real EPSI;
+    Real KI = REAL_MAX;
+    Real EPSI = REAL_MAX;
     int solver = 0;
     int refine = 0;
     std::unordered_map<int, Real> wall_temps;
@@ -103,6 +103,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
                 if (var == "KI") file >> KI;
                 if (var == "EPSI") file >> EPSI;
                 if (var == "solver") file >> solver;
+                if (var == "model") file >> _turb_model;
                 if (!var.compare(0, 10, "wall_temp_")) {
                     Real temp;
                     file >> temp;
@@ -195,7 +196,6 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     }
 
     global_geometry = refine_geometry(global_geometry, refine, imax, jmax);
-    std::cout << imax << std::endl;
     global_size_x = imax;
     global_size_y = jmax;
     Communication::init_params(&params, imax, jmax);
@@ -213,8 +213,24 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     build_domain(domain, params.size_x, params.size_y);
 
     _grid = Grid(_geom_name, domain, local_geometry);
-    _field = Fields(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, UI, VI, PI, TI, KI, EPSI, alpha, beta,
-                    GX, GY);
+    switch (_turb_model) {
+    case 0: {
+        std::cout << "Turbulence model: off" << std::endl;
+        _field = 
+            std::make_unique<Fields>(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, 
+                                     UI, VI, PI, TI, KI, EPSI, alpha, beta, GX, GY);
+        break;
+    }
+    case 1: {
+        std::cout << "Turbulence model: K-Epsilon" << std::endl;
+        _field = 
+            std::make_unique<TurbulenceFields>(nu, dt, tau, _grid.domain().size_x, _grid.domain().size_y, 
+                                     UI, VI, PI, TI, KI, EPSI, alpha, beta, GX, GY);
+        break;
+    }
+    default:
+        break;
+    }
 
     _discretization = Discretization(domain.dx, domain.dy, gamma);
     _max_iter = itermax;
@@ -244,7 +260,7 @@ Case::Case(std::string file_name, int argn, char **args, Params &params) {
     }
     case 1: {
         _pressure_solver =
-            std::make_unique<PCG>(_grid.imaxb(), _grid.jmaxb(), _grid.dx(), _grid.dy(), _field, _grid, _boundaries);
+            std::make_unique<PCG>(_grid.imaxb(), _grid.jmaxb(), _grid.dx(), _grid.dy(), *_field, _grid, _boundaries);
         break;
     }
     default:
@@ -323,7 +339,7 @@ void Case::set_file_names(std::string file_name) {
  */
 void Case::simulate(Params &params) {
     Real t = 0.0;
-    Real dt = _field.dt();
+    Real dt = _field->dt();
     uint32_t timestep = 0;
     Real output_counter = 0.0;
 
@@ -332,40 +348,40 @@ void Case::simulate(Params &params) {
         if (params.world_rank == 0) logger.progress_bar(t, _t_end);
 
         // Select dt
-        dt = _field.calculate_dt(_grid, _calc_temp);
+        dt = _field->calculate_dt(_grid, _calc_temp);
 
         // Enforce velocity boundary conditions
         for (auto &boundary : _boundaries) {
-            boundary->enforce_uv(_field);
+            boundary->enforce_uv(*_field);
         }
 
         if (_calc_temp) {
             // Enforce temperature boundary conditions
             for (const auto &boundary : _boundaries) {
-                boundary->enforce_t(_field);
+                boundary->enforce_t(*_field);
             }
             // Compute temperatures
-            _field.calculate_temperatures(_grid);
+            _field->calculate_temperatures(_grid);
 
             // Communicate temperatures
-            Communication::communicate(&params, _field.t_matrix());
+            Communication::communicate(&params, _field->t_matrix());
         }
 
         // Compute F & G and enforce boundary conditions
-        _field.calculate_fluxes(_grid, _calc_temp);
+        _field->calculate_fluxes(_grid, _calc_temp);
         for (const auto &boundary : _boundaries) {
-            boundary->enforce_fg(_field);
+            boundary->enforce_fg(*_field);
         }
         // Communicate F and G
-        Communication::communicate(&params, _field.f_matrix());
-        Communication::communicate(&params, _field.g_matrix());
+        Communication::communicate(&params, _field->f_matrix());
+        Communication::communicate(&params, _field->g_matrix());
 
         // Set RHS of PPE
-        _field.calculate_rs(_grid);
+        _field->calculate_rs(_grid);
         // Perform pressure solve
         uint32_t it = 0;
         Real res = REAL_MAX;
-        res = _pressure_solver->solve(_field, _grid, _boundaries, params, _max_iter, _tolerance, it);
+        res = _pressure_solver->solve(*_field, _grid, _boundaries, params, _max_iter, _tolerance, it);
 
        
         // Check if max_iter was reached
@@ -376,20 +392,22 @@ void Case::simulate(Params &params) {
         logger.write_log(timestep, t, dt, it, _max_iter, res);
 
         // Compute u^(n+1) & v^(n+1)
-        _field.calculate_velocities(_grid);
+        _field->calculate_velocities(_grid);
         // Communicate velocities
-        Communication::communicate(&params, _field.u_matrix());
-        Communication::communicate(&params, _field.v_matrix());
+        Communication::communicate(&params, _field->u_matrix());
+        Communication::communicate(&params, _field->v_matrix());
 
-         // Compute turbulent viscosity and set boundary conditions
-        _field.calculate_nu_t(_grid);
-        for (const auto &boundary : _boundaries) {
-            boundary->enforce_nu_t(_field);
+        if(_turb_model == 1) {
+            // Compute turbulent viscosity and set boundary conditions
+            _field->calculate_nu_t(_grid);
+            for (const auto &boundary : _boundaries) {
+                boundary->enforce_nu_t(*_field);
+            }
+            // Communicate turbulence quantities
+            Communication::communicate(&params, _field->nu_t_matrix());
+            Communication::communicate(&params, _field->k_matrix());
+            Communication::communicate(&params, _field->eps_matrix());
         }
-        // Communicate turbulence quantities
-        Communication::communicate(&params, _field.nu_t_matrix());
-        Communication::communicate(&params, _field.k_matrix());
-        Communication::communicate(&params, _field.eps_matrix());
 
         // Output u,v,p
         if (t >= output_counter * _output_freq) {
@@ -466,13 +484,13 @@ void Case::output_vtk(int timestep, Params &params) {
     // Print pressure and place ghost cells
     for (int j = 1; j < _grid.domain().size_y + 1; j++) {
         for (int i = 1; i < _grid.domain().size_x + 1; i++) {
-            Real pressure = _field.p(i, j);
+            Real pressure = _field->p(i, j);
             Pressure->InsertNextTuple(&pressure);
-            Real kval = _field.k(i, j);
+            Real kval = _field->k(i, j);
             KValue->InsertNextTuple(&kval);
-            Real epsval = _field.eps(i, j);
+            Real epsval = _field->eps(i, j);
             EpsValue->InsertNextTuple(&epsval);
-            Real nu_t = _field.nu_t(i, j);
+            Real nu_t = _field->nu_t(i, j);
             TurbViscosity->InsertNextTuple(&nu_t);
             // Insert blank cells at obstacles
             if (_grid.cell(i, j).type() != cell_type::FLUID) {
@@ -488,8 +506,8 @@ void Case::output_vtk(int timestep, Params &params) {
     // Print Velocity from bottom to top
     for (int j = 0; j < _grid.domain().size_y + 1; j++) {
         for (int i = 0; i < _grid.domain().size_x + 1; i++) {
-            vel[0] = (_field.u(i, j) + _field.u(i, j + 1)) * 0.5;
-            vel[1] = (_field.v(i, j) + _field.v(i + 1, j)) * 0.5;
+            vel[0] = (_field->u(i, j) + _field->u(i, j + 1)) * 0.5;
+            vel[1] = (_field->v(i, j) + _field->v(i + 1, j)) * 0.5;
             Velocity->InsertNextTuple(vel);
         }
     }
@@ -513,7 +531,7 @@ void Case::output_vtk(int timestep, Params &params) {
         for (int j = 1; j < _grid.domain().size_y + 1; j++) {
             for (int i = 1; i < _grid.domain().size_x + 1; i++) {
 
-                Real temperature = _field.t(i, j);
+                Real temperature = _field->t(i, j);
                 Temperature->InsertNextTuple(&temperature);
             }
         }

@@ -27,7 +27,6 @@
 #define do_end
 #define block_end
 
-#include "vectorbase.h"
 
 // note - "Int" instead of "N" here, the latter is size!
 template<class Int, class T>

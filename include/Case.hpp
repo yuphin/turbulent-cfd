@@ -54,7 +54,7 @@ class Case {
     /// Solution file outputting frequency
     Real _output_freq;
 
-    Fields _field;
+    std::unique_ptr<Fields> _field;
     Grid _grid;
     Discretization _discretization;
     std::unique_ptr<PressureSolver> _pressure_solver;
@@ -68,6 +68,9 @@ class Case {
 
     /// Whether to include temperatures
     bool _calc_temp = false;
+
+    // Turbulence modeling method
+    int _turb_model = 0;
 
     friend class Logger;
     Logger logger = Logger();

@@ -28,14 +28,7 @@ class Fields {
     Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real KI, Real EPSI, Real _alpha,
            Real _beta, Real _gx, Real _gy);
 
-
-    void calculate_nu_t(Grid &grid);
-
-   void calculate_k_and_epsilon(Grid &grid);
-
-    Real damp_f2(int i, int j);
-
-    Real damp_fnu(int i, int j);
+    virtual ~Fields() = default;
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
@@ -45,7 +38,7 @@ class Fields {
      * @param[in] whether to include temperature related terms
      *
      */
-    void calculate_fluxes(Grid &grid, bool calc_temp);
+    virtual void calculate_fluxes(Grid &grid, bool calc_temp);
 
     /**
      * @brief Right hand side calculations using the fluxes for the pressure
@@ -70,7 +63,7 @@ class Fields {
      * @param[in] grid in which the calculations are done
      *
      */
-    void calculate_temperatures(Grid &grid);
+    virtual void calculate_temperatures(Grid &grid);
 
     /**
      * @brief Adaptive step size calculation using x-velocity condition,
@@ -79,7 +72,9 @@ class Fields {
      * @param[in] grid in which the calculations are done
      * @param[in] whether to include temperatures
      */
-    Real calculate_dt(Grid &grid, bool calc_temp);
+    virtual Real calculate_dt(Grid &grid, bool calc_temp);
+
+    virtual void calculate_nu_t(Grid &grid) {}
 
     /// x-velocity index based access and modify
     Real &u(int i, int j);
@@ -185,4 +180,61 @@ class Fields {
     Real _beta;
     /// thermal diffusivity
     Real _alpha;
+};
+
+class TurbulenceFields : public Fields {
+  public:
+
+    TurbulenceFields() = default;
+
+    /**
+     * @brief Constructor for the fields
+     *
+     * @param[in] kinematic viscosity
+     * @param[in] initial timestep size
+     * @param[in] adaptive timestep coefficient
+     * @param[in] number of cells in x direction
+     * @param[in] number of cells in y direction
+     * @param[in] initial x-velocity
+     * @param[in] initial y-velocity
+     * @param[in] initial pressure
+     *
+     */
+    TurbulenceFields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real KI, Real EPSI, Real _alpha,
+           Real _beta, Real _gx, Real _gy);
+
+    void calculate_nu_t(Grid &grid);
+
+    void calculate_k_and_epsilon(Grid &grid);
+
+    Real damp_f2(int i, int j);
+
+    Real damp_fnu(int i, int j);
+
+    /**
+     * @brief Calculates the convective and diffusive fluxes in x and y
+     * direction based on explicit discretization of the momentum equations
+     *
+     * @param[in] grid in which the fluxes are calculated
+     * @param[in] whether to include temperature related terms
+     *
+     */
+    void calculate_fluxes(Grid &grid, bool calc_temp) override;
+
+    /**
+     * @brief Velocity calculation using pressure values
+     *
+     * @param[in] grid in which the calculations are done
+     *
+     */
+    void calculate_temperatures(Grid &grid) override;
+
+    /**
+     * @brief Adaptive step size calculation using x-velocity condition,
+     * y-velocity condition and CFL condition
+     *
+     * @param[in] grid in which the calculations are done
+     * @param[in] whether to include temperatures
+     */
+    Real calculate_dt(Grid &grid, bool calc_temp) override;
 };
