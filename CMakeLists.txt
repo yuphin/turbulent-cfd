@@ -2,16 +2,15 @@
 cmake_minimum_required(VERSION 3.0)
 # Definition of the Project
 # Later you can access the project variable like ${CFDLAB_SOURCE_DIR}
-project(CFDLAB VERSION 1.0)
+project(CFDLAB VERSION 1.0 LANGUAGES CXX CUDA)
 
 # Definition of the C++ Standard 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-
+set(CMAKE_CUDA_ARCHITECTURES 86)
 add_definitions(-Dsolution_liddriven)
 add_definitions(-Dsolution_energy)
 add_definitions(-Dsolution_parallelization)
-
 # You can find package likes
 # find_package(MPI)
 # Require a package
@@ -51,7 +50,8 @@ endif()
 # Add include directory
 include_directories(include)
 include_directories(${Vulkan_INCLUDE_DIR})
-
+include_directories(${CUDA_INCLUDE_DIRS})
+include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
   set(CMAKE_INSTALL_PREFIX /usr/local )
@@ -62,12 +62,14 @@ endif()
 add_executable(fluidchen src/main.cpp src/Boundary.cpp 
                src/Case.cpp src/Cell.cpp src/Discretization.cpp 
                src/Fields.cpp src/Grid.cpp src/PressureSolver.cpp src/Communication.cpp
-               src/Utilities.cpp src/CPUSolver.cpp src/VulkanSolver.cpp src/VulkanUtils.cpp)
+               src/Utilities.cpp src/CPUSolver.cpp src/VulkanSolver.cpp src/VulkanUtils.cpp src/CUDASolver.cu)
 
 # if you use external libraries you have to link them like 
 target_link_libraries(fluidchen PRIVATE MPI::MPI_CXX)
 target_link_libraries(fluidchen PRIVATE ${VTK_LIBRARIES})
 target_link_libraries(fluidchen PRIVATE ${Vulkan_LIBRARY})
+target_link_libraries(fluidchen ${CUDA_RUNTIME_LIBRARY})
+set_target_properties(fluidchen PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 install(TARGETS fluidchen DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 # If you write tests, you can include your subdirectory (in this case tests) as done here

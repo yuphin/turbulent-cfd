@@ -92,5 +92,9 @@ wall_temp_12         -0.5
 #       number of processes in x and y direction
 #--------------------------------------------
 
-iproc         2
+iproc         1
 jproc         1
+
+solver 1
+
+simulation cuda

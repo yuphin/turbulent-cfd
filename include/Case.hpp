@@ -16,6 +16,7 @@
 #include "Utilities.hpp"
 #include "CPUSolver.hpp"
 #include "VulkanSolver.hpp"
+#include "CUDASolver.hpp"
 
 /**
  * @brief Class to hold and orchestrate the simulation flow.

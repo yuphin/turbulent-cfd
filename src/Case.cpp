@@ -63,6 +63,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     Real alpha = REAL_MAX; /* Thermal diffusivity */
     Real DP = REAL_MAX;    /* Pressure differential between the two ends */
     int pressure_solver = 0;
+    std::string simulation_type;
     std::unordered_map<int, Real> wall_temps;
     std::unordered_map<int, Real> wall_vels;
     std::unordered_map<int, Real> inlet_Us;
@@ -104,6 +105,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
                 if (var == "iproc") file >> params.iproc;
                 if (var == "jproc") file >> params.jproc;
                 if (var == "solver") file >> pressure_solver;
+                if (var == "simulation") file >> simulation_type;
                 if (!var.compare(0, 10, "wall_temp_")) {
                     Real temp;
                     file >> temp;
@@ -135,7 +137,16 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         }
     }
     file.close();
-    _solver = std::make_unique<CPUSolver>();
+    if (simulation_type == "cpu") {
+        _solver = std::make_unique<CPUSolver>();
+    
+    } else if (simulation_type == "cuda") {
+        _solver = std::make_unique<CudaSolver>();
+    
+    } else if (simulation_type == "vulkan") {
+        _solver = std::make_unique<VulkanSolver>();
+        
+    }
     if (params.iproc * params.jproc != params.world_size) {
         if (params.world_rank == 0)
             std::cout << "ERROR: Number of MPI processes doesn't match iproc * jproc! \nAborting... " << std::endl;
@@ -152,10 +163,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         nu = 0.0;
     }
 
-    // Check if this case uses energy equation
-    if (TI != REAL_MAX) {
-        _solver->_calc_temp = true;
-    }
+ 
 
     // Prandtl number = nu / alpha
     if (pr != REAL_MAX) {
@@ -212,6 +220,13 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     _solver->_max_iter = itermax;
     _solver->_tolerance = eps;
     _solver->params = params;
+
+    // Check if this case uses energy equation
+    if (TI != REAL_MAX) {
+        // TODO
+        _solver->_field.calc_temp = true;
+        _solver->_calc_temp = true;
+    }
 
     // Construct boundaries
     if (!_solver->_grid.noslip_wall_cells().empty()) {
@@ -309,6 +324,7 @@ void Simulation::simulate(Params &params) {
         uint32_t it;
         Real res;
         _solver->solve_pressure(res, it);
+        std::cout << it << " ";
         // Check if max_iter was reached
         if (params.world_rank == 0 && it == _solver->_max_iter) {
             logger.max_iter_warning();

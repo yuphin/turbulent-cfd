@@ -65,5 +65,8 @@ VI          0
 #       number of processes in x and y direction
 #--------------------------------------------
 
-iproc         3
-jproc         2
+iproc         1
+jproc         1
+
+solver 1
+simulation cuda

@@ -40,7 +40,6 @@ void VulkanSolver::solve_pressure(Real &res, uint32_t &it) {
         simulation.run_command_buffer(3);
         delta_new = *(Real *)scratch_buffer.data;
     }
-    std::cout << it <<  " ";
 }
 
 void VulkanSolver::solve_post_pressure() {
@@ -447,6 +446,8 @@ void VulkanSolver::record_simulation_step(int command_idx) {
     };
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers.data(), 0, 0);
+    // Compute F & G and enforce boundary conditions
+    simulation.record_command_buffer(fg_boundary_pipeline, command_idx, 32, 32, grid_x, grid_y);
     if (_calc_temp) {
         t_new_buffer.copy(t_old_buffer, command_idx, false);
         simulation.record_command_buffer(boundary_t_branchless, command_idx, 1024, 1, grid_size, 1);
@@ -454,8 +455,6 @@ void VulkanSolver::record_simulation_step(int command_idx) {
         simulation.record_command_buffer(calc_t_pipeline, command_idx, 32, 32, grid_x, grid_y);
         barrier(simulation, t_new_buffer, command_idx);
     }
-    // Compute F & G and enforce boundary conditions
-    simulation.record_command_buffer(fg_boundary_pipeline, command_idx, 32, 32, grid_x, grid_y);
 
     std::array<VkBufferMemoryBarrier, 2> fg_barriers_read = {
         buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
