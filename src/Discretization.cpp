@@ -93,11 +93,10 @@ Real Discretization::convection_uKEPS(const Matrix<Real> &U, const Matrix<Real> 
     Real result = 0.0;
     constexpr int METHOD = 0;
     auto dx = _dx;
-    auto dy = _dy;
     if (METHOD == 0) {
         Real result_fd = (U(i, j) * interpolate(T, i, j, 1, 0) - U(i - 1, j) * interpolate(T, i - 1, j, 1, 0)) / dx;
         Real result_dc =
-            (std::abs(U(i, j)) * diff(T, i, j, 1, 0) - std::abs(U(i - 1, j)) * diff(T, i - 1, j, 1, 0)) / dy;
+            (std::abs(U(i, j)) * diff(T, i, j, 1, 0) - std::abs(U(i - 1, j)) * diff(T, i - 1, j, 1, 0)) / dx;
         result += result_fd + result_dc;
     } else {
         auto idnr = [&](int i, int j) -> Real { return U(i, j) <= 0; };
@@ -109,7 +108,6 @@ Real Discretization::convection_uKEPS(const Matrix<Real> &U, const Matrix<Real> 
 Real Discretization::convection_vKEPS(const Matrix<Real> &V, const Matrix<Real> &T, int i, int j) {
     Real result = 0.0;
     constexpr int METHOD = 0;
-    auto dx = _dx;
     auto dy = _dy;
     if (METHOD == 0) {
         Real result_fd = (V(i, j) * interpolate(T, i, j, 0, 1) - V(i, j - 1) * interpolate(T, i, j - 1, 0, 1)) / dy;
