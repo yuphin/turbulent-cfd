@@ -1,6 +1,6 @@
 #pragma once
 #include "Solver.hpp"
-#define ENABLE_PRECOND 0
+#include "PCGUtils.h"
 struct CudaSolver : public Solver {
     CudaSolver() = default;
     ~CudaSolver();
@@ -15,11 +15,13 @@ struct CudaSolver : public Solver {
     Real *F;
     Real *G;
     Real *P;
+    Real *P_temp;
     Real *T;
     Real *T_temp;
     Real *RS;
     Real *U_residual;
     Real *V_residual;
+    Real *P_residual;
     int *cell_type;
     int *row_start_u;
     int *row_start_v;
@@ -33,7 +35,6 @@ struct CudaSolver : public Solver {
     Real *rhs_vec_u;
     Real *rhs_vec_v;
     Real *rhs_vec_t;
-    Real *rhs_vec_l;
     uint32_t *neighborhood;
 
     Real *A;
@@ -47,6 +48,7 @@ struct CudaSolver : public Solver {
     Real *r_dot_r;
     Real *r_dot_r_old;
     Real *d_dot_q;
+    Real *p_residual_out;
     Real *cg_alpha;
     Real *cg_beta;
     int num_offsets_a;
@@ -62,6 +64,17 @@ struct CudaSolver : public Solver {
     Real *gamma;
     int *calc_temp;
 
+    SparseMatrix<Real> A_pcg;
+    SparseMatrix<Real> U_pcg;
+    SparseMatrix<Real> V_pcg;
+    SparseMatrix<Real> T_pcg;
+    FixedSparseMatrix<Real> U_fixed;
+    FixedSparseMatrix<Real> V_fixed;
+    FixedSparseMatrix<Real> T_fixed;
+    DiagonalSparseMatrix<Real> spai;
+    std::vector<Real> U_RHS;
+    std::vector<Real> V_RHS;
+    std::vector<Real> T_RHS;
     
 
 };

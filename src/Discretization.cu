@@ -104,3 +104,10 @@ __device__  Real laplacian_5(Real ar[5], Real inv_dx, Real inv_dy) {
     Real result = (ar[0] - 2. * ar[1] + ar[2]) * inv_dx2 + (ar[3] - 2. * ar[1] + ar[4]) * inv_dy2;
     return result;
 }
+
+__device__ Real sor_helper(Real ar[4], Real inv_dx, Real inv_dy) {
+    Real inv_dx2 = inv_dx * inv_dx;
+    Real inv_dy2 = inv_dy * inv_dy;
+    Real result = (ar[0] + ar[1]) * inv_dx2 + (ar[2] + ar[3]) * inv_dy2;
+    return result;
+}

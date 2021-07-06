@@ -85,6 +85,6 @@ iproc         1
 jproc         1
 
 
-solver 1
-
-simulation cuda
+solver pcg
+preconditioner 0
+simulation vulkan

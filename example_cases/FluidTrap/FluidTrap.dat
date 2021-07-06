@@ -95,6 +95,18 @@ wall_temp_12         -0.5
 iproc         1
 jproc         1
 
-solver 1
+#--------------------------------------------
+#       solver options:
+#			pcg
+#			sor
+#		preconditioner options:
+#		-1 -> off
+#		simulation options:
+#		vulkan
+#		cuda
+#		cpu
+#--------------------------------------------
 
-simulation cuda
+solver pcg
+preconditioner 0
+simulation cpu

@@ -62,7 +62,7 @@ endif()
 add_executable(fluidchen src/main.cpp src/Boundary.cpp 
                src/Case.cpp src/Cell.cpp src/Discretization.cpp 
                src/Fields.cpp src/Grid.cpp src/PressureSolver.cpp src/Communication.cpp
-               src/Utilities.cpp src/CPUSolver.cpp src/VulkanSolver.cpp src/VulkanUtils.cpp src/CUDASolver.cu)
+               src/Utilities.cpp src/CPUSolver.cpp src/VulkanSolver.cpp src/VulkanUtils.cpp src/CUDASolver.cu src/PCGUtils.cpp)
 
 # if you use external libraries you have to link them like 
 target_link_libraries(fluidchen PRIVATE MPI::MPI_CXX)

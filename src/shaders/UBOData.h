@@ -19,4 +19,5 @@ layout(push_constant) uniform UBOData {
     float VI;
     float tau;
     int num_diags;
+    int num_fluid_cells;
 };

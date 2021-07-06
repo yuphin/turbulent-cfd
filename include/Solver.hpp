@@ -9,7 +9,6 @@
 #include "Domain.hpp"
 #include "Fields.hpp"
 #include "Grid.hpp"
-#include "PressureSolver.hpp"
 #include "Utilities.hpp"
 struct Solver {
     virtual void solve_pre_pressure(Real &dt) = 0;
@@ -25,15 +24,19 @@ struct Solver {
     /// Solver convergence tolerance
     Real _tolerance;
 
+    Real _omega;
+
+    int _preconditioner;
+
     /// Whether to include temperatures
     bool _calc_temp = false;
 
     /// Maximum number of iterations for the solver
     uint32_t _max_iter;
 
+    
     friend class Logger;
     Logger logger = Logger();
-
-    std::unique_ptr<PressureSolver> _pressure_solver;
     Params params;
+    SolverType solver_type;
 };

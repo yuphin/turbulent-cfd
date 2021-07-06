@@ -30,6 +30,8 @@ const int fixed_wall_id = 10;
 const Real wall_velocity = 1.0;
 } // namespace LidDrivenCavity
 
+enum class SolverType { SOR, PCG };
+
 enum class border_position {
     TOP,
     BOTTOM,

@@ -10,7 +10,6 @@
 #define BLK_SIZE 128
 #define BLK_SIZE_2D 32
 
-
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort = true) {
     if (code != cudaSuccess) {
         fprintf(stderr, "GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
@@ -24,7 +23,6 @@ int get_num_blks(int size) { return (size + BLK_SIZE - 1) / BLK_SIZE; }
 dim3 get_num_blks_2d(int size_x, int size_y) {
     return dim3((size_x + BLK_SIZE_2D - 1) / BLK_SIZE_2D, (size_y + BLK_SIZE_2D - 1) / BLK_SIZE_2D);
 }
-
 
 template <typename T> inline void malloc_assign(T *dev_ptr, T val) {
     chk(cudaMalloc(&dev_ptr, sizeof(T)));
@@ -96,12 +94,12 @@ __global__ void scalar_div(Real *num, Real *denom, Real *o) { *o = *num / *denom
 __global__ void scalar_cpy(Real *dst, Real *src) { *dst = *src; }
 
 void solve_pcg(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q, Real *d, Real *r, Real *r_dot_r_old,
-               Real *r_dot_r, Real *z, Real *cg_beta, Real &delta_new, Real *cg_alpha, Real *d_dot_q, bool precondition,
+               Real *r_dot_r, Real *z, Real *cg_beta, Real &delta_new, Real *cg_alpha, Real *d_dot_q, int precondition,
                Real *M, int *M_offsets, int m_num_diag, uint32_t &it, uint32_t max_iter, Real eps, int vec_size) {
     int num_blocks = get_num_blks(vec_size);
     cudaMemcpy(r, b, vec_size * sizeof(Real), cudaMemcpyDeviceToDevice);
     cudaMemset(x, 0, vec_size * sizeof(Real));
-    if (precondition) {
+    if (precondition != -1) {
         spmv_dia<<<num_blocks, BLK_SIZE>>>(M, M_offsets, vec_size, vec_size, m_num_diag, r, d);
         vec_dot_vec<<<num_blocks, BLK_SIZE>>>(r, d, r_dot_r, vec_size);
     } else {
@@ -122,7 +120,7 @@ void solve_pcg(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q,
         // r <- r - cg_alpha * q
         smaxpy<<<num_blocks, BLK_SIZE>>>(cg_alpha, q, r, vec_size);
         scalar_cpy<<<1, 1>>>(r_dot_r_old, r_dot_r);
-        if (precondition) {
+        if (precondition != -1) {
             // z <- M * r
             spmv_dia<<<num_blocks, BLK_SIZE>>>(M, M_offsets, vec_size, vec_size, m_num_diag, r, z);
             vec_dot_vec<<<num_blocks, BLK_SIZE>>>(r, z, r_dot_r, vec_size);
@@ -131,7 +129,7 @@ void solve_pcg(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q,
         }
         // cg_beta <- r_dot_r / r_dot_r_old
         scalar_div<<<1, 1>>>(r_dot_r, r_dot_r_old, cg_beta);
-        if (precondition) {
+        if (precondition != -1) {
             // d <- z + cg_beta * d
             saxpy2<<<num_blocks, BLK_SIZE>>>(cg_beta, z, d, vec_size);
         } else {
@@ -139,9 +137,67 @@ void solve_pcg(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q,
             saxpy2<<<num_blocks, BLK_SIZE>>>(cg_beta, r, d, vec_size);
         }
         it++;
-        if (it % 30) {
-            cudaMemcpy(&delta_new, r_dot_r, sizeof(Real), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&delta_new, r_dot_r, sizeof(Real), cudaMemcpyDeviceToHost);
+    }
+}
+
+__global__ void sor_iter(Real *P, Real *RS, Real coeff, int *cell_type, int imax, int jmax, Real omega, Real inv_dx,
+                         Real inv_dy, int parity) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 0) {
+        return;
+    }
+
+    if (parity == 0 && ((i + j) % 2) == 0) {
+        return;
+    } else if (parity == 1 && ((i + j) % 2) == 1) {
+        return;
+    }
+    Real p_stencil[4] = {at(P, i + 1, j), at(P, i - 1, j), at(P, i, j + 1), at(P, i, j - 1)};
+    at(P, i, j) = (1 - omega) * at(P, i, j) + coeff * (sor_helper(p_stencil, inv_dx, inv_dy) - at(RS, i, j));
+}
+
+__global__ void calc_residual(Real *P, Real *RS, int *cell_type, int imax, int jmax, Real inv_dx, Real inv_dy,
+                              Real *residual) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 0) {
+        return;
+    }
+
+    Real rloc = 0;
+    Real p_laplacian[5] = {at(P, i + 1, j), at(P, i, j), at(P, i - 1, j), at(P, i, j + 1), at(P, i, j - 1)};
+
+    Real val = laplacian_5(p_laplacian, inv_dx, inv_dy) - at(RS, i, j);
+    rloc += val * val;
+    at(residual, i, j) = rloc;
+}
+
+__global__ void reduce_residual(Real *residual, Real *o, int size) {
+    __shared__ Real sdata[BLK_SIZE];
+    uint32_t tid = threadIdx.x;
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i == 0) {
+        *o = 0;
+    }
+    if (i < size) {
+        sdata[tid] = residual[i];
+    } else {
+        sdata[tid] = 0;
+    }
+    __syncthreads();
+    for (int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sdata[tid] = sdata[tid] + sdata[tid + s];
         }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        atomicAdd(o, sdata[0]);
     }
 }
 
@@ -196,21 +252,21 @@ __global__ void reduce_abs_max(Real *input, Real *output, int size) {
     extern __shared__ Real sdata[];
     uint32_t tid = threadIdx.x;
     uint32_t i = blockIdx.x * blockDim.x * 2 + threadIdx.x;
-    Real curr_max = (i < size) ? input[i] : 0;
+    Real curr_max = (i < size) ? fabsf(input[i]) : 0;
     if (i + blockDim.x < size) {
-        curr_max = fmaxf(curr_max, fabs(input[i + blockDim.x]));
+        curr_max = fmaxf(curr_max, fabsf(input[i + blockDim.x]));
     }
     sdata[tid] = curr_max;
     __syncthreads();
     for (uint32_t s = blockDim.x / 2; s > 0; s >>= 1) {
         if (tid < s) {
-            sdata[tid] = fmax(curr_max, sdata[tid + s]);
+            sdata[tid] = fmaxf(sdata[tid], sdata[tid + s]);
         }
         __syncthreads();
     }
 
     if (tid == 0) {
-        output[blockIdx.x] = sdata[tid];
+        output[blockIdx.x] = sdata[0];
     }
 }
 
@@ -299,6 +355,83 @@ __global__ void fg_boundary(Real *f, Real *g, Real *u, Real *v, int imax, int jm
     }
 }
 
+__global__ void p_boundary(Real *p, int imax, int jmax, uint32_t *neighborhood, int *cell_type, Real PI) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 1) {
+        return;
+    }
+    uint32_t type = at(neighborhood, i, j) >> 8;
+    uint32_t neighbors = at(neighborhood, i, j) & 0xFF;
+    if (type == 0) { // Outlet
+        at(p, i, j) = PI;
+    } else {
+        int diag = 0;
+        if ((neighbors & 0x10) == 16) { // Right + top
+            diag = 1;
+            at(p, i, j) = (at(p, i + 1, j) + at(p, i, j + 1)) / 2;
+        }
+        if ((neighbors & 0x20) == 32) { // Right + bottom
+            diag = 1;
+            at(p, i, j) = (at(p, i + 1, j) + at(p, i, j - 1)) / 2;
+        }
+        if ((neighbors & 0x40) == 64) { // Left + top
+            diag = 1;
+            at(p, i, j) = (at(p, i - 1, j) + at(p, i, j + 1)) / 2;
+        }
+        if ((neighbors & 0x80) == 128) { // Left + bottom
+            diag = 1;
+            at(p, i, j) = (at(p, i - 1, j) + at(p, i, j - 1)) / 2;
+        }
+        if (!diag) {
+            if ((neighbors & 0x1) == 1) { // Right
+                at(p, i, j) = at(p, i + 1, j);
+            }
+            if ((neighbors & 0x2) == 2) { // Left
+                at(p, i, j) = at(p, i - 1, j);
+            }
+            if ((neighbors & 0x4) == 4) { // Top
+                at(p, i, j) = at(p, i, j + 1);
+            }
+            if ((neighbors & 0x8) == 8) { // Bottom
+                at(p, i, j) = at(p, i, j - 1);
+            }
+        }
+    }
+}
+
+void solve_sor(Real *P, Real *P_tmp, Real *P_residual, Real *P_residual_out, uint32_t *neighborhood, int imax, int jmax,
+               Real *RS, int *cell_type, uint32_t &it, uint32_t max_iter, Real dx, Real dy, Real PI, Real tolerance,
+               Real &res, int num_fluid_cells) {
+    it = 0;
+    const Real omega = 1.7;
+    auto grid_size = imax * jmax;
+    Real coeff = omega / (2 * (1 / (dx * dx) + 1 / (dy * dy)));
+    dim3 blk_size_2d(BLK_SIZE_2D, BLK_SIZE_2D);
+    dim3 num_blks_2d = get_num_blks_2d(imax, jmax);
+    int num_blks_1d(get_num_blks(grid_size));
+    Real inv_dx = 1 / dx;
+    Real inv_dy = 1 / dy;
+    res = REAL_MAX;
+    while (it < max_iter && res > tolerance) {
+        sor_iter<<<num_blks_2d, blk_size_2d>>>(P, RS, coeff, cell_type, imax, jmax, omega, inv_dx, inv_dy, 0);
+        sor_iter<<<num_blks_2d, blk_size_2d>>>(P, RS, coeff, cell_type, imax, jmax, omega, inv_dx, inv_dy, 1);
+        /* std::vector<Real> Pcpu2(grid_size);
+         cudaMemcpy(Pcpu2.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost);*/
+
+        cudaMemset(P_residual, 0, grid_size * sizeof(Real));
+        calc_residual<<<num_blks_2d, blk_size_2d>>>(P, RS, cell_type, imax, jmax, inv_dx, inv_dy, P_residual);
+        reduce_residual<<<num_blks_1d, BLK_SIZE>>>(P_residual, P_residual_out, grid_size);
+        p_boundary<<<num_blks_2d, blk_size_2d>>>(P, imax, jmax, neighborhood, cell_type, PI);
+        cudaMemcpy(&res, P_residual_out, sizeof(Real), cudaMemcpyDeviceToHost);
+        /*   std::vector<Real> Pcpu1(grid_size);
+           cudaMemcpy(Pcpu1.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost);*/
+        res = std::sqrt(res / num_fluid_cells);
+        it++;
+    }
+}
+
 __global__ void calc_rs(Real *f, Real *g, Real *rs, Real dx, Real dy, int imax, int jmax, Real dt, int *cell_type) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -328,16 +461,21 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
 
     Real dx2 = dx * dx;
     Real dy2 = dy * dy;
+    int smemsize = min(BLK_SIZE, size);
+    std::vector<Real> ucpu(imax * jmax);
+    std::vector<Real> vcpu(imax * jmax);
+    std::vector<Real> ures(imax * jmax);
+    std::vector<Real> vres(imax * jmax);
 
-    reduce_abs_max<<<num_blks, BLK_SIZE, num_blks * sizeof(Real)>>>(u, u_residual, size);
-    reduce_abs_max<<<num_blks, BLK_SIZE, num_blks * sizeof(Real)>>>(v, v_residual, size);
+    reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(u, u_residual, size);
+    reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(v, v_residual, size);
     while (num_blks != 1) {
         size = ceil(size / float(BLK_SIZE));
+        smemsize = min(BLK_SIZE, size);
         num_blks = get_num_blks(size);
-        reduce_abs_max<<<num_blks, BLK_SIZE, num_blks * sizeof(Real)>>>(u, u_residual, size);
-        reduce_abs_max<<<num_blks, BLK_SIZE, num_blks * sizeof(Real)>>>(v, v_residual, size);
+        reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(u_residual, u_residual, size);
+        reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(v_residual, v_residual, size);
     }
-
     cudaMemcpy(&u_max_abs, u_residual, sizeof(Real), cudaMemcpyDeviceToHost);
     cudaMemcpy(&v_max_abs, v_residual, sizeof(Real), cudaMemcpyDeviceToHost);
     Real min_cond = std::min(dx / u_max_abs, dy / v_max_abs);
@@ -359,6 +497,8 @@ void CudaSolver::initialize() {
     auto grid_x = _grid.imaxb();
     auto grid_y = _grid.jmaxb();
     auto grid_size = grid_x * grid_y;
+    build_pcg_matrix(_field, _grid, _boundaries, A_pcg, U_pcg, V_pcg, T_pcg, U_RHS, V_RHS, T_RHS, U_fixed, V_fixed,
+                     T_fixed);
     // Preprocess
     std::vector<int> is_fluid(_grid.imaxb() * _grid.jmaxb(), 0);
     for (const auto &current_cell : _grid.fluid_cells()) {
@@ -369,10 +509,8 @@ void CudaSolver::initialize() {
 
     std::vector<BoundaryData> neighbors(_grid.imaxb() * _grid.jmaxb());
     for (const auto &boundary : _boundaries) {
-        BoundaryData data;
         uint32_t type = boundary->get_type();
         auto cells = boundary->_cells;
-        data.neighborhood |= type << 8;
         for (auto &cell : *cells) {
             int i = cell->i();
             int j = cell->j();
@@ -381,66 +519,76 @@ void CudaSolver::initialize() {
             data.neighborhood |= type << 8;
             // data.idx = _grid.imaxb() * j + i;
             if (cell->is_border(border_position::RIGHT)) {
-                data.neighborhood |= data.neighborhood | 1;
+                data.neighborhood |= 1;
             }
             if (cell->is_border(border_position::LEFT)) {
-                data.neighborhood |= data.neighborhood | 2;
+                data.neighborhood |= 2;
             }
             if (cell->is_border(border_position::TOP)) {
-                data.neighborhood |= data.neighborhood | 4;
+                data.neighborhood |= 4;
             }
             if (cell->is_border(border_position::BOTTOM)) {
-                data.neighborhood |= data.neighborhood | 8;
+                data.neighborhood |= 8;
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                data.neighborhood |= 16;
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                data.neighborhood |= 32;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                data.neighborhood |= 64;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                data.neighborhood |= 128;
             }
             neighbors[j * _grid.imaxb() + i] = data;
         }
     }
     DiagonalSparseMatrix<Real> A_matrix_diag =
-        create_diagonal_matrix(static_cast<PCG *>(_pressure_solver.get())->A, _grid.imaxb(), _grid.jmaxb(),
-                               {-_grid.imaxb(), -1, 0, 1, _grid.imaxb()});
+        create_diagonal_matrix(A_pcg, _grid.imaxb(), _grid.jmaxb(), {-_grid.imaxb(), -1, 0, 1, _grid.imaxb()});
     DiagonalSparseMatrix<Real> A_precond_diag;
-    auto pcg_solver = (PCG *)_pressure_solver.get();
-    if (ENABLE_PRECOND) {
-        A_precond_diag =
-            create_preconditioner_spai(static_cast<PCG *>(_pressure_solver.get())->A, _grid.imaxb(), _grid.jmaxb());
+    if (_preconditioner != -1) {
+        A_precond_diag = create_preconditioner_spai(A_pcg, _grid, _preconditioner);
     }
     num_offsets_a = A_matrix_diag.offsets.size();
     num_offsets_m = A_precond_diag.offsets.size();
-    auto t_matrix_data = pcg_solver->T_fixed.value.data();
-    auto t_matrix_size = pcg_solver->T_fixed.value.size();
-    auto t_row_start_data = pcg_solver->T_fixed.rowstart.data();
-    auto t_row_start_size = pcg_solver->T_fixed.rowstart.size();
-    auto t_col_idx_data = pcg_solver->T_fixed.colindex.data();
-    auto t_col_idx_size = pcg_solver->T_fixed.colindex.size();
-    auto t_rhs_data = pcg_solver->T_RHS.data();
-    auto t_rhs_size = pcg_solver->T_RHS.size();
-    auto u_matrix_data = pcg_solver->U_fixed.value.data();
-    auto u_matrix_size = pcg_solver->U_fixed.value.size();
-    auto v_matrix_data = pcg_solver->V_fixed.value.data();
-    auto v_matrix_size = pcg_solver->V_fixed.value.size();
-    auto u_row_start_data = pcg_solver->U_fixed.rowstart.data();
-    auto u_row_start_size = pcg_solver->U_fixed.rowstart.size();
-    auto u_col_idx_data = pcg_solver->U_fixed.colindex.data();
-    auto u_col_idx_size = pcg_solver->U_fixed.colindex.size();
-    auto v_row_start_data = pcg_solver->V_fixed.rowstart.data();
-    auto v_row_start_size = pcg_solver->V_fixed.rowstart.size();
-    auto v_col_idx_data = pcg_solver->V_fixed.colindex.data();
-    auto v_col_idx_size = pcg_solver->V_fixed.colindex.size();
-    auto u_rhs_data = pcg_solver->U_RHS.data();
-    auto u_rhs_size = pcg_solver->U_RHS.size();
-    auto v_rhs_data = pcg_solver->V_RHS.data();
-    auto v_rhs_size = pcg_solver->V_RHS.size();
+    auto t_matrix_data = T_fixed.value.data();
+    auto t_matrix_size = T_fixed.value.size();
+    auto t_row_start_data = T_fixed.rowstart.data();
+    auto t_row_start_size = T_fixed.rowstart.size();
+    auto t_col_idx_data = T_fixed.colindex.data();
+    auto t_col_idx_size = T_fixed.colindex.size();
+    auto t_rhs_data = T_RHS.data();
+    auto t_rhs_size = T_RHS.size();
+    auto u_matrix_data = U_fixed.value.data();
+    auto u_matrix_size = U_fixed.value.size();
+    auto v_matrix_data = V_fixed.value.data();
+    auto v_matrix_size = V_fixed.value.size();
+    auto u_row_start_data = U_fixed.rowstart.data();
+    auto u_row_start_size = U_fixed.rowstart.size();
+    auto u_col_idx_data = U_fixed.colindex.data();
+    auto u_col_idx_size = U_fixed.colindex.size();
+    auto v_row_start_data = V_fixed.rowstart.data();
+    auto v_row_start_size = V_fixed.rowstart.size();
+    auto v_col_idx_data = V_fixed.colindex.data();
+    auto v_col_idx_size = V_fixed.colindex.size();
+    auto u_rhs_data = U_RHS.data();
+    auto u_rhs_size = U_RHS.size();
+    auto v_rhs_data = V_RHS.data();
+    auto v_rhs_size = V_RHS.size();
 
     cudaMalloc(&U, grid_size * sizeof(Real));
     cudaMalloc(&V, grid_size * sizeof(Real));
     cudaMalloc(&F, grid_size * sizeof(Real));
     cudaMalloc(&G, grid_size * sizeof(Real));
     cudaMalloc(&P, grid_size * sizeof(Real));
+    cudaMalloc(&P_temp, grid_size * sizeof(Real));
 
- 
     cudaMalloc(&RS, grid_size * sizeof(Real));
     cudaMalloc(&U_residual, grid_size * sizeof(Real));
     cudaMalloc(&V_residual, grid_size * sizeof(Real));
+    cudaMalloc(&P_residual, grid_size * sizeof(Real));
     cudaMalloc(&cell_type, grid_size * sizeof(int));
     cudaMalloc(&row_start_u, u_row_start_size * sizeof(int));
     cudaMalloc(&row_start_v, v_row_start_size * sizeof(int));
@@ -455,7 +603,7 @@ void CudaSolver::initialize() {
 
     cudaMalloc(&A, A_matrix_diag.data.size() * sizeof(Real));
     cudaMalloc(&A_offsets, A_matrix_diag.offsets.size() * sizeof(uint32_t));
-    if (ENABLE_PRECOND) {
+    if (_preconditioner != -1) {
         cudaMalloc(&M, A_precond_diag.data.size() * sizeof(Real));
         cudaMalloc(&M_offsets, A_precond_diag.offsets.size() * sizeof(uint32_t));
     }
@@ -466,6 +614,7 @@ void CudaSolver::initialize() {
     cudaMalloc(&r_dot_r, sizeof(Real));
     cudaMalloc(&r_dot_r_old, sizeof(Real));
     cudaMalloc(&d_dot_q, sizeof(Real));
+    cudaMalloc(&p_residual_out, sizeof(Real));
     cudaMalloc(&cg_alpha, sizeof(Real));
     cudaMalloc(&cg_beta, sizeof(Real));
 
@@ -498,9 +647,9 @@ void CudaSolver::initialize() {
         cudaMemcpy(col_idx_t, t_col_idx_data, t_col_idx_size * sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(rhs_vec_t, t_rhs_data, t_rhs_size * sizeof(Real), cudaMemcpyHostToDevice);
         chk(cudaMemcpy(T, _field._T._container.data(), grid_size * sizeof(Real), cudaMemcpyHostToDevice));
-    } 
-    
-    if (ENABLE_PRECOND) {
+    }
+
+    if (_preconditioner != -1) {
         chk(cudaMemcpy(M, A_precond_diag.data.data(), A_precond_diag.data.size() * sizeof(Real),
                        cudaMemcpyHostToDevice));
         chk(cudaMemcpy(M_offsets, A_precond_diag.offsets.data(), A_precond_diag.offsets.size() * sizeof(int),
@@ -517,7 +666,6 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
     dt = calculate_dt(_grid.imaxb(), _grid.jmaxb(), U, V, U_residual, V_residual, _grid.dx(), _grid.dy(), _field._tau,
                       _field._nu, _field._alpha, _calc_temp);
-
     _field._dt = dt;
 
     uv_boundary(U, V, row_start_u, row_start_v, col_idx_u, col_idx_v, mat_u, mat_v, rhs_vec_u, rhs_vec_v, grid_size);
@@ -535,8 +683,19 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
 }
 
 void CudaSolver::solve_pressure(Real &res, uint32_t &it) {
-    solve_pcg(A, A_offsets, num_offsets_a, P, RS, q, d, r, r_dot_r_old, r_dot_r, z, cg_beta, res, cg_alpha, d_dot_q,
-              ENABLE_PRECOND, M, M_offsets, num_offsets_m, it, _max_iter, _tolerance, _grid.imaxb() * _grid.jmaxb());
+    if (solver_type == SolverType::PCG) {
+        auto grid_x = _grid.imaxb();
+        auto grid_y = _grid.jmaxb();
+        auto grid_size = grid_x * grid_y;
+        int num_blks(get_num_blks(grid_size));
+        solve_pcg(A, A_offsets, num_offsets_a, P, RS, q, d, r, r_dot_r_old, r_dot_r, z, cg_beta, res, cg_alpha, d_dot_q,
+                  _preconditioner, M, M_offsets, num_offsets_m, it, _max_iter, _tolerance,
+                  _grid.imaxb() * _grid.jmaxb());
+        negate_p<<<num_blks, BLK_SIZE>>>(P, grid_size);
+    } else if (solver_type == SolverType::SOR) {
+        solve_sor(P, P_temp, P_residual, p_residual_out, neighborhood, _grid.imaxb(), _grid.jmaxb(), RS, cell_type, it,
+                  _max_iter, _grid.dx(), _grid.dy(), _field._PI, _tolerance, res, _grid.fluid_cells().size()); 
+    }
 }
 
 void CudaSolver::solve_post_pressure() {
@@ -546,8 +705,6 @@ void CudaSolver::solve_post_pressure() {
     int num_blks(get_num_blks(grid_size));
     dim3 blk_size_2d(BLK_SIZE_2D, BLK_SIZE_2D);
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
-    negate_p<<<num_blks, BLK_SIZE>>>(P, grid_size);
-
     calc_vel<<<num_blks_2d, blk_size_2d>>>(U, V, P, F, G, cell_type, _field._dt, grid_x, grid_y, _grid.dx(),
                                            _grid.dy());
     chk(cudaMemcpy(_field._U._container.data(), U, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
@@ -569,8 +726,10 @@ CudaSolver::~CudaSolver() {
     cudaFree(RS);
     cudaFree(U_residual);
     cudaFree(V_residual);
+    cudaFree(P_residual);
     cudaFree(cell_type);
     cudaFree(P);
+    cudaFree(P_temp);
     cudaFree(row_start_u);
     cudaFree(row_start_v);
     cudaFree(row_start_t);
@@ -586,7 +745,7 @@ CudaSolver::~CudaSolver() {
     cudaFree(neighborhood);
     cudaFree(A);
     cudaFree(A_offsets);
-    if (ENABLE_PRECOND) {
+    if (_preconditioner != -1) {
         cudaFree(M);
         cudaFree(M_offsets);
     }
@@ -597,6 +756,7 @@ CudaSolver::~CudaSolver() {
     cudaFree(r_dot_r);
     cudaFree(r_dot_r_old);
     cudaFree(d_dot_q);
+    cudaFree(p_residual_out);
     cudaFree(cg_alpha);
     cudaFree(cg_beta);
 }

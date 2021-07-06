@@ -1,5 +1,4 @@
 #include "VulkanSolver.hpp"
-#define ENABLE_PRECOND 0
 
 void VulkanSolver::solve_pre_pressure(Real &dt) {
     simulation.run_command_buffer(0);
@@ -7,38 +6,50 @@ void VulkanSolver::solve_pre_pressure(Real &dt) {
 }
 
 void VulkanSolver::solve_pressure(Real &res, uint32_t &it) {
-    Real delta_new = *(Real *)scratch_buffer.data;
-    Real delta_old = delta_new;
-    Real delta_zero = delta_new;
-    Real cond = _tolerance * _tolerance * delta_zero;
-    uint8_t sem_idx = 0;
-    VkBufferCopy copy_region;
-    copy_region.srcOffset = 0;
-    copy_region.dstOffset = 0;
-    copy_region.size = deltas_buffer.size;
-    it = 0;
-    while (it < _max_iter && delta_new > cond) {
-        for (int i = 0; i < 35; i++) {
-            VkSubmitInfo submit_info = {};
-            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submit_info.commandBufferCount = 1;
-            submit_info.pCommandBuffers = &simulation.context.command_buffer[1];
-            submit_info.pWaitSemaphores = i == 0 ? 0 : &simulation.semaphores[sem_idx];
-            submit_info.pSignalSemaphores = &simulation.semaphores[sem_idx ^ 1];
-            VK_CHECK(vkQueueSubmit(simulation.context.compute_queue, 1, &submit_info, simulation.fences[i]));
-            sem_idx ^= 1;
+    if (solver_type == SolverType::PCG) {
+        Real delta_new = *(Real *)scratch_buffer.data;
+        Real delta_old = delta_new;
+        Real delta_zero = delta_new;
+        Real cond = _tolerance * _tolerance * delta_zero;
+        uint8_t sem_idx = 0;
+        VkBufferCopy copy_region;
+        copy_region.srcOffset = 0;
+        copy_region.dstOffset = 0;
+        copy_region.size = deltas_buffer.size;
+        it = 0;
+        while (it < _max_iter && delta_new > cond) {
+            for (int i = 0; i < 35; i++) {
+                VkSubmitInfo submit_info = {};
+                submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                submit_info.commandBufferCount = 1;
+                submit_info.pCommandBuffers = &simulation.context.command_buffer[1];
+                submit_info.pWaitSemaphores = i == 0 ? 0 : &simulation.semaphores[sem_idx];
+                submit_info.pSignalSemaphores = &simulation.semaphores[sem_idx ^ 1];
+                VK_CHECK(vkQueueSubmit(simulation.context.compute_queue, 1, &submit_info, simulation.fences[i]));
+                sem_idx ^= 1;
+            }
+            it += 35;
+            vkWaitForFences(simulation.context.device, simulation.fences.size(), simulation.fences.data(), true,
+                            100000000000);
+            vkResetFences(simulation.context.device, simulation.fences.size(), simulation.fences.data());
+            simulation.begin_recording(3, 0);
+            barrier(simulation, deltas_buffer, 3, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
+            vkCmdCopyBuffer(simulation.context.command_buffer[3], deltas_buffer.handle, scratch_buffer.handle, 1,
+                            &copy_region);
+            simulation.end_recording(3);
+            simulation.run_command_buffer(3);
+            delta_new = *(Real *)scratch_buffer.data;
         }
-        it += 35;
-        vkWaitForFences(simulation.context.device, simulation.fences.size(), simulation.fences.data(), true,
-                        100000000000);
-        vkResetFences(simulation.context.device, simulation.fences.size(), simulation.fences.data());
-        simulation.begin_recording(3, 0);
-        barrier(simulation, deltas_buffer, 3, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-        vkCmdCopyBuffer(simulation.context.command_buffer[3], deltas_buffer.handle, scratch_buffer.handle, 1,
-                        &copy_region);
-        simulation.end_recording(3);
-        simulation.run_command_buffer(3);
-        delta_new = *(Real *)scratch_buffer.data;
+        res = delta_new;
+    } else if (solver_type == SolverType::SOR) {
+        it = 0;
+        res = REAL_MAX;
+
+        while (it < _max_iter && res > _tolerance) {
+            simulation.run_command_buffer(1);
+            res = *(Real *)scratch_buffer.data;
+            it++;
+        }
     }
 }
 
@@ -60,7 +71,7 @@ void VulkanSolver::initialize() {
     auto grid_x = _grid.imaxb();
     auto grid_y = _grid.jmaxb();
     auto grid_size = grid_x * grid_y;
-
+    build_pcg_matrix(_field, _grid, _boundaries, A, U, V, T, U_RHS, V_RHS, T_RHS, U_fixed, V_fixed, T_fixed);
     std::vector<Real> is_fluid(_grid.imaxb() * _grid.jmaxb(), 0);
     for (const auto &current_cell : _grid.fluid_cells()) {
         int i = current_cell->i();
@@ -68,12 +79,10 @@ void VulkanSolver::initialize() {
         is_fluid[_grid.imaxb() * j + i] = 1;
     }
     // Preprocess
-    std::vector<BoundaryData> boundaries(_grid.imaxb() * _grid.jmaxb());
+    std::vector<BoundaryData> neighbors(_grid.imaxb() * _grid.jmaxb());
     for (const auto &boundary : _boundaries) {
-        BoundaryData data;
         uint32_t type = boundary->get_type();
         auto cells = boundary->_cells;
-        data.neighborhood |= type << 8;
         for (auto &cell : *cells) {
             int i = cell->i();
             int j = cell->j();
@@ -82,24 +91,34 @@ void VulkanSolver::initialize() {
             data.neighborhood |= type << 8;
             // data.idx = _grid.imaxb() * j + i;
             if (cell->is_border(border_position::RIGHT)) {
-                data.neighborhood |= data.neighborhood | 1;
+                data.neighborhood |= 1;
             }
             if (cell->is_border(border_position::LEFT)) {
-                data.neighborhood |= data.neighborhood | 2;
+                data.neighborhood |= 2;
             }
             if (cell->is_border(border_position::TOP)) {
-                data.neighborhood |= data.neighborhood | 4;
+                data.neighborhood |= 4;
             }
             if (cell->is_border(border_position::BOTTOM)) {
-                data.neighborhood |= data.neighborhood | 8;
+                data.neighborhood |= 8;
             }
-            boundaries[j * _grid.imaxb() + i] = data;
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
+                data.neighborhood |= 16;
+            }
+            if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
+                data.neighborhood |= 32;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
+                data.neighborhood |= 64;
+            }
+            if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
+                data.neighborhood |= 128;
+            }
+            neighbors[j * _grid.imaxb() + i] = data;
         }
     }
-
     DiagonalSparseMatrix<Real> A_matrix_diag =
-        create_diagonal_matrix(static_cast<PCG *>(_pressure_solver.get())->A, _grid.imaxb(), _grid.jmaxb(),
-                               {-_grid.imaxb(), -1, 0, 1, _grid.imaxb()});
+        create_diagonal_matrix(A, _grid.imaxb(), _grid.jmaxb(), {-_grid.imaxb(), -1, 0, 1, _grid.imaxb()});
     DiagonalSparseMatrix<Real> A_precond_diag;
 
     UBOData data = {_grid.imaxb(),
@@ -120,10 +139,11 @@ void VulkanSolver::initialize() {
                     _field._PI,
                     _field._UI,
                     _field._VI,
-                    _field._tau};
-    if (ENABLE_PRECOND) {
-        A_precond_diag =
-            create_preconditioner_spai(static_cast<PCG *>(_pressure_solver.get())->A, _grid.imaxb(), _grid.jmaxb());
+                    _field._tau,
+                    0,
+                    _grid.fluid_cells().size()};
+    if (_preconditioner != -1) {
+        A_precond_diag = create_preconditioner_spai(A, _grid, _preconditioner);
         data.num_diags = A_precond_diag.num_diags;
     }
     simulation.init(data);
@@ -151,13 +171,14 @@ void VulkanSolver::initialize() {
     saxpy_2_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 2);
     vec_dot_vec_0_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 0);
     vec_dot_vec_1_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 1);
-#if ENABLE_PRECOND
-    vec_dot_vec_2_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 2);
-    spmv_m_pipeline = simulation.create_compute_pipeline("src/shaders/spmv.comp.spv", 1);
-    saxpy_3_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 3);
-#endif
+    if (_preconditioner != -1) {
+        vec_dot_vec_2_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 2);
+        spmv_m_pipeline = simulation.create_compute_pipeline("src/shaders/spmv.comp.spv", 1);
+        saxpy_3_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 3);
+    }
     div_pipeline = simulation.create_compute_pipeline("src/shaders/div.comp.spv", 0);
     div_store_pipeline = simulation.create_compute_pipeline("src/shaders/div.comp.spv", 1);
+    sqrt_residual_pipeline = simulation.create_compute_pipeline("src/shaders/div.comp.spv", 2);
     reduce_pipeline = simulation.create_compute_pipeline("src/shaders/reduce.comp.spv", 0);
     inc_pipeline = simulation.create_compute_pipeline("src/shaders/increment.comp.spv");
     negate_pipeline = simulation.create_compute_pipeline("src/shaders/negate.comp.spv");
@@ -176,7 +197,7 @@ void VulkanSolver::initialize() {
 
     neighborhood_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
-                               boundaries.size() * sizeof(BoundaryData), boundaries.data(), true);
+                               neighbors.size() * sizeof(BoundaryData), neighbors.data(), true);
     u_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
                     _field.u_matrix().size() * sizeof(Real), _field._U._container.data(), true);
@@ -189,16 +210,10 @@ void VulkanSolver::initialize() {
     g_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                     VK_SHARING_MODE_EXCLUSIVE, _field.g_matrix().size() * sizeof(Real), _field._G._container.data(),
                     true);
-
-    // residual_buffer.create(&simulation.context,
-    //                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-    //                           VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-    //                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-    //                       VK_SHARING_MODE_EXCLUSIVE, 32 * sizeof(Real));
-    residual_buffer.create(
-        &simulation.context,
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, ceil(grid_size / 32) * sizeof(Real));
+    residual_buffer.create(&simulation.context,
+                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, grid_size * sizeof(Real));
 
     rs_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, _field._RS.size() * sizeof(Real),
@@ -211,7 +226,7 @@ void VulkanSolver::initialize() {
                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                           VK_SHARING_MODE_EXCLUSIVE, _field._P.size() * sizeof(Real));
 
-    if (ENABLE_PRECOND) {
+    if (_preconditioner != -1) {
         m_data_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
                              A_precond_diag.data.size() * sizeof(Real), A_precond_diag.data.data(), true);
@@ -256,23 +271,22 @@ void VulkanSolver::initialize() {
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                      VK_SHARING_MODE_EXCLUSIVE, sizeof(Real));
 
-    auto pcg_solver = (PCG *)_pressure_solver.get();
-    auto u_matrix_data = pcg_solver->U_fixed.value.data();
-    auto u_matrix_size = pcg_solver->U_fixed.value.size();
-    auto v_matrix_data = pcg_solver->V_fixed.value.data();
-    auto v_matrix_size = pcg_solver->V_fixed.value.size();
-    auto u_row_start_data = pcg_solver->U_fixed.rowstart.data();
-    auto u_row_start_size = pcg_solver->U_fixed.rowstart.size();
-    auto u_col_idx_data = pcg_solver->U_fixed.colindex.data();
-    auto u_col_idx_size = pcg_solver->U_fixed.colindex.size();
-    auto v_row_start_data = pcg_solver->V_fixed.rowstart.data();
-    auto v_row_start_size = pcg_solver->V_fixed.rowstart.size();
-    auto v_col_idx_data = pcg_solver->V_fixed.colindex.data();
-    auto v_col_idx_size = pcg_solver->V_fixed.colindex.size();
-    auto u_rhs_data = pcg_solver->U_RHS.data();
-    auto u_rhs_size = pcg_solver->U_RHS.size();
-    auto v_rhs_data = pcg_solver->V_RHS.data();
-    auto v_rhs_size = pcg_solver->V_RHS.size();
+    auto u_matrix_data = U_fixed.value.data();
+    auto u_matrix_size = U_fixed.value.size();
+    auto v_matrix_data = V_fixed.value.data();
+    auto v_matrix_size = V_fixed.value.size();
+    auto u_row_start_data = U_fixed.rowstart.data();
+    auto u_row_start_size = U_fixed.rowstart.size();
+    auto u_col_idx_data = U_fixed.colindex.data();
+    auto u_col_idx_size = U_fixed.colindex.size();
+    auto v_row_start_data = V_fixed.rowstart.data();
+    auto v_row_start_size = V_fixed.rowstart.size();
+    auto v_col_idx_data = V_fixed.colindex.data();
+    auto v_col_idx_size = V_fixed.colindex.size();
+    auto u_rhs_data = U_RHS.data();
+    auto u_rhs_size = U_RHS.size();
+    auto v_rhs_data = V_RHS.data();
+    auto v_rhs_size = V_RHS.size();
 
     u_boundary_matrix_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
@@ -294,14 +308,14 @@ void VulkanSolver::initialize() {
                        VK_SHARING_MODE_EXCLUSIVE, v_col_idx_size * sizeof(int), v_col_idx_data, true);
 
     if (_calc_temp) {
-        auto t_matrix_data = pcg_solver->T_fixed.value.data();
-        auto t_matrix_size = pcg_solver->T_fixed.value.size();
-        auto t_row_start_data = pcg_solver->T_fixed.rowstart.data();
-        auto t_row_start_size = pcg_solver->T_fixed.rowstart.size();
-        auto t_col_idx_data = pcg_solver->T_fixed.colindex.data();
-        auto t_col_idx_size = pcg_solver->T_fixed.colindex.size();
-        auto t_rhs_data = pcg_solver->T_RHS.data();
-        auto t_rhs_size = pcg_solver->T_RHS.size();
+        auto t_matrix_data = T_fixed.value.data();
+        auto t_matrix_size = T_fixed.value.size();
+        auto t_row_start_data = T_fixed.rowstart.data();
+        auto t_row_start_size = T_fixed.rowstart.size();
+        auto t_col_idx_data = T_fixed.colindex.data();
+        auto t_col_idx_size = T_fixed.colindex.size();
+        auto t_rhs_data = T_RHS.data();
+        auto t_rhs_size = T_RHS.size();
         t_new_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
                             _field.t_matrix().size() * sizeof(Real), _field._T._container.data(), true);
@@ -320,18 +334,41 @@ void VulkanSolver::initialize() {
         t_col_index.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                            VK_SHARING_MODE_EXCLUSIVE, t_col_idx_size * sizeof(int), t_col_idx_data, true);
     }
-
-    simulation.push_descriptors({
-        {u_buffer, 0}, {v_buffer, 1}, {f_buffer, 2}, {g_buffer, 3}, {cell_buffer, 5}, {rs_buffer, 6}, {p_buffer, 7},
-            {residual_buffer, 8}, {neighborhood_buffer, 9}, {a_data_buffer, 10}, {a_offset_buffer, 11}, {d_buffer, 12},
-            {spmv_result_buffer, 13}, {residual_buffer, 14}, {r_buffer, 15}, {p_buffer, 16},
-#if ENABLE_PRECOND
-            {z_buffer, 17}, {m_data_buffer, 18}, {m_offset_buffer, 19},
-#endif
-            {dt_buffer, 21}, {deltas_buffer, 30}, {counter_buffer, 31}, {u_boundary_matrix_buffer, 0, 1},
-            {v_boundary_matrix_buffer, 1, 1}, {u_rhs_buffer, 2, 1}, {v_rhs_buffer, 3, 1}, {u_row_start, 4, 1},
-            {v_row_start, 5, 1}, {u_col_index, 6, 1}, {v_col_index, 7, 1},
-    });
+    std::vector<Descriptor> descriptor_list = {
+        {u_buffer, 0},
+        {v_buffer, 1},
+        {f_buffer, 2},
+        {g_buffer, 3},
+        {cell_buffer, 5},
+        {rs_buffer, 6},
+        {p_buffer, 7},
+        {residual_buffer, 8},
+        {neighborhood_buffer, 9},
+        {a_data_buffer, 10},
+        {a_offset_buffer, 11},
+        {d_buffer, 12},
+        {spmv_result_buffer, 13},
+        {residual_buffer, 14},
+        {r_buffer, 15},
+        {p_buffer, 16},
+        {dt_buffer, 21},
+        {deltas_buffer, 30},
+        {counter_buffer, 31},
+        {u_boundary_matrix_buffer, 0, 1},
+        {v_boundary_matrix_buffer, 1, 1},
+        {u_rhs_buffer, 2, 1},
+        {v_rhs_buffer, 3, 1},
+        {u_row_start, 4, 1},
+        {v_row_start, 5, 1},
+        {u_col_index, 6, 1},
+        {v_col_index, 7, 1},
+    };
+    if (_preconditioner != -1) {
+        descriptor_list.push_back({z_buffer, 17});
+        descriptor_list.push_back({m_data_buffer, 18});
+        descriptor_list.push_back({m_offset_buffer, 19});
+    }
+    simulation.push_descriptors(descriptor_list);
     if (_calc_temp) {
         simulation.push_descriptors({{t_old_buffer, 22},
                                      {t_new_buffer, 23},
@@ -341,7 +378,11 @@ void VulkanSolver::initialize() {
                                      {t_col_index, 11, 1}});
     }
     record_simulation_step(0);
-    record_conjugate_gradient_solver(1);
+    if (solver_type == SolverType::PCG) {
+        record_conjugate_gradient_solver(1);
+    } else if (solver_type == SolverType::SOR) {
+        record_sor_solver(1);
+    }
     record_post_pressure(2);
 }
 
@@ -358,11 +399,11 @@ VulkanSolver::~VulkanSolver() {
     cell_buffer.destroy();
     a_data_buffer.destroy();
     a_offset_buffer.destroy();
-#if ENABLE_PRECOND
-    m_data_buffer.destroy();
-    m_offset_buffer.destroy();
-    z_buffer.destroy();
-#endif
+    if (_preconditioner != -1) {
+        m_data_buffer.destroy();
+        m_offset_buffer.destroy();
+        z_buffer.destroy(); 
+    }
     d_buffer.destroy();
     spmv_result_buffer.destroy();
     counter_buffer.destroy();
@@ -403,11 +444,6 @@ VulkanSolver::~VulkanSolver() {
         reduce_pipeline,
         vec_dot_vec_0_pipeline,
         vec_dot_vec_1_pipeline,
-#if ENABLE_PRECOND
-        vec_dot_vec_2_pipeline,
-        spmv_m_pipeline,
-        saxpy_3_pipeline,
-#endif
         div_pipeline,
         div_store_pipeline,
         inc_pipeline,
@@ -416,8 +452,14 @@ VulkanSolver::~VulkanSolver() {
         reduce_u_pipeline,
         reduce_v_pipeline,
         calc_dt_pipeline,
-        boundary_uv_branchless_pipeline
+        boundary_uv_branchless_pipeline,
+        sqrt_residual_pipeline
     };
+    if (_preconditioner != -1) {
+        pipelines_to_destroy.push_back(vec_dot_vec_2_pipeline);
+        pipelines_to_destroy.push_back(spmv_m_pipeline);
+        pipelines_to_destroy.push_back(saxpy_3_pipeline);
+    }
     if (_calc_temp) {
         pipelines_to_destroy.push_back(calc_t_pipeline);
         pipelines_to_destroy.push_back(boundary_t_branchless);
@@ -430,6 +472,7 @@ void VulkanSolver::record_simulation_step(int command_idx) {
     auto grid_y = _grid.jmaxb();
     auto grid_size = grid_x * grid_y;
     simulation.begin_recording(command_idx, 0);
+
     vkCmdResetQueryPool(simulation.context.command_buffer[command_idx], simulation.query_pool, 0, 6);
     simulation.write_timestamp(command_idx, 0);
     simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, grid_size, 1);
@@ -437,7 +480,14 @@ void VulkanSolver::record_simulation_step(int command_idx) {
            command_idx, grid_size);
     barrier(simulation, residual_buffer, command_idx);
     simulation.record_command_buffer(calc_dt_pipeline, command_idx, 1, 1, 1, 1);
-    barrier(simulation, dt_buffer, command_idx);
+    simulation.record_command_buffer(boundary_uv_branchless_pipeline, command_idx, 1024, 1, grid_size, 1);
+    std::array<VkBufferMemoryBarrier, 3> uvdt_barriers = {
+        buffer_barrier(dt_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
+        buffer_barrier(u_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
+        buffer_barrier(v_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)};
+    // barrier(simulation, dt_buffer, command_idx);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 3, uvdt_barriers.data(), 0, 0);
     simulation.record_command_buffer(fg_pipeline, command_idx, 32, 32, grid_x, grid_y);
     std::array<VkBufferMemoryBarrier, 2> fg_barriers = {
         buffer_barrier(f_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
@@ -462,35 +512,36 @@ void VulkanSolver::record_simulation_step(int command_idx) {
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers_read.data(), 0, 0);
     simulation.record_command_buffer(rs_pipeline, command_idx, 32, 32, grid_x, grid_y);
-    vkCmdFillBuffer(simulation.context.command_buffer[command_idx], p_buffer.handle, 0,
-                    _grid.imaxb() * _grid.jmaxb() * sizeof(Real), 0);
-    std::vector<Real> solution(_field.p_matrix().size(), 0);
-    VkBufferMemoryBarrier fill_barrier = buffer_barrier(p_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
-    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
-    barrier(simulation, rs_buffer, command_idx);
+    if (solver_type == SolverType::PCG) {
+        vkCmdFillBuffer(simulation.context.command_buffer[command_idx], p_buffer.handle, 0,
+                        _grid.imaxb() * _grid.jmaxb() * sizeof(Real), 0);
+        std::vector<Real> solution(_field.p_matrix().size(), 0);
+        VkBufferMemoryBarrier fill_barrier = buffer_barrier(p_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+        barrier(simulation, rs_buffer, command_idx);
 
-    rs_buffer.copy(r_buffer, command_idx, false);
-    barrier(simulation, r_buffer, command_idx);
+        rs_buffer.copy(r_buffer, command_idx, false);
+        barrier(simulation, r_buffer, command_idx);
 
-    if (!ENABLE_PRECOND) {
-        // z_buffer.copy(d_buffer, command_idx, false);
-        rs_buffer.copy(d_buffer, command_idx, false);
+        if (_preconditioner == -1) {
+            // z_buffer.copy(d_buffer, command_idx, false);
+            rs_buffer.copy(d_buffer, command_idx, false);
 
-        vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_1_pipeline, reduce_pipeline, command_idx,
-               grid_size);
-    } else {
-        simulation.record_command_buffer(spmv_m_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
-        barrier(simulation, z_buffer, command_idx);
-        z_buffer.copy(d_buffer, command_idx, false);
-        vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx,
-               grid_size);
+            vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_1_pipeline, reduce_pipeline, command_idx,
+                   grid_size);
+        } else {
+            simulation.record_command_buffer(spmv_m_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
+            barrier(simulation, z_buffer, command_idx);
+            z_buffer.copy(d_buffer, command_idx, false);
+            vec_dp(simulation, residual_buffer, counter_buffer, vec_dot_vec_2_pipeline, reduce_pipeline, command_idx,
+                   grid_size);
+        }
+        barrier(simulation, residual_buffer, command_idx);
+        residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(Real));
+        residual_buffer.copy(deltas_buffer, command_idx, false, 0, 0, sizeof(Real));
     }
-    barrier(simulation, residual_buffer, command_idx);
-    residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(Real));
-    residual_buffer.copy(deltas_buffer, command_idx, false, 0, 0, sizeof(Real));
-    // Calculate delta_new(r_norm) = r_t dot r
     simulation.write_timestamp(command_idx, 1);
     simulation.end_recording(command_idx);
 }
@@ -523,7 +574,7 @@ void VulkanSolver::record_conjugate_gradient_solver(int command_idx) {
 
     // simulation.record_command_buffer(inc_pipeline, command_idx, 1, 1, 1, 1);
     // barrier(simulation, counter_buffer, command_idx);
-    if (ENABLE_PRECOND) {
+    if (_preconditioner != -1) {
         // Preconditioning
         // z <- M *r
         simulation.record_command_buffer(spmv_m_pipeline, command_idx, 1024, 1, _grid.imaxb() * _grid.jmaxb(), 1);
@@ -543,7 +594,7 @@ void VulkanSolver::record_conjugate_gradient_solver(int command_idx) {
       Real beta = delta_new / delta_old;*/
     scalar_div(simulation, div_store_pipeline, command_idx);
     barrier(simulation, residual_buffer, command_idx, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
-    if (ENABLE_PRECOND) {
+    if (_preconditioner != -1) {
         // d <- z + beta * d;
         vec_saxpy(simulation, saxpy_3_pipeline, command_idx, grid_size);
     } else {
@@ -558,6 +609,25 @@ void VulkanSolver::record_conjugate_gradient_solver(int command_idx) {
     simulation.end_recording(command_idx);
 }
 
+void VulkanSolver::record_sor_solver(int command_idx) {
+    auto grid_x = _grid.imaxb();
+    auto grid_y = _grid.jmaxb();
+    auto grid_size = grid_x * grid_y;
+    simulation.begin_recording(command_idx, VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
+    simulation.record_command_buffer(p_pipeline_red, command_idx, 32, 32, grid_x, grid_y);
+    barrier(simulation, p_buffer, command_idx);
+    simulation.record_command_buffer(p_pipeline_black, command_idx, 32, 32, grid_x, grid_y);
+    barrier(simulation, p_buffer, command_idx);
+    simulation.record_command_buffer(p_boundary_pipeline, command_idx, 32, 32, grid_x, grid_y);
+    calc_residual(simulation, residual_buffer, counter_buffer, residual_pipeline, reduce_pipeline, command_idx, grid_x,
+                  grid_y);
+    barrier(simulation, residual_buffer, command_idx);
+    simulation.record_command_buffer(sqrt_residual_pipeline, command_idx, 1, 1, 1, 1);
+    barrier(simulation, residual_buffer, command_idx);
+    residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(float));
+    simulation.end_recording(command_idx);
+}
+
 void VulkanSolver::record_post_pressure(int command_idx) {
     auto grid_x = _grid.imaxb();
     auto grid_y = _grid.jmaxb();
@@ -565,16 +635,16 @@ void VulkanSolver::record_post_pressure(int command_idx) {
     simulation.begin_recording(command_idx, 0);
     vkCmdResetQueryPool(simulation.context.command_buffer[command_idx], simulation.query_pool, 0, 6);
     simulation.write_timestamp(command_idx, 4);
-    simulation.record_command_buffer(negate_pipeline, command_idx, 1024, 1, grid_size, 1);
-    barrier(simulation, p_buffer, command_idx);
+    if (solver_type == SolverType::PCG) {
+        simulation.record_command_buffer(negate_pipeline, command_idx, 1024, 1, grid_size, 1);
+        barrier(simulation, p_buffer, command_idx);
+    }
     simulation.record_command_buffer(vel_pipeline, command_idx, 32, 32, grid_x, grid_y);
     std::array<VkBufferMemoryBarrier, 2> uv_barriers = {
         buffer_barrier(u_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),
         buffer_barrier(v_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)};
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, uv_barriers.data(), 0, 0);
-    // simulation.record_command_buffer(v_boundary_pipeline);
-    simulation.record_command_buffer(boundary_uv_branchless_pipeline, command_idx, 1024, 1, grid_size, 1);
     simulation.write_timestamp(command_idx, 5);
     simulation.end_recording(command_idx);
 }

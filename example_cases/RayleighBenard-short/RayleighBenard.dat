@@ -95,3 +95,7 @@ wall_vel_10      0
 
 iproc         1
 jproc         1
+
+
+solver 1
+simulation cuda

@@ -19,10 +19,12 @@ layout(binding = 30) buffer Deltas
 void main(){
 	if(STORE == 0){
 		res[0] =  deltas[0] / res[0];
-	} else {
+	} else if(STORE == 1){
 		deltas[1] = deltas[0]; // old
 		deltas[0] = res[0]; // new
 		res[0] = res[0] / deltas[1];
+	} else if(STORE == 2){
+		res[0] = sqrt(res[0] / num_fluid_cells);
 	}
 
 }

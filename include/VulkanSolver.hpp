@@ -1,6 +1,7 @@
 #pragma once
 #include "Solver.hpp"
 #include "VulkanUtils.hpp"
+#include "PCGUtils.h"
 
 struct VulkanSolver : public Solver {
     VulkanSolver() = default;
@@ -10,6 +11,10 @@ struct VulkanSolver : public Solver {
     void initialize() override;
     ~VulkanSolver();
   private:
+    void record_simulation_step(int command_idx);
+    void record_conjugate_gradient_solver(int command_idx);
+    void record_sor_solver(int command_idx);
+    void record_post_pressure(int command_idx);
     GPUSimulation simulation;
     UBOData ubo_data;
     Buffer ubo_buffer;
@@ -78,8 +83,17 @@ struct VulkanSolver : public Solver {
     Pipeline reduce_v_pipeline;
     Pipeline calc_dt_pipeline;
     Pipeline boundary_uv_branchless_pipeline;
-    void record_simulation_step(int command_idx);
-    void record_conjugate_gradient_solver(int command_idx);
-    void record_post_pressure(int command_idx);
+    Pipeline sqrt_residual_pipeline;
     uint64_t timestamps[6] = {};
+    SparseMatrix<Real> A;
+    SparseMatrix<Real> U;
+    SparseMatrix<Real> V;
+    SparseMatrix<Real> T;
+    FixedSparseMatrix<Real> U_fixed;
+    FixedSparseMatrix<Real> V_fixed;
+    FixedSparseMatrix<Real> T_fixed;
+    DiagonalSparseMatrix<Real> spai;
+    std::vector<Real> U_RHS;
+    std::vector<Real> V_RHS;
+    std::vector<Real> T_RHS;
 };

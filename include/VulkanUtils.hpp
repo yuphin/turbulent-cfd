@@ -39,6 +39,7 @@ struct UBOData {
     float VI;
     float tau;
     int num_diags;
+    int num_fluid_cells;
 };
 
 template <typename T, size_t Size> char (*countof_helper(T (&_Array)[Size]))[Size];
@@ -715,6 +716,9 @@ Real vec_dp_immediate(GPUSimulation &simulation, Buffer &v1, Buffer &v2, Buffer 
                       Buffer &scratch_buffer, Pipeline &pipeline, Pipeline &reduce_pipeline, int command_idx, int dim);
 void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer, Pipeline &pipeline,
             Pipeline &reduce_pipeline, int command_idx, int dim);
+
+void calc_residual(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer,
+                   Pipeline &residual_pipeline, Pipeline &reduce_pipeline, int command_idx, int grid_x, int grid_y);
 
 void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer, Pipeline &min_max_uv_pipeline,
             Pipeline &reduce_u_pipeline, Pipeline &reduce_v_pipeline, int command_idx, int dim);

@@ -6,49 +6,14 @@ layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 #define at(AR, I, J) AR[imax * (J) + (I)]
 
-layout(std430, binding = 0) buffer U
-{
- 	float u[];
-};
-
-layout(std430, binding = 1) buffer V
-{
-	float v[];
-};
-
-layout(std430, binding = 2) buffer F
-{
-	float f[];
-};
-
-layout(std430, binding = 3) buffer G
-{
-	float g[];
-};
-
-layout(binding = 21) buffer DT
-{
-	float dt;
-};
 
 layout(binding = 5) readonly buffer CellType
 {
 	float cell_type[];
 };
-
-layout(binding = 6) buffer RS
-{
-	float rs[];
-};
-
 layout(binding = 7) buffer P
 {
 	float p[];
-};
-
-layout(binding = 8) buffer R
-{
-	float r[];
 };
 
 layout(binding = 9) buffer Neighborhood {
@@ -65,22 +30,39 @@ void main() {
     }
 	uint type = at(neighborhood, i, j) >> 8;
 	uint neighbors = at(neighborhood, i, j) & 0xFF;
-	if(neighbors == 0xFF) {
-		return;
-	}
-	if(type == 0) {
-		// Outlet
-		at(p, i, j) = PI;
-		//at(p, i, j) = imax * (j) + (i);
-	} else  {
-		// No-slip
-		float p_stencil[8] = float[8](at(p, i+1, j), at(p, i - 1, j), 
-								  at(p, i, j + 1), at(p, i, j-1), 
-								  (at(p, i+1, j) + at(p, i, j + 1)) / 2,
-								  (at(p, i+1, j) + at(p, i, j - 1)) / 2,
-								  (at(p, i-1, j) + at(p, i, j + 1)) / 2,
-								  (at(p, i-1, j) + at(p, i, j - 1)) / 2);
-		at(p, i, j) = p_stencil[neighbors];
-		//at(p, i, j) = imax * (j) + (i);//p_stencil[neighbors];
-	}
+	 if (type == 0) { // Outlet
+        at(p, i, j) = PI;
+    } else {
+        int diag = 0;
+        if ((neighbors & 0x10) == 16) { // Right + top
+            diag = 1;
+            at(p, i, j) = (at(p, i + 1, j) + at(p, i, j + 1)) / 2;
+        }
+        if ((neighbors & 0x20) == 32) { // Right + bottom
+            diag = 1;
+            at(p, i, j) = (at(p, i + 1, j) + at(p, i, j - 1)) / 2;
+        }
+        if ((neighbors & 0x40) == 64) { // Left + top
+            diag = 1;
+            at(p, i, j) = (at(p, i - 1, j) + at(p, i, j + 1)) / 2;
+        }
+        if ((neighbors & 0x80) == 128) { // Left + bottom
+            diag = 1;
+            at(p, i, j) = (at(p, i - 1, j) + at(p, i, j - 1)) / 2;
+        }
+        if (diag == 0) {
+            if ((neighbors & 0x1) == 1) { // Right
+                at(p, i, j) = at(p, i + 1, j);
+            }
+            if ((neighbors & 0x2) == 2) { // Left
+                at(p, i, j) = at(p, i - 1, j);
+            }
+            if ((neighbors & 0x4) == 4) { // Top
+                at(p, i, j) = at(p, i, j + 1);
+            }
+            if ((neighbors & 0x8) == 8) { // Bottom
+                at(p, i, j) = at(p, i, j - 1);
+            }
+        }
+    }
 }

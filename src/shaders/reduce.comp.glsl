@@ -20,7 +20,7 @@ shared float data[32];
 void main(){
 	uint idx = gl_GlobalInvocationID.x;
 	float sum = 0;
-	int limit = ((size + 1023) >> (10 * cnt));
+	int limit = cnt == 0 ? size : ((size + 1023) >> (10 * cnt));
 	if(idx < limit){
 		sum = res[idx];
 	}

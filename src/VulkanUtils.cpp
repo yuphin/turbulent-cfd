@@ -51,9 +51,44 @@ void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_
 
     VkBufferMemoryBarrier fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
                                                         VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    VkBufferMemoryBarrier counter_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
+                                                           VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
     std::vector<VkBufferMemoryBarrier> barriers{res_barrier, fill_barrier};
+    while (num_wgs != 1) {
+        simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
+        num_wgs = ceil(num_wgs / 1024.0f);
+        if (num_wgs > 1) {
+            vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, barriers.data(), 0, 0);
+        }
+    }
+}
+
+void calc_residual(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer,
+                   Pipeline &residual_pipeline, Pipeline &reduce_pipeline, int command_idx, int grid_x, int grid_y) {
+    vkCmdFillBuffer(simulation.context.command_buffer[command_idx], residual_buffer.handle, 0, residual_buffer.size, 0);
+    vkCmdFillBuffer(simulation.context.command_buffer[command_idx], counter_buffer.handle, 0, counter_buffer.size, 0);
+    VkBufferMemoryBarrier fill_res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_res_barrier, 0, 0);
+    simulation.record_command_buffer(residual_pipeline, command_idx, 32, 32, grid_x, grid_y);
+    VkBufferMemoryBarrier res_barrier = buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
+                                                       VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
+    auto grid_dim = grid_x * grid_y;
+    int num_wgs = grid_dim;
+    VkBufferMemoryBarrier fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
+                                                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+
+    VkBufferMemoryBarrier counter_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
+                                                           VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
+    std::vector<VkBufferMemoryBarrier> barriers{res_barrier, counter_barrier};
     while (num_wgs != 1) {
         simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
         num_wgs = ceil(num_wgs / 1024.0f);
@@ -80,9 +115,11 @@ void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_
     vkCmdFillBuffer(simulation.context.command_buffer[command_idx], counter_buffer.handle, 0, counter_buffer.size, 1);
     fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
                                   VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
+    VkBufferMemoryBarrier counter_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT,
+                                                           VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &fill_barrier, 0, 0);
-    std::vector<VkBufferMemoryBarrier> barriers{res_barrier, fill_barrier};
+    std::vector<VkBufferMemoryBarrier> barriers{res_barrier, counter_barrier};
     while (num_wgs != 1) {
         simulation.record_command_buffer(reduce_u_pipeline, command_idx, 1024, 1, num_wgs, 1);
         simulation.record_command_buffer(reduce_v_pipeline, command_idx, 1024, 1, num_wgs, 1);
