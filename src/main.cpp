@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 #include "Communication.hpp"
-#include "Case.hpp"
+#include "Simulation.hpp"
 
 int main(int argn, char **args) {
     Params params;
