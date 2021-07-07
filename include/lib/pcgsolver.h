@@ -727,7 +727,7 @@ struct SparsePCGSolver
       for(iteration=0; iteration<max_iterations; ++iteration){
          multiply(fixed_matrix, s, z);
          double alpha=rho/InstantBLAS<int,T>::dot(s, z);
-         InstantBLAS<int,T>::add_scaled(alpha, s, result);
+         InstantBLAS<int,T>::add_scaled(-alpha, s, result);
          InstantBLAS<int,T>::add_scaled(-alpha, z, r);
          residual_out=InstantBLAS<int,T>::abs_max(r);
 		 relative_residual_out = residual_out / residual_0;

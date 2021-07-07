@@ -217,11 +217,8 @@ Real PCG::solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Bou
     // 2-> Modified Incomplete Cholesky
     // 1-> Diagonal
     // 0-> Off
-    solver.solve(A, field._RS._container, p, pcg_residual, pcg_iters, 1);
-  
-    for (int i = 0; i < field._P.size(); i++) {
-        field._P._container[i] = -p[i];
-    }
+    solver.solve(A, field._RS._container, field._P._container,pcg_residual, pcg_iters, 0);
+   
     it = pcg_iters;
     std::cout << "pcg iters: " << it << ", ";
     return pcg_residual;
