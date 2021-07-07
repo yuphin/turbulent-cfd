@@ -22,13 +22,6 @@ namespace filesystem = std::filesystem;
 #include <vtkStructuredGridWriter.h>
 #include <vtkTuple.h>
 
-#define ENABLE_GS_GPU 0
-
-#define ENABLE_GS_CPU 0
-
-#define ENABLE_CG_CPU 0
-
-#define ENABLE_PRECOND 0
 Simulation::Simulation(std::string file_name, int argn, char **args, Params &params) {
 
     // Set up logging functionality
