@@ -61,7 +61,7 @@ void VulkanSolver::solve_post_pressure() {
     _field._V._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._V.size());
     p_buffer.copy(scratch_buffer, 3);
     _field._P._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._P.size());
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         t_new_buffer.copy(scratch_buffer, 3);
         _field._T._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._T.size());
     }
@@ -156,7 +156,7 @@ void VulkanSolver::initialize() {
     simulation.create_command_pool();
     simulation.create_fences();
     simulation.create_query_pool(32, VK_QUERY_TYPE_TIMESTAMP);
-    fg_pipeline = simulation.create_compute_pipeline("src/shaders/calc_fg.comp.spv", _calc_temp);
+    fg_pipeline = simulation.create_compute_pipeline("src/shaders/calc_fg.comp.spv", _field.calc_temp);
     rs_pipeline = simulation.create_compute_pipeline("src/shaders/calc_rs.comp.spv");
     vel_pipeline = simulation.create_compute_pipeline("src/shaders/calc_vel.comp.spv");
     p_pipeline_red = simulation.create_compute_pipeline("src/shaders/calc_p_redblack_gs.comp.spv", 0);
@@ -185,9 +185,9 @@ void VulkanSolver::initialize() {
     min_max_uv_pipeline = simulation.create_compute_pipeline("src/shaders/min_max_uv.comp.spv");
     reduce_u_pipeline = simulation.create_compute_pipeline("src/shaders/reduce_uv.comp.spv", 0);
     reduce_v_pipeline = simulation.create_compute_pipeline("src/shaders/reduce_uv.comp.spv", 1);
-    calc_dt_pipeline = simulation.create_compute_pipeline("src/shaders/calc_dt.comp.spv", _calc_temp);
+    calc_dt_pipeline = simulation.create_compute_pipeline("src/shaders/calc_dt.comp.spv", _field.calc_temp);
     boundary_uv_branchless_pipeline = simulation.create_compute_pipeline("src/shaders/boundary_uv_branchless.comp.spv");
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         calc_t_pipeline = simulation.create_compute_pipeline("src/shaders/calc_temp.comp.spv");
         boundary_t_branchless = simulation.create_compute_pipeline("src/shaders/boundary_t_branchless.comp.spv");
     }
@@ -307,7 +307,7 @@ void VulkanSolver::initialize() {
     v_col_index.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                        VK_SHARING_MODE_EXCLUSIVE, v_col_idx_size * sizeof(int), v_col_idx_data, true);
 
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         auto t_matrix_data = T_fixed.value.data();
         auto t_matrix_size = T_fixed.value.size();
         auto t_row_start_data = T_fixed.rowstart.data();
@@ -369,7 +369,7 @@ void VulkanSolver::initialize() {
         descriptor_list.push_back({m_offset_buffer, 19});
     }
     simulation.push_descriptors(descriptor_list);
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         simulation.push_descriptors({{t_old_buffer, 22},
                                      {t_new_buffer, 23},
                                      {t_boundary_matrix_buffer, 8, 1},
@@ -419,7 +419,7 @@ VulkanSolver::~VulkanSolver() {
     v_row_start.destroy();
     u_col_index.destroy();
     v_col_index.destroy();
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         t_new_buffer.destroy();
         t_old_buffer.destroy();
         t_rhs_buffer.destroy();
@@ -460,7 +460,7 @@ VulkanSolver::~VulkanSolver() {
         pipelines_to_destroy.push_back(spmv_m_pipeline);
         pipelines_to_destroy.push_back(saxpy_3_pipeline);
     }
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         pipelines_to_destroy.push_back(calc_t_pipeline);
         pipelines_to_destroy.push_back(boundary_t_branchless);
     }
@@ -498,7 +498,7 @@ void VulkanSolver::record_simulation_step(int command_idx) {
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, fg_barriers.data(), 0, 0);
     // Compute F & G and enforce boundary conditions
     simulation.record_command_buffer(fg_boundary_pipeline, command_idx, 32, 32, grid_x, grid_y);
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         t_new_buffer.copy(t_old_buffer, command_idx, false);
         simulation.record_command_buffer(boundary_t_branchless, command_idx, 1024, 1, grid_size, 1);
         barrier(simulation, t_new_buffer, command_idx);

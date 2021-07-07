@@ -46,7 +46,7 @@ void main(){
     float t_laplacian[5] = float[5](at(t_old, i+1, j), at(t_old, i, j), 
                     at(t_old, i-1, j), at(t_old, i, j+1), at(t_old, i, j-1));
                     
-    at(t_new, i, j) = at(t_old, i, j) + dt * (alpha * laplacian_5(t_laplacian)
+    at(t_new, i, j) = at(t_new, i, j) + dt * (alpha * laplacian_5(t_laplacian)
                     - convection_uT(u_stencil, t_laplacian)
                     - convection_vT(v_stencil, t_laplacian));
 }

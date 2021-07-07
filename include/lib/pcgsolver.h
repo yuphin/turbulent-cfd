@@ -700,7 +700,7 @@ struct SparsePCGSolver
       min_diagonal_ratio=min_diagonal_ratio_;
    }
 
-   bool solve(const SparseMatrix<T> &matrix, const std::vector<T> &rhs, std::vector<T> &result, T &relative_residual_out, int &iterations_out, int precondition=2, int num_local_iters = 1)
+   bool solve(const SparseMatrix<T> &matrix, const std::vector<T> &rhs, std::vector<T> &result, T &relative_residual_out, int &iterations_out, int precondition=2)
    {
       int n=matrix.n;
       if((int)m.size()!=n){ m.resize(n); s.resize(n); z.resize(n); r.resize(n); }
@@ -729,7 +729,7 @@ struct SparsePCGSolver
       for(iteration=0; iteration<max_iterations; ++iteration){
          multiply(fixed_matrix, s, z);
          double alpha=rho/InstantBLAS<int,T>::dot(s, z);
-         InstantBLAS<int,T>::add_scaled(alpha, s, result);
+         InstantBLAS<int,T>::add_scaled(-alpha, s, result);
          InstantBLAS<int,T>::add_scaled(-alpha, z, r);
          residual_out=InstantBLAS<int,T>::abs_max(r);
 		 relative_residual_out = residual_out / residual_0;

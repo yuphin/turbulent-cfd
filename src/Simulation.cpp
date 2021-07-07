@@ -1,6 +1,5 @@
 #include "Simulation.hpp"
 
-
 #include <algorithm>
 #include <cmath>
 #include <ctime>
@@ -62,17 +61,22 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     Real TI = REAL_MAX;    /* Temperature */
     Real alpha = REAL_MAX; /* Thermal diffusivity */
     Real DP = REAL_MAX;    /* Pressure differential between the two ends */
-    std::string solver_type_str = "sor";
-    std::string simulation_type;
+    int solver_type_int = 0;
+    int simulation_type_int = 0;
     int preconditioner = -1;
     SolverType solver_type;
+    Real KI = REAL_MAX;
+    Real EPSI = REAL_MAX;
+    int refine = 0;
+    int turb_model = 0;
     std::unordered_map<int, Real> wall_temps;
     std::unordered_map<int, Real> wall_vels;
     std::unordered_map<int, Real> inlet_Us;
     std::unordered_map<int, Real> inlet_Vs;
     std::unordered_map<int, Real> inlet_Ts;
+    std::unordered_map<int, Real> inlet_Ks;
+    std::unordered_map<int, Real> inlet_EPSs;
     if (file.is_open()) {
-
         std::string var;
         while (!file.eof() && file.good()) {
             file >> var;
@@ -106,9 +110,13 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
                 if (var == "DELTA_P") file >> DP;
                 if (var == "iproc") file >> params.iproc;
                 if (var == "jproc") file >> params.jproc;
-                if (var == "solver") file >> solver_type_str;
-                if (var == "simulation") file >> simulation_type;
+                if (var == "solver") file >> solver_type_int;
+                if (var == "simulation") file >> simulation_type_int;
                 if (var == "preconditioner") file >> preconditioner;
+                if (var == "refine") file >> refine;
+                if (var == "model") file >> turb_model;
+                if (var == "KI") file >> KI;
+                if (var == "EPSI") file >> EPSI;
                 if (!var.compare(0, 10, "wall_temp_")) {
                     Real temp;
                     file >> temp;
@@ -136,6 +144,16 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
                     file >> t;
                     inlet_Ts.insert({std::stoi(var.substr(4)), t});
                 }
+                if (!var.compare(0, 4, "KIN_")) {
+                    Real k;
+                    file >> k;
+                    inlet_Ks.insert({std::stoi(var.substr(4)), k});
+                }
+                if (!var.compare(0, 6, "EPSIN_")) {
+                    Real eps;
+                    file >> eps;
+                    inlet_EPSs.insert({std::stoi(var.substr(6)), eps});
+                }
             }
         }
     }
@@ -155,31 +173,27 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         }
         nu = 0.0;
     }
-    if (solver_type_str == "sor") {
+    if (solver_type_int == (int)SolverType::SOR) {
         solver_type = SolverType::SOR;
-    } else if (solver_type_str == "pcg") {
+    } else if (solver_type_int == (int)SolverType::PCG) {
         solver_type = SolverType::PCG;
     }
 
-    if (simulation_type == "cpu") {
+    if (simulation_type_int == 0) {
         _solver = std::make_unique<CPUSolver>();
-    
-    } else if (simulation_type == "cuda") {
+
+    } else if (simulation_type_int == 1) {
         _solver = std::make_unique<CudaSolver>();
-    
-    } else if (simulation_type == "vulkan") {
+
+    } else if (simulation_type_int == 2) {
         _solver = std::make_unique<VulkanSolver>();
     }
-
-    _solver->solver_type = solver_type;
-    _solver->_preconditioner = preconditioner;
-    _solver->_omega = omg;
 
     // Prandtl number = nu / alpha
     if (pr != REAL_MAX) {
         alpha = nu / pr;
     } else if (alpha == REAL_MAX) {
-        if (params.world_rank == 0 && _solver->_calc_temp) {
+        if (params.world_rank == 0) {
             logger.log_error("Prandtl number, alpha or beta are not set, defaulting to 0");
         }
         alpha = 0.0;
@@ -195,8 +209,6 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     // Create log file in output dir
     logger.create_log(_dict_name, _case_name, params);
 
-    global_size_x = imax;
-    global_size_y = jmax;
     std::vector<std::vector<int>> global_geometry;
     if (_geom_name.compare("NONE")) {
 
@@ -204,6 +216,10 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     } else {
         global_geometry = build_lid_driven_cavity(imax, jmax);
     }
+
+    global_geometry = refine_geometry(global_geometry, refine, imax, jmax);
+    global_size_x = imax;
+    global_size_y = jmax;
     Communication::init_params(&params, imax, jmax);
 
     auto local_geometry = partition(global_geometry, params.imin, params.imax, params.jmin, params.jmax);
@@ -225,17 +241,23 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     domain.total_size = domain.imax * domain.jmax;
 
     _solver->_grid = Grid(_geom_name, domain, local_geometry);
-    _solver->_field = Fields(nu, dt, tau, domain.size_x, domain.size_y, UI, VI, PI, TI, alpha, beta, GX, GY);
     _solver->_discretization = Discretization(domain.dx, domain.dy, gamma);
     _solver->_max_iter = itermax;
     _solver->_tolerance = eps;
     _solver->params = params;
-
+    _solver->_field = Fields(nu, dt, tau, domain.size_x, domain.size_y, UI, VI, PI, TI, KI, EPSI, alpha, beta, GX, GY);
+    _solver->solver_type = solver_type;
+    _solver->_preconditioner = preconditioner;
+    _solver->_omega = omg;
+    _solver->_turb_model = turb_model;
     // Check if this case uses energy equation
     if (TI != REAL_MAX) {
-        // TODO
         _solver->_field.calc_temp = true;
-        _solver->_calc_temp = true;
+    }
+    if (turb_model == 0) {
+        std::cout << "Turbulence model: off\n";
+    } else if (turb_model == 1) {
+        std::cout << "Turbulence model: K-Epsilon\n";
     }
 
     // Construct boundaries
@@ -251,8 +273,8 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         _solver->_boundaries.push_back(std::make_unique<OutletBoundary>(&_solver->_grid.outlet_cells()));
     }
     if (!_solver->_grid.inlet_cells().empty()) {
-        _solver->_boundaries.push_back(
-            std::make_unique<InletBoundary>(&_solver->_grid.inlet_cells(), inlet_Us, inlet_Vs, inlet_Ts, DP));
+        _solver->_boundaries.push_back(std::make_unique<InletBoundary>(&_solver->_grid.inlet_cells(), inlet_Us,
+                                                                       inlet_Vs, inlet_Ts, inlet_Ks, inlet_EPSs, DP));
     }
 }
 
@@ -318,7 +340,9 @@ void Simulation::simulate(Params &params) {
         uint32_t it;
         Real res;
         _solver->solve_pressure(res, it);
-        if (params.world_rank == 0)  std::cout << it << " ";
+        if (params.world_rank == 0) {
+            std::cout << "Iter count: " << it << " ";
+        }
         // Check if max_iter was reached
         if (params.world_rank == 0 && it == _solver->_max_iter) {
             logger.max_iter_warning();
@@ -334,6 +358,7 @@ void Simulation::simulate(Params &params) {
 
         t += dt;
         timestep++;
+        // output_vtk(timestep, params); // output every timestep for debugging
     }
     _solver->solve_post_pressure();
 }
@@ -377,6 +402,22 @@ void Simulation::output_vtk(int timestep, Params &params) {
     VTK_Array *Pressure = VTK_Array::New();
     Pressure->SetName("pressure");
     Pressure->SetNumberOfComponents(1);
+    VTK_Array *KValue;
+    VTK_Array *EpsValue;
+    VTK_Array *TurbViscosity;
+    if (_solver->_turb_model == 1) {
+        KValue = VTK_Array::New();
+        KValue->SetName("kvalue");
+        KValue->SetNumberOfComponents(1);
+
+        EpsValue = VTK_Array::New();
+        EpsValue->SetName("epsvalue");
+        EpsValue->SetNumberOfComponents(1);
+
+        TurbViscosity = VTK_Array::New();
+        TurbViscosity->SetName("nu_t");
+        TurbViscosity->SetNumberOfComponents(1);
+    }
 
     // Velocity Array
     VTK_Array *Velocity = VTK_Array::New();
@@ -388,7 +429,14 @@ void Simulation::output_vtk(int timestep, Params &params) {
         for (int i = 1; i < _solver->_grid.domain().size_x + 1; i++) {
             Real pressure = _solver->_field.p(i, j);
             Pressure->InsertNextTuple(&pressure);
-
+            if (_solver->_turb_model == 1) {
+                Real kval = _solver->_field.k(i, j);
+                KValue->InsertNextTuple(&kval);
+                Real epsval = _solver->_field.eps(i, j);
+                EpsValue->InsertNextTuple(&epsval);
+                Real nu_t = _solver->_field.nu_t(i, j);
+                TurbViscosity->InsertNextTuple(&nu_t);
+            }
             // Insert blank cells at obstacles
             if (_solver->_grid.cell(i, j).type() != cell_type::FLUID) {
                 structuredGrid->BlankCell((j - 1) * _solver->_grid.domain().domain_size_x + (i - 1));
@@ -411,12 +459,16 @@ void Simulation::output_vtk(int timestep, Params &params) {
 
     // Add Pressure to Structured Grid
     structuredGrid->GetCellData()->AddArray(Pressure);
-
+    if (_solver->_turb_model == 1) {
+        structuredGrid->GetCellData()->AddArray(KValue);
+        structuredGrid->GetCellData()->AddArray(EpsValue);
+        structuredGrid->GetCellData()->AddArray(TurbViscosity);
+    }
     // Add Velocity to Structured Grid
     structuredGrid->GetPointData()->AddArray(Velocity);
 
     // Add Temperature to Structured Grid
-    if (_solver->_calc_temp) {
+    if (_solver->_field.calc_temp) {
         VTK_Array *Temperature = VTK_Array::New();
         Temperature->SetName("temperature");
         Temperature->SetNumberOfComponents(1);
@@ -441,13 +493,4 @@ void Simulation::output_vtk(int timestep, Params &params) {
     writer->SetFileName(outputname.c_str());
     writer->SetInputData(structuredGrid);
     writer->Write();
-}
-
-void Simulation::build_domain(Domain &domain, int imax_domain, int jmax_domain) {
-    domain.imin = 0;
-    domain.jmin = 0;
-    domain.imax = imax_domain + 2;
-    domain.jmax = jmax_domain + 2;
-    domain.size_x = imax_domain;
-    domain.size_y = jmax_domain;
 }

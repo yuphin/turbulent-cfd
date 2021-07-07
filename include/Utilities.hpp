@@ -213,3 +213,5 @@ std::vector<std::vector<int>> build_lid_driven_cavity(int xdim, int ydim);
 /// Partition the vector for subdomains
 std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec, int imin, int imax, int jmin,
                                         int jmax);
+
+std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>> &vec, int refine, int &imax, int &jmax);

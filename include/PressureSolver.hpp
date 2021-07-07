@@ -1,0 +1,78 @@
+#pragma once
+
+#include "Boundary.hpp"
+#include "Fields.hpp"
+#include "Grid.hpp"
+#include <lib/pcgsolver.h>
+#include <utility>
+/**
+ * @brief Abstract class for pressure Poisson equation solver
+ *
+ */
+class PressureSolver {
+  public:
+    PressureSolver() = default;
+    virtual ~PressureSolver() = default;
+
+    /**
+     * @brief Solve the pressure equation on given field, grid and boundary
+     *
+     * @param[in] field to be used
+     * @param[in] grid to be used
+     * @param[in] boundary to be used
+     */
+    virtual Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries,
+                       Params &params, uint32_t iters, Real tolerance, uint32_t &it) = 0;
+};
+
+/**
+ * @brief Successive Over-Relaxation algorithm for solution of pressure Poisson
+ * equation
+ *
+ */
+class SOR : public PressureSolver {
+  public:
+    SOR() = default;
+
+    /**
+     * @brief Constructor of SOR solver
+     *
+     * @param[in] relaxation factor
+     */
+    SOR(Real omega);
+
+    virtual ~SOR() = default;
+
+    /**
+     * @brief Solve the pressure equation on given field, grid and boundary
+     *
+     * @param[in] field to be used
+     * @param[in] grid to be used
+     * @param[in] boundary to be used
+     */
+    Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries, Params &params,
+               uint32_t iters, Real tolerance, uint32_t &it) override;
+
+  private:
+    Real _omega;
+};
+
+class PCG : public PressureSolver {
+  public:
+    PCG(int dim_x, int dim_y, Real dx, Real dy, Fields &field, Grid &grid,
+        const std::vector<std::unique_ptr<Boundary>> &boundaries);
+
+    Real solve(Fields &field, Grid &grid, const std::vector<std::unique_ptr<Boundary>> &boundaries, Params &params,
+               uint32_t iters, Real tolerance, uint32_t &it) override;
+    SparseMatrix<Real> A;
+
+  private:
+    int dim;
+    int dim_x;
+    int dim_y;
+    SparseMatrix<Real> U;
+    SparseMatrix<Real> V;
+    SparseMatrix<Real> T;
+    void build_matrix(Real dx, Real dy, Fields &field, Grid &grid,
+                      const std::vector<std::unique_ptr<Boundary>> &boundaries);
+};

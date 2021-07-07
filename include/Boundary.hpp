@@ -24,10 +24,12 @@ class Boundary {
     virtual void enforce_fg(Fields &field);
     virtual void enforce_p(Fields &field);
     virtual void enforce_t(Fields &field);
+    virtual void enforce_nu_t(Fields &field);    
     virtual ~Boundary() = default;
     uint32_t get_type() {return _type;}
     std::vector<Cell *> *_cells;
     std::unordered_map<int, Real> _wall_temperature;
+    uint32_t _type;
 
   protected:
     virtual void enforce_p_main(Fields &field, Cell *cell);
@@ -36,7 +38,6 @@ class Boundary {
     void enforce_t_drichlet_diag(Fields &field, Cell *cell);
     void enforce_t_adiabatic_main(Fields &field, Cell *cell);
     void enforce_t_adiabatic_diag(Fields &field, Cell *cell);
-    uint32_t _type;
 };
 
 /**
@@ -59,14 +60,19 @@ class InletBoundary : public Boundary {
   public:
     InletBoundary(std::vector<Cell *> *cells);
     InletBoundary(std::vector<Cell *> *cells, std::unordered_map<int, Real> inlet_U,
-                  std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, Real DP);
+                  std::unordered_map<int, Real> inlet_V, std::unordered_map<int, Real> inlet_T, 
+                  std::unordered_map<int, Real> inlet_K, std::unordered_map<int, Real> inlet_EPS, Real DP);
     virtual ~InletBoundary() = default;
     void enforce_uv(Fields &field) override;
     void enforce_p(Fields &field) override;    
     void enforce_t(Fields &field) override;
+    void enforce_nu_t(Fields &field) override;
+
     std::unordered_map<int, Real> _inlet_U;
     std::unordered_map<int, Real> _inlet_V;
     std::unordered_map<int, Real> _inlet_T;
+    std::unordered_map<int, Real> _inlet_K;
+    std::unordered_map<int, Real> _inlet_EPS;
   private:
     Real _inlet_DP = REAL_MAX;
 };
@@ -82,11 +88,11 @@ class NoSlipWallBoundary : public Boundary {
                        std::unordered_map<int, Real> wall_temperature);
     virtual ~NoSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
+
     std::unordered_map<int, Real> _wall_velocity;
   private:
     void enforce_uv_main(Fields &field, Cell *cell);
     void enforce_uv_diagonal(Fields &field, Cell *cell);
-   
 };
 
 /**
@@ -101,7 +107,7 @@ class FreeSlipWallBoundary : public Boundary {
                          std::unordered_map<int, Real> wall_temperature);
     virtual ~FreeSlipWallBoundary() = default;
     void enforce_uv(Fields &field) override;
+
     std::unordered_map<int, Real> _wall_velocity;
   private:
-  
 };

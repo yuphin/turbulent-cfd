@@ -25,8 +25,10 @@ class Fields {
      * @param[in] initial pressure
      *
      */
-    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real _alpha,
+    Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real KI, Real EPSI, Real _alpha,
            Real _beta, Real _gx, Real _gy);
+
+    ~Fields() = default;
 
     /**
      * @brief Calculates the convective and diffusive fluxes in x and y
@@ -36,7 +38,7 @@ class Fields {
      * @param[in] whether to include temperature related terms
      *
      */
-    void calculate_fluxes(Grid &grid, bool calc_temp);
+    void calculate_fluxes(Grid &grid, bool calc_temp, bool turbulent);
 
     /**
      * @brief Right hand side calculations using the fluxes for the pressure
@@ -70,7 +72,7 @@ class Fields {
      * @param[in] grid in which the calculations are done
      * @param[in] whether to include temperatures
      */
-    Real calculate_dt(Grid &grid, bool calc_temp);
+    Real calculate_dt(Grid &grid, bool calc_temp, bool turbulent);
 
     /// x-velocity index based access and modify
     Real &u(int i, int j);
@@ -93,6 +95,17 @@ class Fields {
     /// y-momentum flux index based access and modify
     Real &g(int i, int j);
 
+    /// turbulent kinetic energy index based access and modify
+    Real &k(int i, int j);
+
+    /// dissipation rate index based access and modify
+    Real &eps(int i, int j);
+
+    /// turbulent viscosity index based access and modify
+    Real &nu_t(int i, int j);
+    Real &nu_i(int i, int j);
+    Real &nu_j(int i, int j);
+
     /// get timestep size
     Real dt() const;
 
@@ -113,6 +126,23 @@ class Fields {
 
     /// y-momentum flux matrix
     Matrix<Real> &g_matrix();
+
+    /// turbulent kinetic energy matrix
+    Matrix<Real> &k_matrix();
+
+    /// dissipation rate matrix
+    Matrix<Real> &eps_matrix();
+
+    /// turbulent energy matrix
+    Matrix<Real> &nu_t_matrix();
+
+    void calculate_nu_t(Grid &grid);
+
+    void calculate_k_and_epsilon(Grid &grid);
+
+    Real damp_f2(int i, int j);
+
+    Real damp_fnu(int i, int j);
 
     /// initial pressure
     Real _PI;
@@ -140,6 +170,14 @@ class Fields {
     Matrix<Real> _G;
     /// right hand side matrix
     Matrix<Real> _RS;
+    /// turbulent kinetic energy
+    Matrix<Real> _K;
+    /// dissipation of _K
+    Matrix<Real> _EPS;
+    /// turbulent viscosity
+    Matrix<Real> _NU_T;
+    Matrix<Real> _NU_I;
+    Matrix<Real> _NU_J;
 
     /// kinematic viscosity
     Real _nu;

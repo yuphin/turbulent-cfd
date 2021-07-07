@@ -88,6 +88,4 @@ class Simulation {
      * @param[in] Timestep of the solution
      */
     void output_vtk(int t, Params &params);
-
-    void build_domain(Domain &domain, int imax_domain, int jmax_domain);
 };

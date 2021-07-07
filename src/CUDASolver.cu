@@ -293,7 +293,7 @@ __global__ void calc_t(Real *u, Real *v, Real dx, Real dy, Real *t_new, Real *t_
     Real t_laplacian[5] = {at(t_old, i + 1, j), at(t_old, i, j), at(t_old, i - 1, j), at(t_old, i, j + 1),
                            at(t_old, i, j - 1)};
 
-    at(t_new, i, j) = at(t_old, i, j) + dt * (alpha * laplacian_5(t_laplacian, inv_dx, inv_dy) -
+    at(t_new, i, j) = at(t_new, i, j) + dt * (alpha * laplacian_5(t_laplacian, inv_dx, inv_dy) -
                                               convection_uT(u_stencil, t_laplacian, inv_dx, gamma) -
                                               convection_vT(v_stencil, t_laplacian, inv_dy, gamma));
 }
@@ -635,7 +635,7 @@ void CudaSolver::initialize() {
     chk(cudaMemcpy(A, A_matrix_diag.data.data(), A_matrix_diag.data.size() * sizeof(Real), cudaMemcpyHostToDevice));
     chk(cudaMemcpy(A_offsets, A_matrix_diag.offsets.data(), A_matrix_diag.offsets.size() * sizeof(int),
                    cudaMemcpyHostToDevice));
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         cudaMalloc(&T, grid_size * sizeof(Real));
         cudaMalloc(&T_temp, grid_size * sizeof(Real));
         cudaMalloc(&mat_t, t_matrix_size * sizeof(Real));
@@ -665,17 +665,17 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
     dim3 blk_size_2d(BLK_SIZE_2D, BLK_SIZE_2D);
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
     dt = calculate_dt(_grid.imaxb(), _grid.jmaxb(), U, V, U_residual, V_residual, _grid.dx(), _grid.dy(), _field._tau,
-                      _field._nu, _field._alpha, _calc_temp);
+                      _field._nu, _field._alpha, _field.calc_temp);
     _field._dt = dt;
 
     uv_boundary(U, V, row_start_u, row_start_v, col_idx_u, col_idx_v, mat_u, mat_v, rhs_vec_u, rhs_vec_v, grid_size);
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         t_boundary(T, row_start_t, col_idx_t, mat_t, rhs_vec_t, grid_size);
         chk(cudaMemcpy(T_temp, T, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
         calc_t<<<num_blks_2d, blk_size_2d>>>(U, V, _grid.dx(), _grid.dy(), T, T_temp, cell_type, _field._alpha, dt,
                                              _discretization._gamma, _grid.imaxb(), _grid.jmaxb());
     }
-    calc_fg<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, _calc_temp, _grid.dx(), _grid.dy(), T, cell_type, dt,
+    calc_fg<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, _field.calc_temp, _grid.dx(), _grid.dy(), T, cell_type, dt,
                                           _discretization._gamma, _field._nu, _field._beta, _field._gx, _field._gy,
                                           grid_x, grid_y);
     fg_boundary<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, grid_x, grid_y, neighborhood, cell_type);
@@ -710,7 +710,7 @@ void CudaSolver::solve_post_pressure() {
     chk(cudaMemcpy(_field._U._container.data(), U, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     chk(cudaMemcpy(_field._V._container.data(), V, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     chk(cudaMemcpy(_field._P._container.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-    if (_calc_temp) {
+    if (_field.calc_temp) {
         chk(cudaMemcpy(_field._T._container.data(), T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     }
 }

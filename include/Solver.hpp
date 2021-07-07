@@ -28,11 +28,11 @@ struct Solver {
 
     int _preconditioner;
 
-    /// Whether to include temperatures
-    bool _calc_temp = false;
-
     /// Maximum number of iterations for the solver
     uint32_t _max_iter;
+
+    // Turbulence modeling method
+    int _turb_model = 0;
 
     
     friend class Logger;
