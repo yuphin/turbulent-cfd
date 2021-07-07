@@ -81,10 +81,10 @@ VIN_2        0
 #       number of processes in x and y direction
 #--------------------------------------------
 
-iproc         1
-jproc         1
+iproc         2
+jproc         2
 
 
-solver pcg
+solver sor
 preconditioner 0
-simulation vulkan
+simulation cpu

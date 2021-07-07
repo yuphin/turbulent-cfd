@@ -82,9 +82,6 @@ Real CPUSolver::solve_pcg(uint32_t &it) {
     std::vector<Real> p(dim, 0);
 
     solver.solve(A, _field._RS._container, p, pcg_residual, pcg_iters, 0);
-    if (pcg_iters == 0) {
-        int a = 4;
-    }
     for (int i = 0; i < _field._P.size(); i++) {
         _field._P._container[i] = -p[i];
     }

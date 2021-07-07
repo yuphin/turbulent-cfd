@@ -173,6 +173,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
 
     _solver->solver_type = solver_type;
     _solver->_preconditioner = preconditioner;
+    _solver->_omega = omg;
 
     // Prandtl number = nu / alpha
     if (pr != REAL_MAX) {
@@ -317,7 +318,7 @@ void Simulation::simulate(Params &params) {
         uint32_t it;
         Real res;
         _solver->solve_pressure(res, it);
-        std::cout << it << " ";
+        if (params.world_rank == 0)  std::cout << it << " ";
         // Check if max_iter was reached
         if (params.world_rank == 0 && it == _solver->_max_iter) {
             logger.max_iter_warning();

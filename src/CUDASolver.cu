@@ -488,7 +488,7 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
         Real inv_dx2 = inv_dx * inv_dx;
         Real inv_dy = 1 / dy;
         Real inv_dy2 = inv_dy * inv_dy;
-        float cond_temp = 1 / (2 * alpha * (inv_dx2 + inv_dy2));
+        Real cond_temp = 1 / (2 * alpha * (inv_dx2 + inv_dy2));
         min_cond = std::min(min_cond, cond_temp);
     }
     return tau * min_cond;
