@@ -131,10 +131,7 @@ Real Discretization::laplacian_nu(const Matrix<Real> &P, Real nu, const Matrix<R
     auto invdy2 = invdy * invdy;
     auto i_diff = (nu + nu_i(i, j)) * (P(i + 1, j) - P(i, j)) - (nu + nu_i(i - 1, j)) * (P(i, j) - P(i - 1, j));
     auto j_diff = (nu + nu_j(i, j)) * (P(i, j + 1) - P(i, j)) - (nu + nu_j(i, j - 1)) * (P(i, j) - P(i, j - 1));
-    Real result =
-        1 / coeff *
-        (((nu + nu_i(i, j)) * (P(i + 1, j) - P(i, j)) - (nu + nu_i(i - 1, j)) * (P(i, j) - P(i - 1, j))) * invdx2 +
-         ((nu + nu_j(i, j)) * (P(i, j + 1) - P(i, j)) - (nu + nu_j(i, j - 1)) * (P(i, j) - P(i, j - 1))) * invdy2);
+    Real result = 1 / coeff * (i_diff * invdx2 + j_diff * invdy2);
     return result;
 }
 

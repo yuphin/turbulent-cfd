@@ -79,11 +79,11 @@ __global__ void vec_dot_vec(Real *a, Real *b, Real *o, int size) {
 __global__ void spmv_dia(Real *data, int *offsets, int num_rows, int num_cols, int num_diags, Real *x, Real *y) {
     int row = blockDim.x * blockIdx.x + threadIdx.x;
     if (row < num_rows) {
-        float dot = 0;
+        Real dot = 0;
         y[row] = 0;
         for (int n = 0; n < num_diags; n++) {
             int col = row + offsets[n];
-            float val = data[num_rows * n + row];
+            Real val = data[num_rows * n + row];
             if (col >= 0 && col < num_cols) dot += val * x[col];
         }
         y[row] += dot;
@@ -221,8 +221,8 @@ __global__ void calc_vel(Real *u, Real *v, Real *p, Real *f, Real *g, int *cell_
     Real inv_dx = 1 / dx;
     Real inv_dy = 1 / dy;
 
-    float p_diff_u[2] = {at(p, i, j), at(p, i + 1, j)};
-    float p_diff_v[2] = {at(p, i, j), at(p, i, j + 1)};
+    Real p_diff_u[2] = {at(p, i, j), at(p, i + 1, j)};
+    Real p_diff_v[2] = {at(p, i, j), at(p, i, j + 1)};
     /*  at(u, i, j) = vel_kernel(at(f, i, j), *dt, p_diff_u, inv_dx);
       at(v, i, j) = vel_kernel(at(g, i, j), *dt, p_diff_v, inv_dy);*/
     at(u, i, j) = at(f, i, j) - dt * inv_dx * (p_diff_u[1] - p_diff_u[0]);
@@ -270,6 +270,28 @@ __global__ void reduce_abs_max(Real *input, Real *output, int size) {
     }
 }
 
+__global__ void reduce_min(Real *input, Real *output, int size) {
+    extern __shared__ Real sdata[];
+    uint32_t tid = threadIdx.x;
+    uint32_t i = blockIdx.x * blockDim.x * 2 + threadIdx.x;
+    Real curr_max = (i < size) ? input[i] : 0;
+    if (i + blockDim.x < size) {
+        curr_max = fminf(curr_max, (input[i + blockDim.x]));
+    }
+    sdata[tid] = curr_max;
+    __syncthreads();
+    for (uint32_t s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sdata[tid] = fminf(sdata[tid], sdata[tid + s]);
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        output[blockIdx.x] = sdata[0];
+    }
+}
+
 void t_boundary(Real *t, int *row_start_t, int *col_idx_t, Real *mat_t, Real *rhs_vec_t, int size) {
     int num_blks(get_num_blks(size));
     enforce_boundary<<<num_blks, BLK_SIZE>>>(t, row_start_t, col_idx_t, mat_t, rhs_vec_t, size);
@@ -298,6 +320,78 @@ __global__ void calc_t(Real *u, Real *v, Real dx, Real dy, Real *t_new, Real *t_
                                               convection_vT(v_stencil, t_laplacian, inv_dy, gamma));
 }
 
+__global__ void calculate_nu_t(Real *NU_T, Real *K, Real *EPS, int *cell_type, Real _nu, int imax, int jmax) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 0) {
+        return;
+    }
+    Real kij = at(K, i, j);
+    Real epsij = at(EPS, i, j);
+    at(NU_T, i, j) = 0.09 * kij * kij / epsij + _nu;
+}
+
+__global__ void calculate_nu_ij(Real *NU_I, Real *NU_J, Real *K, Real *EPS, int *cell_type, Real _nu, int imax,
+                                int jmax) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 0) {
+        return;
+    }
+    Real num_i = (at(K, i, j) + at(K, i + 1, j)) / 2;
+    Real denom_i = (at(EPS, i, j) + at(EPS, i + 1, j)) / 2;
+
+    Real num_j = (at(K, i, j) + at(K, i, j + 1)) / 2;
+    Real denom_j = (at(EPS, i, j) + at(EPS, i, j + 1)) / 2;
+
+    at(NU_I, i, j) = 0.09 * num_i * num_i / denom_i;
+    at(NU_J, i, j) = 0.09 * num_j * num_j / denom_j;
+}
+
+__global__ void calculate_k_and_epsilon(Real *K_old, Real *EPS_old, Real *K, Real *EPS, Real *NU_T, Real *NU_I,
+                                        Real *NU_J, Real *U, Real *V, int *cell_type, Real _nu, int imax, int jmax,
+                                        Real dt, Real inv_dx, Real inv_dy) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 0) {
+        return;
+    }
+    Real f2_coeff = 1;
+    auto nut = at(NU_T, i, j);
+    auto kij = at(K_old, i, j);
+    auto eij = at(EPS_old, i, j);
+    Real K_stencil[5] = {at(K_old, i + 1, j), at(K_old, i, j), at(K_old, i - 1, j), at(K_old, i, j + 1),
+                         at(K_old, i, j - 1)};
+    Real EPS_stencil[5] = {at(EPS_old, i + 1, j), at(EPS_old, i, j), at(EPS_old, i - 1, j), at(EPS_old, i, j + 1),
+                           at(EPS_old, i, j - 1)};
+    Real U_diff[2] = {at(U, i - 1, j), at(U, i, j)};
+    Real V_diff[2] = {at(V, i, j - 1), at(V, i, j)};
+    Real NU_I_diff[2] = {at(NU_I, i, j), at(NU_I, i - 1, j)};
+    Real NU_J_diff[2] = {at(NU_J, i, j), at(NU_J, i, j - 1)};
+    Real U_stencil[6] = {at(U, i, j),         at(U, i - 1, j), at(U, i, j + 1),
+                         at(U, i - 1, j + 1), at(U, i, j - 1), at(U, i - 1, j - 1)};
+    Real V_stencil[6] = {at(V, i, j),         at(V, i, j - 1), at(V, i + 1, j),
+                         at(V, i + 1, j - 1), at(V, i - 1, j), at(V, i - 1, j - 1)};
+    auto k1_1 = convecton_uKEPS(U_diff, K_stencil, inv_dx);
+    auto k1_2 = convecton_vKEPS(V_diff, K_stencil, inv_dy);
+    auto e1_1 = convecton_uKEPS(U_diff, EPS_stencil, inv_dx);
+    auto e1_2 = convecton_vKEPS(V_diff, EPS_stencil, inv_dy);
+
+    auto k2 = laplacian_nu(K_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
+    auto e2 = laplacian_nu(EPS_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1.3);
+
+    auto k3 = nut * mean_strain_rate_squared(U_stencil, V_stencil, inv_dx, inv_dy);
+    auto e3 = 1.44 * eij * k3 / kij;
+    auto e4 = f2_coeff * 1.92 * eij * eij / kij;
+    auto kij_new = kij + dt * (-(k1_1 + k1_2) + k2 + k3 - eij);
+    auto epsij_new = eij + dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
+    at(K, i, j) = kij_new;
+    at(EPS, i, j) = epsij_new;
+}
+
 __global__ void calc_fg(Real *f, Real *g, Real *u, Real *v, bool calc_temp, Real dx, Real dy, Real *t, int *cell_type,
                         Real dt, Real gamma, Real nu, Real beta, Real gx, Real gy, int imax, int jmax) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -320,6 +414,41 @@ __global__ void calc_fg(Real *f, Real *g, Real *u, Real *v, bool calc_temp, Real
     at(f, i, j) = at(u, i, j) + dt * (nu * laplacian(u_stencil, inv_dx, inv_dy) -
                                       convection_u(u_stencil, v_stencil, inv_dx, inv_dy, gamma));
     at(g, i, j) = at(v, i, j) + dt * (nu * laplacian(v_stencil, inv_dx, inv_dy) -
+                                      convection_v(u_stencil, v_stencil, inv_dx, inv_dy, gamma));
+
+    if (calc_temp) {
+        Real term1 = at(t, i, j) + at(t, i + 1, j);
+        Real term2 = at(t, i, j) + at(t, i, j + 1);
+        at(f, i, j) -= beta * dt / 2 * (term1)*gx;
+        at(g, i, j) -= beta * dt / 2 * (term2)*gy;
+    }
+}
+
+__global__ void calc_fg_turbulent(Real *f, Real *g, Real *u, Real *v, Real *NU_T, bool calc_temp, Real dx, Real dy,
+                                  Real *t, int *cell_type, Real dt, Real gamma, Real nu, Real beta, Real gx, Real gy,
+                                  int imax, int jmax) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 0) {
+        return;
+    }
+    Real inv_dx = 1 / dx;
+    Real inv_dy = 1 / dy;
+    Real inv_dx2 = inv_dx * inv_dx;
+    Real inv_dy2 = inv_dy * inv_dy;
+    // 5-point + 1 stencil for U and V
+    Real u_stencil[6] = {at(u, i + 1, j), at(u, i, j),     at(u, i - 1, j),
+                         at(u, i, j + 1), at(u, i, j - 1), at(u, i - 1, j + 1)};
+    Real v_stencil[6] = {at(v, i + 1, j), at(v, i, j),     at(v, i - 1, j),
+                         at(v, i, j + 1), at(v, i, j - 1), at(v, i + 1, j - 1)};
+
+    Real nu_term1 = (at(NU_T, i, j) + at(NU_T, i + 1, j)) / 2;
+    Real nu_term2 = (at(NU_T, i, j) + at(NU_T, i, j + 1)) / 2;
+    // Calculate fluxes
+    at(f, i, j) = at(u, i, j) + dt * (nu_term1 * laplacian(u_stencil, inv_dx, inv_dy) -
+                                      convection_u(u_stencil, v_stencil, inv_dx, inv_dy, gamma));
+    at(g, i, j) = at(v, i, j) + dt * (nu_term2 * laplacian(v_stencil, inv_dx, inv_dy) -
                                       convection_v(u_stencil, v_stencil, inv_dx, inv_dy, gamma));
 
     if (calc_temp) {
@@ -401,6 +530,81 @@ __global__ void p_boundary(Real *p, int imax, int jmax, uint32_t *neighborhood, 
     }
 }
 
+__global__ void nu_t_boundary(Real *NU_T, Real *K, Real *EPS, int imax, int jmax, uint32_t *neighborhood,
+                              int *cell_type, Real wk, Real weps, Real _nu) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 1) {
+        return;
+    }
+    uint32_t type = at(neighborhood, i, j) >> 8;
+    uint32_t neighbors = at(neighborhood, i, j) & 0xFF;
+    Real k;
+    Real eps;
+    if (type == 1) { // Inlet
+        if ((neighbors & 0x1) == 1) { // Right
+            k = 2 * wk - at(K, i + 1, j);
+            eps = 2 * weps - at(EPS, i + 1, j);
+        }
+        if ((neighbors & 0x2) == 2) { // Left
+            k = 2 * wk - at(K, i - 1, j);
+            eps = 2 * weps - at(EPS, i - 1, j);
+        }
+        if ((neighbors & 0x4) == 4) { // Top
+            k = 2 * wk - at(K, i, j + 1);
+            eps = 2 * weps - at(EPS, i, j + 1);
+        }
+        if ((neighbors & 0x8) == 8) { // Bottom
+            k = 2 * wk - at(K, i, j - 1);
+            eps = 2 * weps - at(EPS, i, j - 1);
+        }
+    } else { // Other
+        int diag = 0;
+        if ((neighbors & 0x10) == 16) { // Right + top
+            diag = 1;
+            k = (at(K, i + 1, j) + at(K, i, j + 1)) / 2;
+            eps = (at(EPS, i + 1, j) + at(EPS, i, j + 1)) / 2;
+        }
+        if ((neighbors & 0x20) == 32) { // Right + bottom
+            diag = 1;
+            k = (at(K, i + 1, j) + at(K, i, j - 1)) / 2;
+            eps = (at(EPS, i + 1, j) + at(EPS, i, j - 1)) / 2;
+        }
+        if ((neighbors & 0x40) == 64) { // Left + top
+            diag = 1;
+            k = (at(K, i - 1, j) + at(K, i, j + 1)) / 2;
+            eps = (at(EPS, i - 1, j) + at(EPS, i, j + 1)) / 2;
+        }
+        if ((neighbors & 0x80) == 128) { // Left + bottom
+            diag = 1;
+            k = (at(K, i - 1, j) + at(K, i, j - 1)) / 2;
+            eps = (at(EPS, i - 1, j) + at(EPS, i, j - 1)) / 2;
+        }
+        if (!diag) {
+            if ((neighbors & 0x1) == 1) { // Right
+                k = at(K, i + 1, j);
+                eps = at(EPS, i + 1, j);
+            }
+            if ((neighbors & 0x2) == 2) { // Left
+                k = at(K, i - 1, j);
+                eps = at(EPS, i - 1, j);
+            }
+            if ((neighbors & 0x4) == 4) { // Top
+                k = at(K, i, j + 1);
+                eps = at(EPS, i, j + 1);
+            }
+            if ((neighbors & 0x8) == 8) { // Bottom
+                k = at(K, i, j - 1);
+                eps = at(EPS, i, j - 1);
+            }
+        }
+    }
+    at(K, i, j) = k;
+    at(EPS, i, j) = eps;
+    at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
+}
+
 void solve_sor(Real *P, Real *P_tmp, Real *P_residual, Real *P_residual_out, uint32_t *neighborhood, int imax, int jmax,
                Real *RS, int *cell_type, uint32_t &it, uint32_t max_iter, Real dx, Real dy, Real PI, Real tolerance,
                Real &res, int num_fluid_cells) {
@@ -417,16 +621,11 @@ void solve_sor(Real *P, Real *P_tmp, Real *P_residual, Real *P_residual_out, uin
     while (it < max_iter && res > tolerance) {
         sor_iter<<<num_blks_2d, blk_size_2d>>>(P, RS, coeff, cell_type, imax, jmax, omega, inv_dx, inv_dy, 0);
         sor_iter<<<num_blks_2d, blk_size_2d>>>(P, RS, coeff, cell_type, imax, jmax, omega, inv_dx, inv_dy, 1);
-        /* std::vector<Real> Pcpu2(grid_size);
-         cudaMemcpy(Pcpu2.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost);*/
-
         cudaMemset(P_residual, 0, grid_size * sizeof(Real));
         calc_residual<<<num_blks_2d, blk_size_2d>>>(P, RS, cell_type, imax, jmax, inv_dx, inv_dy, P_residual);
         reduce_residual<<<num_blks_1d, BLK_SIZE>>>(P_residual, P_residual_out, grid_size);
         p_boundary<<<num_blks_2d, blk_size_2d>>>(P, imax, jmax, neighborhood, cell_type, PI);
         cudaMemcpy(&res, P_residual_out, sizeof(Real), cudaMemcpyDeviceToHost);
-        /*   std::vector<Real> Pcpu1(grid_size);
-           cudaMemcpy(Pcpu1.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost);*/
         res = std::sqrt(res / num_fluid_cells);
         it++;
     }
@@ -443,21 +642,22 @@ __global__ void calc_rs(Real *f, Real *g, Real *rs, Real dx, Real dy, int imax, 
 
     Real inv_dx = 1 / dx;
     Real inv_dy = 1 / dy;
-    float f_diff[2] = {at(f, i, j), at(f, i - 1, j)};
-    float g_diff[2] = {at(g, i, j), at(g, i, j - 1)};
+    Real f_diff[2] = {at(f, i, j), at(f, i - 1, j)};
+    Real g_diff[2] = {at(g, i, j), at(g, i, j - 1)};
 
-    float df = inv_dx * (f_diff[0] - f_diff[1]);
-    float dg = inv_dy * (g_diff[0] - g_diff[1]);
+    Real df = inv_dx * (f_diff[0] - f_diff[1]);
+    Real dg = inv_dy * (g_diff[0] - g_diff[1]);
     at(rs, i, j) = (df + dg) * 1 / dt;
 }
 
-Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *v_residual, Real dx, Real dy, Real tau,
-                  Real nu, Real alpha, bool calc_temp) {
+Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *v_residual, Real *nu_residual,
+                  Real *nu_t, Real dx, Real dy, Real tau, Real nu, Real alpha, bool calc_temp, bool turbulent) {
     // Calculate uv max
     int size = imax * jmax;
     int num_blks(get_num_blks(size));
     Real u_max_abs = 0;
     Real v_max_abs = 0;
+    Real nu_min = REAL_MAX;
 
     Real dx2 = dx * dx;
     Real dy2 = dy * dy;
@@ -469,20 +669,33 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
 
     reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(u, u_residual, size);
     reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(v, v_residual, size);
+    if (turbulent) {
+        reduce_min<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(nu_t, nu_residual, size);
+    }
     while (num_blks != 1) {
-        size = ceil(size / float(BLK_SIZE));
+        size = ceil(size / Real(BLK_SIZE));
         smemsize = min(BLK_SIZE, size);
         num_blks = get_num_blks(size);
         reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(u_residual, u_residual, size);
         reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(v_residual, v_residual, size);
+        if (turbulent) {
+            reduce_min<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(nu_t, nu_residual, size);
+        }
     }
     cudaMemcpy(&u_max_abs, u_residual, sizeof(Real), cudaMemcpyDeviceToHost);
     cudaMemcpy(&v_max_abs, v_residual, sizeof(Real), cudaMemcpyDeviceToHost);
+    if (turbulent) {
+        cudaMemcpy(&nu_min, nu_residual, sizeof(Real), cudaMemcpyDeviceToHost);
+    }
     Real min_cond = std::min(dx / u_max_abs, dy / v_max_abs);
+
+    nu_min = nu_min == REAL_MAX ? nu : nu_min;
+
     if (nu != 0) {
         Real cond_spatial = 1.0 / (2.0 * nu) * ((dx2 * dy2) / (dx2 + dy2));
         min_cond = std::min(min_cond, cond_spatial);
     }
+
     if (calc_temp) {
         Real inv_dx = 1 / dx;
         Real inv_dx2 = inv_dx * inv_dx;
@@ -491,6 +704,7 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
         Real cond_temp = 1 / (2 * alpha * (inv_dx2 + inv_dy2));
         min_cond = std::min(min_cond, cond_temp);
     }
+
     return tau * min_cond;
 }
 void CudaSolver::initialize() {
@@ -588,6 +802,23 @@ void CudaSolver::initialize() {
     cudaMalloc(&RS, grid_size * sizeof(Real));
     cudaMalloc(&U_residual, grid_size * sizeof(Real));
     cudaMalloc(&V_residual, grid_size * sizeof(Real));
+    if (_turb_model != 0) {
+        cudaMalloc(&NU_residual, grid_size * sizeof(Real));
+        cudaMalloc(&NU_T, grid_size * sizeof(Real));
+        cudaMalloc(&NU_I, grid_size * sizeof(Real));
+        cudaMalloc(&NU_J, grid_size * sizeof(Real));
+        cudaMalloc(&K, grid_size * sizeof(Real));
+        cudaMalloc(&K_old, grid_size * sizeof(Real));
+        cudaMalloc(&EPS, grid_size * sizeof(Real));
+        cudaMalloc(&EPS_old, grid_size * sizeof(Real));
+
+        cudaMemset(NU_residual, 0, grid_size * sizeof(Real));
+        cudaMemset(NU_T, 0, grid_size * sizeof(Real));
+        cudaMemset(NU_I, 0, grid_size * sizeof(Real));
+        cudaMemset(NU_J, 0, grid_size * sizeof(Real));
+        cudaMemset(K, _field._KI, grid_size * sizeof(Real));
+        cudaMemset(EPS, _field._EPSI, grid_size * sizeof(Real));
+    }
     cudaMalloc(&P_residual, grid_size * sizeof(Real));
     cudaMalloc(&cell_type, grid_size * sizeof(int));
     cudaMalloc(&row_start_u, u_row_start_size * sizeof(int));
@@ -664,8 +895,8 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
     dim3 num_blks_1d(get_num_blks(grid_size));
     dim3 blk_size_2d(BLK_SIZE_2D, BLK_SIZE_2D);
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
-    dt = calculate_dt(_grid.imaxb(), _grid.jmaxb(), U, V, U_residual, V_residual, _grid.dx(), _grid.dy(), _field._tau,
-                      _field._nu, _field._alpha, _field.calc_temp);
+    dt = calculate_dt(_grid.imaxb(), _grid.jmaxb(), U, V, U_residual, V_residual, NU_residual, NU_T, _grid.dx(),
+                      _grid.dy(), _field._tau, _field._nu, _field._alpha, _field.calc_temp, _turb_model != 0);
     _field._dt = dt;
 
     uv_boundary(U, V, row_start_u, row_start_v, col_idx_u, col_idx_v, mat_u, mat_v, rhs_vec_u, rhs_vec_v, grid_size);
@@ -675,9 +906,15 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
         calc_t<<<num_blks_2d, blk_size_2d>>>(U, V, _grid.dx(), _grid.dy(), T, T_temp, cell_type, _field._alpha, dt,
                                              _discretization._gamma, _grid.imaxb(), _grid.jmaxb());
     }
-    calc_fg<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, _field.calc_temp, _grid.dx(), _grid.dy(), T, cell_type, dt,
-                                          _discretization._gamma, _field._nu, _field._beta, _field._gx, _field._gy,
-                                          grid_x, grid_y);
+    if (_turb_model != 0) {
+        calc_fg_turbulent<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, NU_T, _field.calc_temp, _grid.dx(), _grid.dy(), T,
+                                                        cell_type, dt, _discretization._gamma, _field._nu, _field._beta,
+                                                        _field._gx, _field._gy, grid_x, grid_y);
+    } else {
+        calc_fg<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, _field.calc_temp, _grid.dx(), _grid.dy(), T, cell_type, dt,
+                                              _discretization._gamma, _field._nu, _field._beta, _field._gx, _field._gy,
+                                              grid_x, grid_y);
+    }
     fg_boundary<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, grid_x, grid_y, neighborhood, cell_type);
     calc_rs<<<num_blks_2d, blk_size_2d>>>(F, G, RS, _grid.dx(), _grid.dy(), grid_x, grid_y, dt, cell_type);
 }
@@ -694,7 +931,7 @@ void CudaSolver::solve_pressure(Real &res, uint32_t &it) {
         negate_p<<<num_blks, BLK_SIZE>>>(P, grid_size);
     } else if (solver_type == SolverType::SOR) {
         solve_sor(P, P_temp, P_residual, p_residual_out, neighborhood, _grid.imaxb(), _grid.jmaxb(), RS, cell_type, it,
-                  _max_iter, _grid.dx(), _grid.dy(), _field._PI, _tolerance, res, _grid.fluid_cells().size()); 
+                  _max_iter, _grid.dx(), _grid.dy(), _field._PI, _tolerance, res, _grid.fluid_cells().size());
     }
 }
 
@@ -707,6 +944,19 @@ void CudaSolver::solve_post_pressure() {
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
     calc_vel<<<num_blks_2d, blk_size_2d>>>(U, V, P, F, G, cell_type, _field._dt, grid_x, grid_y, _grid.dx(),
                                            _grid.dy());
+
+    if (_turb_model == 1) {
+        chk(cudaMemcpy(K_old, K, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
+        chk(cudaMemcpy(EPS_old, EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
+        calculate_nu_t<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, cell_type, _field._nu, grid_x, grid_y);
+        calculate_nu_ij<<<num_blks_2d, blk_size_2d>>>(NU_I, NU_J, K, EPS, cell_type, _field._nu, grid_x, grid_y);
+        calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, cell_type,
+                                                              _field._nu, grid_x, grid_y, _field._dt, 1 / _grid.dx(),
+                                                              1 / _grid.dy());
+        // TODO : Implement KIN and EPSIN
+        nu_t_boundary<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, grid_x, grid_y, neighborhood, cell_type, 0, 0,
+                                                    _field._nu);
+    }
     chk(cudaMemcpy(_field._U._container.data(), U, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     chk(cudaMemcpy(_field._V._container.data(), V, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     chk(cudaMemcpy(_field._P._container.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
@@ -726,6 +976,16 @@ CudaSolver::~CudaSolver() {
     cudaFree(RS);
     cudaFree(U_residual);
     cudaFree(V_residual);
+    if (_turb_model != 0) {
+        cudaFree(NU_residual);
+        cudaFree(NU_T);
+        cudaFree(NU_I);
+        cudaFree(NU_J);
+        cudaFree(K);
+        cudaFree(K_old);
+        cudaFree(EPS_old);
+        cudaFree(EPS);
+    }
     cudaFree(P_residual);
     cudaFree(cell_type);
     cudaFree(P);

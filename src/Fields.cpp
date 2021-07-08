@@ -28,7 +28,8 @@ Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI,
     _TI = TI;
     _UI = UI;
     _VI = VI;
-
+    _KI = KI;
+    _EPSI = EPSI;
     calc_temp = false;
 }
 
@@ -152,8 +153,6 @@ void Fields::calculate_fluxes(Grid &grid, bool calc_temp, bool turbulent) {
         } else {
             nu_term1 = nu_term2 = _nu;
         }
-     /*   auto tmp = u(i, j) + dt() * (nu_term1 * Discretization::diffusion(u_matrix(), i, j) -
-                                     Discretization::convection_u(u_matrix(), v_matrix(), i, j));*/
         f(i, j) = u(i, j) + dt() * (nu_term1 * Discretization::diffusion(u_matrix(), i, j) -
                                     Discretization::convection_u(u_matrix(), v_matrix(), i, j));
         g(i, j) = v(i, j) + dt() * (nu_term2 * Discretization::diffusion(v_matrix(), i, j) -

@@ -107,6 +107,6 @@ jproc         1
 #		cpu
 #--------------------------------------------
 
-solver pcg
-preconditioner 0
-simulation cpu
+solver 0
+model 0
+simulation 1

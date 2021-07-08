@@ -156,6 +156,12 @@ class Fields {
     /// initial velocity v
     Real _VI;
 
+    /// Initial k
+    Real _KI;
+
+    /// Initial eps
+    Real _EPSI;
+
     /// x-velocity matrix
     Matrix<Real> _U;
     /// y-velocity matrix

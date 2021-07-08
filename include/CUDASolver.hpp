@@ -21,6 +21,7 @@ struct CudaSolver : public Solver {
     Real *RS;
     Real *U_residual;
     Real *V_residual;
+    Real *NU_residual;
     Real *P_residual;
     int *cell_type;
     int *row_start_u;
@@ -53,6 +54,14 @@ struct CudaSolver : public Solver {
     Real *cg_beta;
     int num_offsets_a;
     int num_offsets_m;
+
+    Real *NU_T;
+    Real *NU_I;
+    Real *NU_J;
+    Real *K;
+    Real *K_old;
+    Real *EPS;
+    Real *EPS_old;
 
     Real *dx;
     Real *dy;
