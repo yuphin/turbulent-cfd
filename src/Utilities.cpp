@@ -123,3 +123,11 @@ std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>
 
     return geometry_data;
 }
+
+bool is_inlet(int id) { return id >= 2 && id <= 9; }
+
+bool is_outlet(int id) { return id == 1; }
+
+bool is_no_slip(int id) { return id >= 10 && id <= 19; }
+
+bool is_free_slip(int id) { return id >= 20; }

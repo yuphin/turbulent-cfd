@@ -189,8 +189,12 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp, bool turbulent) {
     Real maxAbsU = fabs(uMax) > fabs(uMin) ? fabs(uMax) : fabs(uMin);
     Real maxAbsV = fabs(vMax) > fabs(vMin) ? fabs(vMax) : fabs(vMin);
     Real nu_min = REAL_MAX;
-    Real k_max = *std::max_element(_K.data(), _K.data() + _K.size());
-    Real eps_max = *std::max_element(_EPS.data(), _EPS.data() + _EPS.size());
+    Real k_max;
+    Real eps_max;
+    if(turbulent){
+        k_max = *std::max_element(_K.data(), _K.data() + _K.size());
+        eps_max = *std::max_element(_EPS.data(), _EPS.data() + _EPS.size());
+    }
 
     if (turbulent) {
         for (auto &cell : grid.fluid_cells()) {
@@ -224,10 +228,12 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp, bool turbulent) {
         Real cond_4 = 1 / (2 * _alpha * (1 / dx2 + 1 / dy2));
         minimum = std::min(minimum, cond_4);
     }
-    Real cond_5 = 1 / (2 * k_max * (1 / dx2 + 1 / dy2));
-    Real cond_6 = 1 / (2 * eps_max * (1 / dx2 + 1 / dy2));
-    minimum = std::min(minimum, cond_5);
-    minimum = std::min(minimum, cond_6);
+    if(turbulent){
+        Real cond_5 = 1 / (2 * k_max * (1 / dx2 + 1 / dy2));
+        Real cond_6 = 1 / (2 * eps_max * (1 / dx2 + 1 / dy2));
+        minimum = std::min(minimum, cond_5);
+        minimum = std::min(minimum, cond_6);
+    }
     _dt = _tau * minimum;
     return _dt;
 }

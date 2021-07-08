@@ -114,7 +114,7 @@ __device__ Real convecton_uKEPS(Real U[2], Real T[5], Real inv_dx) {
     constexpr int METHOD = 0;
 
     if (METHOD == 0) {
-        convection_uT(U, T, inv_dx, 1);
+        return convection_uT(U, T, inv_dx, 1);
     } else {
         // TODO
     }
@@ -123,7 +123,7 @@ __device__ Real convecton_uKEPS(Real U[2], Real T[5], Real inv_dx) {
 __device__ Real convecton_vKEPS(Real V[2], Real T[5], Real inv_dy) {
     constexpr int METHOD = 0;
     if (METHOD == 0) {
-        convection_vT(V, T, inv_dy, 1);
+        return convection_vT(V, T, inv_dy, 1);
     } else {
         // TODO
     }
@@ -146,6 +146,7 @@ __device__ Real mean_strain_rate_squared(Real U[6], Real V[6], Real inv_dx, Real
     // V offsets:
     // 0,0 / 0,-1 / 1,0 / 1, -1 / -1,0 / -1,-1
     constexpr int METHOD = 0;
+    Real result = 0;
     if (METHOD == 0) {
         Real invdx2 = inv_dx * inv_dx;
         Real invdy2 = inv_dy * inv_dy;
@@ -154,9 +155,9 @@ __device__ Real mean_strain_rate_squared(Real U[6], Real V[6], Real inv_dx, Real
         auto shear_1 = (U[2] + U[3] - U[4] - U[5]) * (0.25 * inv_dy);
         auto shear_2 = (V[2] + V[3] - V[4] - V[5]) * (0.25 * inv_dx);
         auto shear = shear_1 + shear_2;
-        Real result = (u_diff * u_diff) * invdx2 + v_diff * v_diff * invdy2 + shear * shear;
+        result = (u_diff * u_diff) * invdx2 + v_diff * v_diff * invdy2 + shear * shear;
     } else {
         // TODO 
     }
-
+    return result;
 }

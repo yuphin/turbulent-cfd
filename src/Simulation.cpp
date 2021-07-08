@@ -254,14 +254,6 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     }
 
     // Construct boundaries
-    if (!_solver->_grid.noslip_wall_cells().empty()) {
-        _solver->_boundaries.push_back(
-            std::make_unique<NoSlipWallBoundary>(&_solver->_grid.noslip_wall_cells(), wall_vels, wall_temps));
-    }
-    if (!_solver->_grid.freeslip_wall_cells().empty()) {
-        _solver->_boundaries.push_back(
-            std::make_unique<FreeSlipWallBoundary>(&_solver->_grid.freeslip_wall_cells(), wall_vels, wall_temps));
-    }
     if (!_solver->_grid.outlet_cells().empty()) {
         _solver->_boundaries.push_back(std::make_unique<OutletBoundary>(&_solver->_grid.outlet_cells()));
     }
@@ -269,6 +261,24 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         _solver->_boundaries.push_back(std::make_unique<InletBoundary>(&_solver->_grid.inlet_cells(), inlet_Us,
                                                                        inlet_Vs, inlet_Ts, inlet_Ks, inlet_EPSs, DP));
     }
+    if (!_solver->_grid.freeslip_wall_cells().empty()) {
+        _solver->_boundaries.push_back(
+            std::make_unique<FreeSlipWallBoundary>(&_solver->_grid.freeslip_wall_cells(), wall_vels, wall_temps));
+    }
+
+    if (!_solver->_grid.noslip_wall_cells().empty()) {
+        _solver->_boundaries.push_back(
+            std::make_unique<NoSlipWallBoundary>(&_solver->_grid.noslip_wall_cells(), wall_vels, wall_temps));
+    }
+  
+   
+    // Set pointers to boundaries
+  /* for (const auto &boundary : _solver->_boundaries) {
+        auto cells = boundary->_cells;
+        for (auto &cell : *cells) {
+            cell->_boundary = boundary.get();
+        }
+    }*/
 }
 
 void Simulation::set_file_names(std::string file_name) {

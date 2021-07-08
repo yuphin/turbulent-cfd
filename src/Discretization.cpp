@@ -150,7 +150,7 @@ Real Discretization::mean_strain_rate_squared(const Matrix<Real> &U, const Matri
         auto shear_1 = (U(i, j + 1) + U(i - 1, j + 1) - U(i, j - 1) - U(i - 1, j - 1)) * (0.25 * invdy);
         auto shear_2 = (V(i + 1, j) + V(i + 1, j - 1) - V(i - 1, j) - V(i - 1, j - 1)) * (0.25 * invdx);
         auto shear = shear_1 + shear_2;
-        Real result = (u_diff * u_diff) * invdx2 + v_diff * v_diff * invdy2 + shear * shear;
+        result = (u_diff * u_diff) * invdx2 + v_diff * v_diff * invdy2 + shear * shear;
     } else {
         Real dudy = (interpolate(U, i - 1, j + 1, 1, 0) - interpolate(U, i - 1, j - 1, 1, 0)) / (2 * _dy);
         Real dvdx = (interpolate(V, i + 1, j - 1, 0, 1) - interpolate(V, i - 1, j - 1, 0, 1)) / (2 * _dx);

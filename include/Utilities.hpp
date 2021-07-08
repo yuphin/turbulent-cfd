@@ -39,6 +39,13 @@ enum class border_position {
     RIGHT,
 };
 
+enum BoundaryType {
+    BND_NOSLIP_IDX,
+    BND_FREESLIP_IDX,
+    BND_OUTLET_IDX,
+    BND_INLET_IDX
+};
+
 namespace border {
 const int TOP = 0;
 const int BOTTOM = 1;
@@ -215,3 +222,8 @@ std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec
                                         int jmax);
 
 std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>> &vec, int refine, int &imax, int &jmax);
+
+bool is_inlet(int id);
+bool is_outlet(int id);
+bool is_no_slip(int id);
+bool is_free_slip(int id);

@@ -88,12 +88,12 @@ class Grid {
     std::vector<Cell *> &freeslip_wall_cells();
 
     Domain _domain;
+    Matrix<Cell> _cells;
 
   private:
     /// Build cell data structures with given geometrical data
     void assign_cell_types(std::vector<std::vector<int>> &geometry_data);
 
-    Matrix<Cell> _cells;
     std::vector<Cell *> _fluid_cells;
     std::vector<Cell *> _inlet_cells;
     std::vector<Cell *> _outlet_cells;

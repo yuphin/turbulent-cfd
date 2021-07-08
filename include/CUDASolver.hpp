@@ -1,6 +1,17 @@
 #pragma once
 #include "Solver.hpp"
 #include "PCGUtils.h"
+
+#if USE_FLOATS
+#define real_max(v1, v2) fmaxf(v1, v2)
+#define real_min(v1, v2) fminf(v1, v2)
+#define real_abs(v1) fabsf(v1)
+#else
+#define real_max(v1, v2) fmax(v1,v2)
+#define real_min(v1, v2) fmin(v1,v2)
+#define real_abs(v1) fabs(v1)
+#endif
+
 struct CudaSolver : public Solver {
     CudaSolver() = default;
     ~CudaSolver();
@@ -22,6 +33,8 @@ struct CudaSolver : public Solver {
     Real *U_residual;
     Real *V_residual;
     Real *NU_residual;
+    Real *K_residual;
+    Real *EPS_residual;
     Real *P_residual;
     int *cell_type;
     int *row_start_u;

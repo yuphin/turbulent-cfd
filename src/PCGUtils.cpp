@@ -154,22 +154,22 @@ void build_pcg_matrix(Fields &_field, Grid &_grid, const std::vector<std::unique
                     A.set_element(loc, at(i, j - 1), -inv_dy2);
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }
@@ -199,25 +199,25 @@ void build_pcg_matrix(Fields &_field, Grid &_grid, const std::vector<std::unique
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::TOP)) {
                     // Pressure
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
                     // Pressure
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i + 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
                     // Pressure
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j + 1), -0.5 * inv_dy2);
                 }
                 if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
                     // Pressure
-                    A.set_element(loc, loc, 0.5 * (dim));
+                    A.set_element(loc, loc, 0.5 * (div));
                     A.set_element(loc, at(i - 1, j), -0.5 * inv_dx2);
                     A.set_element(loc, at(i, j - 1), -0.5 * inv_dy2);
                 }
@@ -246,6 +246,9 @@ void build_pcg_matrix(Fields &_field, Grid &_grid, const std::vector<std::unique
             int j = cell->j();
             int id = cell->id();
             auto loc = at(i, j);
+            if (loc == 0) {
+                int a = 4;
+            }
             switch (boundary->get_type()) {
             case 0: {
                 // Outlet
@@ -288,28 +291,52 @@ void build_pcg_matrix(Fields &_field, Grid &_grid, const std::vector<std::unique
                 // Apply noslip for now
                 if (cell->borders().size() == 1) {
                     if (cell->is_border(border_position::RIGHT)) {
-
                         // Velocity
                         V_RHS[loc] += wall_vel_v;
                         zero_val(U, U_RHS, i, j);
+                        auto neighbor = cell->neighbour(border_position::RIGHT);
+                        /*  if (is_inlet(neighbor->id())) {
+                              V_RHS[loc] += static_cast<InletBoundary *>(_boundaries[BND_INLET_IDX].get())
+                                                ->_inlet_V[neighbor->id()] / 2;
+                          } else {
+                              V.set_element(loc, at(i + 1, j), -1);
+                          }*/
                         V.set_element(loc, at(i + 1, j), -1);
                     } else if (cell->is_border(border_position::LEFT)) {
-
                         // Velocity
                         V_RHS[loc] += wall_vel_v;
                         zero_val(U, U_RHS, i - 1, j);
+                        auto neighbor = cell->neighbour(border_position::LEFT);
+                        /*  if (is_inlet(neighbor->id())) {
+                              V_RHS[loc] += static_cast<InletBoundary *>(_boundaries[BND_INLET_IDX].get())
+                                                ->_inlet_V[neighbor->id()] / 2;
+                          } else {
+                              V.set_element(loc, at(i - 1, j), -1);
+                          }*/
                         V.set_element(loc, at(i - 1, j), -1);
                     } else if (cell->is_border(border_position::TOP)) {
-
                         // Velocity
                         U_RHS[loc] += wall_vel_u;
                         zero_val(V, V_RHS, i, j);
+                        auto neighbor = cell->neighbour(border_position::TOP);
+                        /*  if (is_inlet(neighbor->id())) {
+                              U_RHS[loc] += static_cast<InletBoundary *>(_boundaries[BND_INLET_IDX].get())
+                                                ->_inlet_U[neighbor->id()] / 2;
+                          } else {
+                              U.set_element(loc, at(i, j + 1), -1);
+                          }*/
                         U.set_element(loc, at(i, j + 1), -1);
                     } else if (cell->is_border(border_position::BOTTOM)) {
-
                         // Velocity
                         U_RHS[loc] += wall_vel_u;
                         zero_val(V, V_RHS, i, j - 1);
+                        auto neighbor = cell->neighbour(border_position::BOTTOM);
+                        /*  if (is_inlet(neighbor->id())) {
+                              U_RHS[loc] += static_cast<InletBoundary *>(_boundaries[BND_INLET_IDX].get())
+                                                ->_inlet_U[neighbor->id()] / 2;
+                          } else {
+                              U.set_element(loc, at(i, j - 1), -1);
+                          }*/
                         U.set_element(loc, at(i, j - 1), -1);
                     }
                 } else if (cell->borders().size() == 2) {
@@ -350,6 +377,9 @@ void build_pcg_matrix(Fields &_field, Grid &_grid, const std::vector<std::unique
                         U.set_element(loc, at(i, j - 1), -1);
                         V.set_element(loc, at(i - 1, j), -1);
                     }
+                } else {
+                    U.set_element(loc, loc, 1);
+                    V.set_element(loc, loc, 1);
                 }
             } break;
             case 3: {

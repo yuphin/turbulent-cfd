@@ -29,6 +29,13 @@ template <typename T> inline void malloc_assign(T *dev_ptr, T val) {
     chk(cudaMemcpy(dev_ptr, &val, 1, cudaMemcpyHostToDevice));
 }
 
+__global__ void init(Real *a, Real val, int size) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size) {
+        a[i] = val;
+    }
+}
+
 __global__ void saxpy(Real *a, Real *x, Real *y, int size) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
@@ -90,6 +97,73 @@ __global__ void spmv_dia(Real *data, int *offsets, int num_rows, int num_cols, i
     }
 }
 
+// See https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+__global__ void reduce_abs_max(Real *input, Real *output, int size) {
+    extern __shared__ Real sdata[];
+    uint32_t tid = threadIdx.x;
+    uint32_t i = blockIdx.x * blockDim.x * 2 + threadIdx.x;
+    Real curr_max = (i < size) ? real_abs(input[i]) : 0;
+    if (i + blockDim.x < size) {
+        curr_max = real_max(curr_max, real_abs(input[i + blockDim.x]));
+    }
+    sdata[tid] = curr_max;
+    __syncthreads();
+    for (uint32_t s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sdata[tid] = real_max(sdata[tid], sdata[tid + s]);
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        output[blockIdx.x] = sdata[0];
+    }
+}
+
+__global__ void reduce_min(Real *input, Real *output, int size) {
+    extern __shared__ Real sdata[];
+    uint32_t tid = threadIdx.x;
+    uint32_t i = blockIdx.x * blockDim.x * 2 + threadIdx.x;
+    Real curr_max = (i < size) ? input[i] : 0;
+    if (i + blockDim.x < size) {
+        curr_max = real_min(curr_max, (input[i + blockDim.x]));
+    }
+    sdata[tid] = curr_max;
+    __syncthreads();
+    for (uint32_t s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sdata[tid] = real_min(sdata[tid], sdata[tid + s]);
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        output[blockIdx.x] = sdata[0];
+    }
+}
+
+__global__ void reduce_max(Real *input, Real *output, int size) {
+    extern __shared__ Real sdata[];
+    uint32_t tid = threadIdx.x;
+    uint32_t i = blockIdx.x * blockDim.x * 2 + threadIdx.x;
+    Real curr_max = (i < size) ? input[i] : 0;
+    if (i + blockDim.x < size) {
+        curr_max = real_max(curr_max, (input[i + blockDim.x]));
+    }
+    sdata[tid] = curr_max;
+    __syncthreads();
+    for (uint32_t s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) {
+            sdata[tid] = real_max(sdata[tid], sdata[tid + s]);
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        output[blockIdx.x] = sdata[0];
+    }
+}
+
 __global__ void scalar_div(Real *num, Real *denom, Real *o) { *o = *num / *denom; }
 __global__ void scalar_cpy(Real *dst, Real *src) { *dst = *src; }
 
@@ -139,6 +213,78 @@ void solve_pcg(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q,
         it++;
         cudaMemcpy(&delta_new, r_dot_r, sizeof(Real), cudaMemcpyDeviceToHost);
     }
+}
+
+
+void get_abs_max(Real *input, Real *res, Real &out, int size) {
+    int num_blks(get_num_blks(size));
+    int smemsize = min(BLK_SIZE, size);
+    reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(input, res, size);
+    while (num_blks != 1) {
+        size = ceil(size / Real(BLK_SIZE));
+        smemsize = min(BLK_SIZE, size);
+        num_blks = get_num_blks(size);
+        reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(res, res, size);
+    }
+    cudaMemcpy(&out, res, sizeof(Real), cudaMemcpyDeviceToHost);
+}
+
+void solve_pcg2(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q, Real *d, Real *r, Real *rho_old,
+               Real *rho, Real *z, Real *cg_beta, Real *residual, Real &delta_new, Real *cg_alpha, Real *d_dot_q, int precondition,
+               Real *M, int *M_offsets, int m_num_diag, uint32_t &it, uint32_t max_iter, Real eps, int vec_size) {
+    int num_blocks = get_num_blks(vec_size);
+    Real residual_out;
+    cudaMemcpy(r, b, vec_size * sizeof(Real), cudaMemcpyDeviceToDevice);
+    cudaMemset(x, 0, vec_size * sizeof(Real));
+    get_abs_max(r, residual, residual_out, vec_size);
+    if (residual_out == 0) {
+        it = 0;
+        return;
+    }
+    if (precondition != -1) {
+        spmv_dia<<<num_blocks, BLK_SIZE>>>(M, M_offsets, vec_size, vec_size, m_num_diag, r, d);
+        vec_dot_vec<<<num_blocks, BLK_SIZE>>>(r, d, rho, vec_size);
+    } else {
+        cudaMemcpy(d, b, vec_size * sizeof(Real), cudaMemcpyDeviceToDevice);
+        vec_dot_vec<<<num_blocks, BLK_SIZE>>>(r, r, rho, vec_size);
+    }
+    Real residual_0 = residual_out;
+    it = 0;
+    while (it < max_iter) {
+        // q <- A * d
+        cudaMemset(q, 0, vec_size * sizeof(Real));
+        spmv_dia<<<num_blocks, BLK_SIZE>>>(A, A_offsets, vec_size, vec_size, num_diag, d, q);
+        vec_dot_vec<<<num_blocks, BLK_SIZE>>>(d, q, d_dot_q, vec_size);
+        // cg_alpha <- rho / d_dot_q
+        scalar_div<<<1, 1>>>(rho, d_dot_q, cg_alpha);
+        // x <- x - cg_alpha * d
+        smaxpy<<<num_blocks, BLK_SIZE>>>(cg_alpha, d, x, vec_size);
+        // r <- r - cg_alpha * q
+        smaxpy<<<num_blocks, BLK_SIZE>>>(cg_alpha, q, r, vec_size);
+        get_abs_max(r, residual, residual_out, vec_size);
+        if (residual_out <= eps) {
+            break;
+        }
+        scalar_cpy<<<1, 1>>>(rho_old, rho);
+        if (precondition != -1) {
+            // z <- M * r
+            spmv_dia<<<num_blocks, BLK_SIZE>>>(M, M_offsets, vec_size, vec_size, m_num_diag, r, z);
+            vec_dot_vec<<<num_blocks, BLK_SIZE>>>(r, z, rho, vec_size);
+        } else {
+            vec_dot_vec<<<num_blocks, BLK_SIZE>>>(r, r, rho, vec_size);
+        }
+        // cg_beta <- rho / rho_old
+        scalar_div<<<1, 1>>>(rho, rho_old, cg_beta);
+        if (precondition != -1) {
+            // d <- z + cg_beta * d
+            saxpy2<<<num_blocks, BLK_SIZE>>>(cg_beta, z, d, vec_size);
+        } else {
+            // d <- r + cg_beta *d
+            saxpy2<<<num_blocks, BLK_SIZE>>>(cg_beta, r, d, vec_size);
+        }
+        it++;
+    }
+    delta_new = residual_out / residual_0;
 }
 
 __global__ void sor_iter(Real *P, Real *RS, Real coeff, int *cell_type, int imax, int jmax, Real omega, Real inv_dx,
@@ -247,50 +393,7 @@ void uv_boundary(Real *u, Real *v, int *row_start_u, int *row_start_v, int *col_
     enforce_boundary<<<num_blks, BLK_SIZE>>>(v, row_start_v, col_idx_v, mat_v, rhs_vec_v, size);
 }
 
-// See https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
-__global__ void reduce_abs_max(Real *input, Real *output, int size) {
-    extern __shared__ Real sdata[];
-    uint32_t tid = threadIdx.x;
-    uint32_t i = blockIdx.x * blockDim.x * 2 + threadIdx.x;
-    Real curr_max = (i < size) ? fabsf(input[i]) : 0;
-    if (i + blockDim.x < size) {
-        curr_max = fmaxf(curr_max, fabsf(input[i + blockDim.x]));
-    }
-    sdata[tid] = curr_max;
-    __syncthreads();
-    for (uint32_t s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] = fmaxf(sdata[tid], sdata[tid + s]);
-        }
-        __syncthreads();
-    }
 
-    if (tid == 0) {
-        output[blockIdx.x] = sdata[0];
-    }
-}
-
-__global__ void reduce_min(Real *input, Real *output, int size) {
-    extern __shared__ Real sdata[];
-    uint32_t tid = threadIdx.x;
-    uint32_t i = blockIdx.x * blockDim.x * 2 + threadIdx.x;
-    Real curr_max = (i < size) ? input[i] : 0;
-    if (i + blockDim.x < size) {
-        curr_max = fminf(curr_max, (input[i + blockDim.x]));
-    }
-    sdata[tid] = curr_max;
-    __syncthreads();
-    for (uint32_t s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] = fminf(sdata[tid], sdata[tid + s]);
-        }
-        __syncthreads();
-    }
-
-    if (tid == 0) {
-        output[blockIdx.x] = sdata[0];
-    }
-}
 
 void t_boundary(Real *t, int *row_start_t, int *col_idx_t, Real *mat_t, Real *rhs_vec_t, int size) {
     int num_blks(get_num_blks(size));
@@ -540,27 +643,38 @@ __global__ void nu_t_boundary(Real *NU_T, Real *K, Real *EPS, int imax, int jmax
     }
     uint32_t type = at(neighborhood, i, j) >> 8;
     uint32_t neighbors = at(neighborhood, i, j) & 0xFF;
-    Real k;
-    Real eps;
+    Real k = 0;
+    Real eps = 0;
     if (type == 1) { // Inlet
+        int valid = 0;
         if ((neighbors & 0x1) == 1) { // Right
             k = 2 * wk - at(K, i + 1, j);
             eps = 2 * weps - at(EPS, i + 1, j);
+            valid = 1;
         }
         if ((neighbors & 0x2) == 2) { // Left
             k = 2 * wk - at(K, i - 1, j);
             eps = 2 * weps - at(EPS, i - 1, j);
+            valid = 1;
         }
         if ((neighbors & 0x4) == 4) { // Top
             k = 2 * wk - at(K, i, j + 1);
             eps = 2 * weps - at(EPS, i, j + 1);
+            valid = 1;
         }
         if ((neighbors & 0x8) == 8) { // Bottom
             k = 2 * wk - at(K, i, j - 1);
             eps = 2 * weps - at(EPS, i, j - 1);
+            valid = 1;
+        }
+        if (valid) {
+            at(K, i, j) = k;
+            at(EPS, i, j) = eps;
+            at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
         }
     } else { // Other
         int diag = 0;
+        int valid = 0;
         if ((neighbors & 0x10) == 16) { // Right + top
             diag = 1;
             k = (at(K, i + 1, j) + at(K, i, j + 1)) / 2;
@@ -585,24 +699,30 @@ __global__ void nu_t_boundary(Real *NU_T, Real *K, Real *EPS, int imax, int jmax
             if ((neighbors & 0x1) == 1) { // Right
                 k = at(K, i + 1, j);
                 eps = at(EPS, i + 1, j);
+                valid = 1;
             }
             if ((neighbors & 0x2) == 2) { // Left
                 k = at(K, i - 1, j);
                 eps = at(EPS, i - 1, j);
+                valid = 1;
             }
             if ((neighbors & 0x4) == 4) { // Top
                 k = at(K, i, j + 1);
                 eps = at(EPS, i, j + 1);
+                valid = 1;
             }
             if ((neighbors & 0x8) == 8) { // Bottom
                 k = at(K, i, j - 1);
                 eps = at(EPS, i, j - 1);
+                valid = 1;
             }
         }
+        if (diag || valid) {
+            at(K, i, j) = k;
+            at(EPS, i, j) = eps;
+            at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
+        }
     }
-    at(K, i, j) = k;
-    at(EPS, i, j) = eps;
-    at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
 }
 
 void solve_sor(Real *P, Real *P_tmp, Real *P_residual, Real *P_residual_out, uint32_t *neighborhood, int imax, int jmax,
@@ -651,13 +771,16 @@ __global__ void calc_rs(Real *f, Real *g, Real *rs, Real dx, Real dy, int imax, 
 }
 
 Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *v_residual, Real *nu_residual,
-                  Real *nu_t, Real dx, Real dy, Real tau, Real nu, Real alpha, bool calc_temp, bool turbulent) {
+                  Real *k_residual, Real *eps_residual, Real *nu_t, Real *k, Real *eps, Real dx, Real dy, Real tau,
+                  Real nu, Real alpha, bool calc_temp, bool turbulent) {
     // Calculate uv max
     int size = imax * jmax;
     int num_blks(get_num_blks(size));
     Real u_max_abs = 0;
     Real v_max_abs = 0;
     Real nu_min = REAL_MAX;
+    Real k_max;
+    Real eps_max;
 
     Real dx2 = dx * dx;
     Real dy2 = dy * dy;
@@ -671,6 +794,8 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
     reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(v, v_residual, size);
     if (turbulent) {
         reduce_min<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(nu_t, nu_residual, size);
+        reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(k, k_residual, size);
+        reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(eps, eps_residual, size);
     }
     while (num_blks != 1) {
         size = ceil(size / Real(BLK_SIZE));
@@ -680,18 +805,22 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
         reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(v_residual, v_residual, size);
         if (turbulent) {
             reduce_min<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(nu_t, nu_residual, size);
+            reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(k, k_residual, size);
+            reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(eps, eps_residual, size);
         }
     }
     cudaMemcpy(&u_max_abs, u_residual, sizeof(Real), cudaMemcpyDeviceToHost);
     cudaMemcpy(&v_max_abs, v_residual, sizeof(Real), cudaMemcpyDeviceToHost);
     if (turbulent) {
         cudaMemcpy(&nu_min, nu_residual, sizeof(Real), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&k_max, k_residual, sizeof(Real), cudaMemcpyDeviceToHost);
+        cudaMemcpy(&eps_max, eps_residual, sizeof(Real), cudaMemcpyDeviceToHost);
     }
     Real min_cond = std::min(dx / u_max_abs, dy / v_max_abs);
 
-    nu_min = nu_min == REAL_MAX ? nu : nu_min;
+    nu_min = (nu_min == REAL_MAX || nu_min == 0) ? nu : nu_min;
 
-    if (nu != 0) {
+    if (nu_min != 0) {
         Real cond_spatial = 1.0 / (2.0 * nu) * ((dx2 * dy2) / (dx2 + dy2));
         min_cond = std::min(min_cond, cond_spatial);
     }
@@ -703,6 +832,12 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
         Real inv_dy2 = inv_dy * inv_dy;
         Real cond_temp = 1 / (2 * alpha * (inv_dx2 + inv_dy2));
         min_cond = std::min(min_cond, cond_temp);
+    }
+    if (turbulent) {
+        Real cond_5 = 1 / (2 * k_max * (1 / dx2 + 1 / dy2));
+        Real cond_6 = 1 / (2 * eps_max * (1 / dx2 + 1 / dy2));
+        min_cond = std::min(min_cond, cond_5);
+        min_cond = std::min(min_cond, cond_6);
     }
 
     return tau * min_cond;
@@ -804,6 +939,8 @@ void CudaSolver::initialize() {
     cudaMalloc(&V_residual, grid_size * sizeof(Real));
     if (_turb_model != 0) {
         cudaMalloc(&NU_residual, grid_size * sizeof(Real));
+        cudaMalloc(&K_residual, grid_size * sizeof(Real));
+        cudaMalloc(&EPS_residual, grid_size * sizeof(Real));
         cudaMalloc(&NU_T, grid_size * sizeof(Real));
         cudaMalloc(&NU_I, grid_size * sizeof(Real));
         cudaMalloc(&NU_J, grid_size * sizeof(Real));
@@ -813,11 +950,13 @@ void CudaSolver::initialize() {
         cudaMalloc(&EPS_old, grid_size * sizeof(Real));
 
         cudaMemset(NU_residual, 0, grid_size * sizeof(Real));
+        cudaMemset(K_residual, 0, grid_size * sizeof(Real));
+        cudaMemset(EPS_residual, 0, grid_size * sizeof(Real));
         cudaMemset(NU_T, 0, grid_size * sizeof(Real));
         cudaMemset(NU_I, 0, grid_size * sizeof(Real));
         cudaMemset(NU_J, 0, grid_size * sizeof(Real));
-        cudaMemset(K, _field._KI, grid_size * sizeof(Real));
-        cudaMemset(EPS, _field._EPSI, grid_size * sizeof(Real));
+        cudaMemcpy(K, _field._K._container.data(), grid_size * sizeof(Real), cudaMemcpyHostToDevice);
+        cudaMemcpy(EPS, _field._EPS._container.data(), grid_size * sizeof(Real), cudaMemcpyHostToDevice);
     }
     cudaMalloc(&P_residual, grid_size * sizeof(Real));
     cudaMalloc(&cell_type, grid_size * sizeof(int));
@@ -895,10 +1034,10 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
     dim3 num_blks_1d(get_num_blks(grid_size));
     dim3 blk_size_2d(BLK_SIZE_2D, BLK_SIZE_2D);
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
-    dt = calculate_dt(_grid.imaxb(), _grid.jmaxb(), U, V, U_residual, V_residual, NU_residual, NU_T, _grid.dx(),
-                      _grid.dy(), _field._tau, _field._nu, _field._alpha, _field.calc_temp, _turb_model != 0);
+    dt = calculate_dt(_grid.imaxb(), _grid.jmaxb(), U, V, U_residual, V_residual, NU_residual, K_residual, EPS_residual,
+                      NU_T, K, EPS, _grid.dx(), _grid.dy(), _field._tau, _field._nu, _field._alpha, _field.calc_temp,
+                      _turb_model != 0);
     _field._dt = dt;
-
     uv_boundary(U, V, row_start_u, row_start_v, col_idx_u, col_idx_v, mat_u, mat_v, rhs_vec_u, rhs_vec_v, grid_size);
     if (_field.calc_temp) {
         t_boundary(T, row_start_t, col_idx_t, mat_t, rhs_vec_t, grid_size);
@@ -906,6 +1045,8 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
         calc_t<<<num_blks_2d, blk_size_2d>>>(U, V, _grid.dx(), _grid.dy(), T, T_temp, cell_type, _field._alpha, dt,
                                              _discretization._gamma, _grid.imaxb(), _grid.jmaxb());
     }
+    std::vector<Real> fcpu(grid_size);
+    std::vector<Real> gcpu(grid_size);
     if (_turb_model != 0) {
         calc_fg_turbulent<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, NU_T, _field.calc_temp, _grid.dx(), _grid.dy(), T,
                                                         cell_type, dt, _discretization._gamma, _field._nu, _field._beta,
@@ -925,10 +1066,9 @@ void CudaSolver::solve_pressure(Real &res, uint32_t &it) {
         auto grid_y = _grid.jmaxb();
         auto grid_size = grid_x * grid_y;
         int num_blks(get_num_blks(grid_size));
-        solve_pcg(A, A_offsets, num_offsets_a, P, RS, q, d, r, r_dot_r_old, r_dot_r, z, cg_beta, res, cg_alpha, d_dot_q,
+        solve_pcg2(A, A_offsets, num_offsets_a, P, RS, q, d, r, r_dot_r_old, r_dot_r, z, cg_beta, U_residual, res, cg_alpha, d_dot_q,
                   _preconditioner, M, M_offsets, num_offsets_m, it, _max_iter, _tolerance,
                   _grid.imaxb() * _grid.jmaxb());
-        negate_p<<<num_blks, BLK_SIZE>>>(P, grid_size);
     } else if (solver_type == SolverType::SOR) {
         solve_sor(P, P_temp, P_residual, p_residual_out, neighborhood, _grid.imaxb(), _grid.jmaxb(), RS, cell_type, it,
                   _max_iter, _grid.dx(), _grid.dy(), _field._PI, _tolerance, res, _grid.fluid_cells().size());
@@ -944,7 +1084,6 @@ void CudaSolver::solve_post_pressure() {
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
     calc_vel<<<num_blks_2d, blk_size_2d>>>(U, V, P, F, G, cell_type, _field._dt, grid_x, grid_y, _grid.dx(),
                                            _grid.dy());
-
     if (_turb_model == 1) {
         chk(cudaMemcpy(K_old, K, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
         chk(cudaMemcpy(EPS_old, EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
@@ -978,6 +1117,8 @@ CudaSolver::~CudaSolver() {
     cudaFree(V_residual);
     if (_turb_model != 0) {
         cudaFree(NU_residual);
+        cudaFree(K_residual);
+        cudaFree(EPS_residual);
         cudaFree(NU_T);
         cudaFree(NU_I);
         cudaFree(NU_J);
