@@ -158,7 +158,6 @@ Real Discretization::mean_strain_rate_squared(const Matrix<Real> &U, const Matri
         Real dvdy = (2 / 3) * (V(i, j) - V(i, j - 1)) / _dx;
         result = 2 * (dudy + dvdx + dudx + dvdy) * (dudy + dvdx + dudx + dvdy);
     }
-
     return result;
 }
 

@@ -189,8 +189,8 @@ void solve_pcg(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q,
         vec_dot_vec<<<num_blocks, BLK_SIZE>>>(d, q, d_dot_q, vec_size);
         // cg_alpha <- r_dot_r / d_dot_q
         scalar_div<<<1, 1>>>(r_dot_r, d_dot_q, cg_alpha);
-        // x <- x + cg_alpha * d
-        saxpy<<<num_blocks, BLK_SIZE>>>(cg_alpha, d, x, vec_size);
+        // x <- x - cg_alpha * d
+        smaxpy<<<num_blocks, BLK_SIZE>>>(cg_alpha, d, x, vec_size);
         // r <- r - cg_alpha * q
         smaxpy<<<num_blocks, BLK_SIZE>>>(cg_alpha, q, r, vec_size);
         scalar_cpy<<<1, 1>>>(r_dot_r_old, r_dot_r);
@@ -215,7 +215,6 @@ void solve_pcg(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q,
     }
 }
 
-
 void get_abs_max(Real *input, Real *res, Real &out, int size) {
     int num_blks(get_num_blks(size));
     int smemsize = min(BLK_SIZE, size);
@@ -230,8 +229,9 @@ void get_abs_max(Real *input, Real *res, Real &out, int size) {
 }
 
 void solve_pcg2(Real *A, int *A_offsets, int num_diag, Real *x, Real *b, Real *q, Real *d, Real *r, Real *rho_old,
-               Real *rho, Real *z, Real *cg_beta, Real *residual, Real &delta_new, Real *cg_alpha, Real *d_dot_q, int precondition,
-               Real *M, int *M_offsets, int m_num_diag, uint32_t &it, uint32_t max_iter, Real eps, int vec_size) {
+                Real *rho, Real *z, Real *cg_beta, Real *residual, Real &delta_new, Real *cg_alpha, Real *d_dot_q,
+                int precondition, Real *M, int *M_offsets, int m_num_diag, uint32_t &it, uint32_t max_iter, Real eps,
+                int vec_size) {
     int num_blocks = get_num_blks(vec_size);
     Real residual_out;
     cudaMemcpy(r, b, vec_size * sizeof(Real), cudaMemcpyDeviceToDevice);
@@ -392,8 +392,6 @@ void uv_boundary(Real *u, Real *v, int *row_start_u, int *row_start_v, int *col_
     enforce_boundary<<<num_blks, BLK_SIZE>>>(u, row_start_u, col_idx_u, mat_u, rhs_vec_u, size);
     enforce_boundary<<<num_blks, BLK_SIZE>>>(v, row_start_v, col_idx_v, mat_v, rhs_vec_v, size);
 }
-
-
 
 void t_boundary(Real *t, int *row_start_t, int *col_idx_t, Real *mat_t, Real *rhs_vec_t, int size) {
     int num_blks(get_num_blks(size));
@@ -1066,9 +1064,18 @@ void CudaSolver::solve_pressure(Real &res, uint32_t &it) {
         auto grid_y = _grid.jmaxb();
         auto grid_size = grid_x * grid_y;
         int num_blks(get_num_blks(grid_size));
-        solve_pcg2(A, A_offsets, num_offsets_a, P, RS, q, d, r, r_dot_r_old, r_dot_r, z, cg_beta, U_residual, res, cg_alpha, d_dot_q,
-                  _preconditioner, M, M_offsets, num_offsets_m, it, _max_iter, _tolerance,
-                  _grid.imaxb() * _grid.jmaxb());
+        constexpr int PCG_MODE = 0;
+        if (PCG_MODE == 0) {
+            solve_pcg(A, A_offsets, num_offsets_a, P, RS, q, d, r, r_dot_r_old, r_dot_r, z, cg_beta, res, cg_alpha,
+                      d_dot_q, _preconditioner, M, M_offsets, num_offsets_m, it, _max_iter, _tolerance,
+                      _grid.imaxb() * _grid.jmaxb());
+
+        } else {
+            solve_pcg2(A, A_offsets, num_offsets_a, P, RS, q, d, r, r_dot_r_old, r_dot_r, z, cg_beta, U_residual, res,
+                       cg_alpha, d_dot_q, _preconditioner, M, M_offsets, num_offsets_m, it, _max_iter, _tolerance,
+                       _grid.imaxb() * _grid.jmaxb());
+        }
+
     } else if (solver_type == SolverType::SOR) {
         solve_sor(P, P_temp, P_residual, p_residual_out, neighborhood, _grid.imaxb(), _grid.jmaxb(), RS, cell_type, it,
                   _max_iter, _grid.dx(), _grid.dy(), _field._PI, _tolerance, res, _grid.fluid_cells().size());
