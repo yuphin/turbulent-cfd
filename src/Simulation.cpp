@@ -272,15 +272,6 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         _solver->_boundaries.push_back(
             std::make_unique<NoSlipWallBoundary>(&_solver->_grid.noslip_wall_cells(), wall_vels, wall_temps));
     }
-  
-   
-    // Set pointers to boundaries
-  /* for (const auto &boundary : _solver->_boundaries) {
-        auto cells = boundary->_cells;
-        for (auto &cell : *cells) {
-            cell->_boundary = boundary.get();
-        }
-    }*/
 }
 
 void Simulation::set_file_names(std::string file_name) {
@@ -404,28 +395,28 @@ void Simulation::output_vtk(int timestep, Params &params) {
 #else
     typedef vtkDoubleArray VTK_Array;
 #endif
-    VTK_Array *Pressure = VTK_Array::New();
+    vtkSmartPointer<VTK_Array> Pressure = vtkSmartPointer<VTK_Array>::New();
     Pressure->SetName("pressure");
     Pressure->SetNumberOfComponents(1);
-    VTK_Array *KValue;
-    VTK_Array *EpsValue;
-    VTK_Array *TurbViscosity;
+    vtkSmartPointer<VTK_Array> KValue;
+    vtkSmartPointer<VTK_Array> EpsValue;
+    vtkSmartPointer<VTK_Array> TurbViscosity;
     if (_solver->_turb_model != 0) {
-        KValue = VTK_Array::New();
+        KValue = vtkSmartPointer<VTK_Array>::New();
         KValue->SetName("kvalue");
         KValue->SetNumberOfComponents(1);
 
-        EpsValue = VTK_Array::New();
+        EpsValue = vtkSmartPointer<VTK_Array>::New();
         EpsValue->SetName("epsvalue");
         EpsValue->SetNumberOfComponents(1);
 
-        TurbViscosity = VTK_Array::New();
+        TurbViscosity = vtkSmartPointer<VTK_Array>::New();
         TurbViscosity->SetName("nu_t");
         TurbViscosity->SetNumberOfComponents(1);
     }
 
     // Velocity Array
-    VTK_Array *Velocity = VTK_Array::New();
+    vtkSmartPointer<VTK_Array> Velocity = vtkSmartPointer<VTK_Array>::New();
     Velocity->SetName("velocity");
     Velocity->SetNumberOfComponents(3);
 
@@ -474,7 +465,7 @@ void Simulation::output_vtk(int timestep, Params &params) {
 
     // Add Temperature to Structured Grid
     if (_solver->_field.calc_temp) {
-        VTK_Array *Temperature = VTK_Array::New();
+        vtkSmartPointer<VTK_Array> Temperature = VTK_Array::New();
         Temperature->SetName("temperature");
         Temperature->SetNumberOfComponents(1);
 
