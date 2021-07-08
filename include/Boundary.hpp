@@ -25,7 +25,7 @@ class Boundary {
     virtual void enforce_fg(Fields &field);
     virtual void enforce_p(Fields &field);
     virtual void enforce_t(Fields &field);
-    virtual void enforce_nu_t(Fields &field);    
+    virtual void enforce_nu_t(Fields &field, int turb_model);    
     virtual ~Boundary() = default;
     uint32_t get_type() {return _type;}
     std::vector<Cell *> *_cells;
@@ -67,7 +67,7 @@ class InletBoundary : public Boundary {
     void enforce_uv(Fields &field) override;
     void enforce_p(Fields &field) override;    
     void enforce_t(Fields &field) override;
-    void enforce_nu_t(Fields &field) override;
+    void enforce_nu_t(Fields &field, int turb_model) override;
 
     std::unordered_map<int, Real> _inlet_U;
     std::unordered_map<int, Real> _inlet_V;

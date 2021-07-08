@@ -251,6 +251,8 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         std::cout << "Turbulence model: off\n";
     } else if (turb_model == 1) {
         std::cout << "Turbulence model: K-Epsilon\n";
+    } else if (turb_model == 2) {
+        std::cout << "Turbulence model: K-Omega\n";
     }
 
     // Construct boundaries
@@ -408,7 +410,7 @@ void Simulation::output_vtk(int timestep, Params &params) {
     VTK_Array *KValue;
     VTK_Array *EpsValue;
     VTK_Array *TurbViscosity;
-    if (_solver->_turb_model == 1) {
+    if (_solver->_turb_model != 0) {
         KValue = VTK_Array::New();
         KValue->SetName("kvalue");
         KValue->SetNumberOfComponents(1);
@@ -432,7 +434,7 @@ void Simulation::output_vtk(int timestep, Params &params) {
         for (int i = 1; i < _solver->_grid.domain().size_x + 1; i++) {
             Real pressure = _solver->_field.p(i, j);
             Pressure->InsertNextTuple(&pressure);
-            if (_solver->_turb_model == 1) {
+            if (_solver->_turb_model != 0) {
                 Real kval = _solver->_field.k(i, j);
                 KValue->InsertNextTuple(&kval);
                 Real epsval = _solver->_field.eps(i, j);
@@ -462,7 +464,7 @@ void Simulation::output_vtk(int timestep, Params &params) {
 
     // Add Pressure to Structured Grid
     structuredGrid->GetCellData()->AddArray(Pressure);
-    if (_solver->_turb_model == 1) {
+    if (_solver->_turb_model != 0) {
         structuredGrid->GetCellData()->AddArray(KValue);
         structuredGrid->GetCellData()->AddArray(EpsValue);
         structuredGrid->GetCellData()->AddArray(TurbViscosity);

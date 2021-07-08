@@ -77,7 +77,7 @@ Matrix<Real> &Fields::nu_t_matrix() { return _NU_T; }
 
 Real Fields::dt() const { return _dt; }
 
-void Fields::calculate_nu_t(Grid &grid) {
+void Fields::calculate_nu_t(Grid &grid, int turb_model) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
@@ -85,7 +85,11 @@ void Fields::calculate_nu_t(Grid &grid) {
         Real fnu_coeff = 1;
         auto kij = k(i, j);
         auto epsij = eps(i, j);
-        nu_t(i, j) = fnu_coeff * 0.09 * kij * kij / epsij + _nu;
+        if (turb_model == 1) {
+            nu_t(i, j) = fnu_coeff * 0.09 * kij * kij / epsij + _nu;
+        } else if (turb_model == 2) {
+            nu_t(i, j) = kij / epsij + _nu;
+        }
         assert(!isnan(nu_t(i, j)));
         assert(!isinf(nu_t(i, j)));
         assert(nu_t(i, j) > 0);
@@ -94,46 +98,84 @@ void Fields::calculate_nu_t(Grid &grid) {
         int i = current_cell->i();
         int j = current_cell->j();
         Real fnu_coeff = 1;
-
-        auto num_i = (k(i, j) + k(i + 1, j)) / 2;
-        auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
-        auto num_j = (k(i, j) + k(i, j + 1)) / 2;
-        auto denom_j = (eps(i, j) + eps(i, j + 1)) / 2;
-        nu_i(i, j) = fnu_coeff * 0.09 * num_i * num_i / denom_i;
-        nu_j(i, j) = fnu_coeff * 0.09 * num_j * num_j / denom_j;
+        if (turb_model == 1) {
+            auto num_i = (k(i, j) + k(i + 1, j)) / 2;
+            auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
+            auto num_j = (k(i, j) + k(i, j + 1)) / 2;
+            auto denom_j = (eps(i, j) + eps(i, j + 1)) / 2;
+            nu_i(i, j) = fnu_coeff * 0.09 * num_i * num_i / denom_i;
+            nu_j(i, j) = fnu_coeff * 0.09 * num_j * num_j / denom_j; 
+        } else if (turb_model == 2) {
+            auto num_i = (k(i, j) + k(i + 1, j)) / 2;
+            auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
+            auto num_j = (k(i, j) + k(i, j + 1)) / 2;
+            auto denom_j = (eps(i, j) + eps(i, j + 1)) / 2;
+            nu_i(i, j) = 0.5 * num_i / denom_i;
+            nu_j(i, j) = 0.5 * num_j / denom_j;  
+        }
+      
     }
-    calculate_k_and_epsilon(grid);
+    calculate_k_and_epsilon(grid, turb_model);
 }
 
-void Fields::calculate_k_and_epsilon(Grid &grid) {
+void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
     auto K_OLD = _K;
     auto EPS_OLD = _EPS;
+    if (turb_model == 1) { // K-epsilon
+        for (const auto &current_cell : grid.fluid_cells()) {
+            int i = current_cell->i();
+            int j = current_cell->j();
+            Real f2_coeff = 1;
+            auto nut = nu_t(i, j);
+            auto kij = K_OLD(i, j);
+            auto eij = EPS_OLD(i, j);
+            auto k1_1 = Discretization::convection_uKEPS(_U, K_OLD, i, j);
+            auto k1_2 = Discretization::convection_vKEPS(_V, K_OLD, i, j);
+            auto e1_1 = Discretization::convection_uKEPS(_U, EPS_OLD, i, j);
+            auto e1_2 = Discretization::convection_vKEPS(_V, EPS_OLD, i, j);
 
-    for (const auto &current_cell : grid.fluid_cells()) {
-        int i = current_cell->i();
-        int j = current_cell->j();
-        Real f2_coeff = 1;
-        auto nut = nu_t(i, j);
-        auto kij = K_OLD(i, j);
-        auto eij = EPS_OLD(i, j);
-        auto k1_1 = Discretization::convection_uKEPS(_U, K_OLD, i, j);
-        auto k1_2 = Discretization::convection_vKEPS(_V, K_OLD, i, j);
-        auto e1_1 = Discretization::convection_uKEPS(_U, EPS_OLD, i, j);
-        auto e1_2 = Discretization::convection_vKEPS(_V, EPS_OLD, i, j);
+            auto k2 = Discretization::laplacian_nu(K_OLD, _nu, _NU_I, _NU_J, i, j);
+            auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j, 1.3);
 
-        auto k2 = Discretization::laplacian_nu(K_OLD, _nu, _NU_I, _NU_J, i, j);
-        auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j, 1.3);
+            auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, i, j);
+            auto e3 = 1.44 * eij * k3 / kij;
+            auto e4 = f2_coeff * 1.92 * eij * eij / kij;
+            auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - eij);
+            auto epsij_new = eij + _dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
+            k(i, j) = kij_new;
+            eps(i, j) = epsij_new;
+            assert(kij_new > 0);
+            assert(epsij_new > 0);
+        } 
+    } else if (turb_model == 2) { // K-omega
+        for (const auto &current_cell : grid.fluid_cells()) {
+            int i = current_cell->i();
+            int j = current_cell->j();
+            Real f2_coeff = 1;
+            auto nut = nu_t(i, j);
+            auto kij = K_OLD(i, j);
+            auto eij = EPS_OLD(i, j);
+            auto k1_1 = Discretization::convection_uKEPS(_U, K_OLD, i, j);
+            auto k1_2 = Discretization::convection_vKEPS(_V, K_OLD, i, j);
+            auto e1_1 = Discretization::convection_uKEPS(_U, EPS_OLD, i, j);
+            auto e1_2 = Discretization::convection_vKEPS(_V, EPS_OLD, i, j);
 
-        auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, i, j);
-        auto e3 = 1.44 * eij * k3 / kij;
-        auto e4 = f2_coeff * 1.92 * eij * eij / kij;
-        auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - eij);
-        auto epsij_new = eij + _dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
-        k(i, j) = kij_new;
-        eps(i, j) = epsij_new;
-        assert(kij_new > 0);
-        assert(epsij_new > 0);
+            auto k2 = Discretization::laplacian_nu(K_OLD, _nu, _NU_I, _NU_J, i, j);
+            auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j);
+
+            auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, i, j);
+            auto e3 = 5/9 * eij * k3 / kij;
+            auto e4 = 3 / 40 * eij * eij;
+            auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - 0.09 * kij * eij);
+            auto epsij_new = eij + _dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
+            k(i, j) = kij_new;
+            eps(i, j) = epsij_new;
+            assert(kij_new > 0);
+            assert(epsij_new > 0);
+        } 
+    
     }
+  
 }
 
 Real Fields::damp_f2(int i, int j) { return 1 - 0.3 * std::exp(-std::pow(k(i, j) * k(i, j) / (_nu * eps(i, j)), 2)); }
@@ -176,7 +218,7 @@ void Fields::calculate_temperatures(Grid &grid) {
     }
 }
 
-Real Fields::calculate_dt(Grid &grid, bool calc_temp, bool turbulent) {
+Real Fields::calculate_dt(Grid &grid, bool calc_temp, int turbulence) {
 
     Real dx2 = grid.dx() * grid.dx();
     Real dy2 = grid.dy() * grid.dy();
@@ -191,12 +233,12 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp, bool turbulent) {
     Real nu_min = REAL_MAX;
     Real k_max;
     Real eps_max;
-    if(turbulent){
+    if(turbulence != 0){
         k_max = *std::max_element(_K.data(), _K.data() + _K.size());
         eps_max = *std::max_element(_EPS.data(), _EPS.data() + _EPS.size());
     }
 
-    if (turbulent) {
+    if (turbulence != 0) {
         for (auto &cell : grid.fluid_cells()) {
             int i = cell->i();
             int j = cell->j();
@@ -228,9 +270,14 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp, bool turbulent) {
         Real cond_4 = 1 / (2 * _alpha * (1 / dx2 + 1 / dy2));
         minimum = std::min(minimum, cond_4);
     }
-    if(turbulent){
+    if(turbulence != 0){
         Real cond_5 = 1 / (2 * k_max * (1 / dx2 + 1 / dy2));
-        Real cond_6 = 1 / (2 * eps_max * (1 / dx2 + 1 / dy2));
+        Real cond_6;
+        if (turbulence == 1) {
+            cond_6 = 1 / (2 * eps_max  * (1 / dx2 + 1 / dy2));
+        } else if (turbulence == 2) {
+            cond_6 = 1 / (2 * (eps_max * 0.09 * k_max) * (1 / dx2 + 1 / dy2));
+        }
         minimum = std::min(minimum, cond_5);
         minimum = std::min(minimum, cond_6);
     }

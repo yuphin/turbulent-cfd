@@ -189,7 +189,7 @@ void Boundary::enforce_t_adiabatic_diag(Fields &field, Cell *cell) {
     }
 }
 
-void Boundary::enforce_nu_t(Fields &field) {
+void Boundary::enforce_nu_t(Fields &field, int turb_model) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();
@@ -202,28 +202,44 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto eps_interp = (field.eps(i + 1, j) + field.eps(i, j + 1)) / 2.0;
                 field.k(i, j) = k_interp;
                 field.eps(i, j) = eps_interp;
-                field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+                if (turb_model == 1) {
+                    field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+                } else if (turb_model == 2) {
+                    field.nu_t(i, j) = k_interp / eps_interp + field._nu;
+                }
             }
             if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
                 auto k_interp = (field.k(i + 1, j) + field.k(i, j - 1)) / 2.0;
                 auto eps_interp = (field.eps(i + 1, j) + field.eps(i, j - 1)) / 2.0;
                 field.k(i, j) = k_interp;
                 field.eps(i, j) = eps_interp;
-                field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+                if (turb_model == 1) {
+                    field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+                } else if (turb_model == 2) {
+                    field.nu_t(i, j) = k_interp / eps_interp + field._nu;
+                }
             }
             if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::TOP)) {
                 auto k_interp = (field.k(i - 1, j) + field.k(i, j + 1)) / 2.0;
                 auto eps_interp = (field.eps(i - 1, j) + field.eps(i, j + 1)) / 2.0;
                 field.k(i, j) = k_interp;
                 field.eps(i, j) = eps_interp;
-                field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+                if (turb_model == 1) {
+                    field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+                } else if (turb_model == 2) {
+                    field.nu_t(i, j) = k_interp / eps_interp + field._nu;
+                }
             }
             if (cell->is_border(border_position::LEFT) && cell->is_border(border_position::BOTTOM)) {
                 auto k_interp = (field.k(i - 1, j) + field.k(i, j - 1)) / 2.0;
                 auto eps_interp = (field.eps(i - 1, j) + field.eps(i, j - 1)) / 2.0;
                 field.k(i, j) = k_interp;
                 field.eps(i, j) = eps_interp;
-                field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+                if (turb_model == 1) {
+                    field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
+                } else if (turb_model == 2) {
+                    field.nu_t(i, j) = k_interp / eps_interp + field._nu;
+                }
             }
         } else if (cell->borders().size() == 1) {
             if (cell->is_border(border_position::RIGHT)) {
@@ -231,29 +247,47 @@ void Boundary::enforce_nu_t(Fields &field) {
                 auto eps = field.eps(i + 1, j);
                 field.k(i, j) = k;
                 field.eps(i, j) = eps;
-                field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+                if (turb_model == 1) {
+                    field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+                } else if (turb_model == 2) {
+                    field.nu_t(i, j) = k / eps + field._nu;
+                }
             }
             if (cell->is_border(border_position::LEFT)) {
                 auto k = field.k(i - 1, j);
                 auto eps = field.eps(i - 1, j);
                 field.k(i, j) = k;
                 field.eps(i, j) = eps;
-                field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+                if (turb_model == 1) {
+                    field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+                } else if (turb_model == 2) {
+                    field.nu_t(i, j) = k / eps + field._nu;
+                }
             }
             if (cell->is_border(border_position::TOP)) {
                 auto k = field.k(i, j + 1);
                 auto eps = field.eps(i, j + 1);
                 field.k(i, j) = k;
                 field.eps(i, j) = eps;
-                field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+                if (turb_model == 1) {
+                    field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+                } else if (turb_model == 2) {
+                    field.nu_t(i, j) = k / eps + field._nu;
+                }
             }
             if (cell->is_border(border_position::BOTTOM)) {
                 auto k = field.k(i, j - 1);
                 auto eps = field.eps(i, j - 1);
                 field.k(i, j) = k;
                 field.eps(i, j) = eps;
-                field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+                if (turb_model == 1) {
+                    field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+                } else if (turb_model == 2) {
+                    field.nu_t(i, j) = k / eps + field._nu;
+                }
             }
+        } else if (!cell->borders().size()) {
+            field.nu_t(i, j) = field._nu;
         }
     }
 }
@@ -330,11 +364,11 @@ void InletBoundary::enforce_t(Fields &field) {
     }
 }
 
-void InletBoundary::enforce_nu_t(Fields &field) {
+void InletBoundary::enforce_nu_t(Fields &field, int turb_model) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();
-       
+
         auto wk = _inlet_K[cell->id()];
         auto weps = _inlet_EPS[cell->id()];
         if (cell->is_border(border_position::RIGHT)) {
@@ -342,28 +376,44 @@ void InletBoundary::enforce_nu_t(Fields &field) {
             auto eps = 2 * weps - field.eps(i + 1, j);
             field.k(i, j) = k;
             field.eps(i, j) = eps;
-            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+          /*  if (turb_model == 1) {
+                field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+            } else if (turb_model == 2) {
+                field.nu_t(i, j) = k / eps + field._nu;
+            }*/
         }
         if (cell->is_border(border_position::LEFT)) {
             auto k = 2 * wk - field.k(i - 1, j);
             auto eps = 2 * weps - field.eps(i - 1, j);
             field.k(i, j) = k;
             field.eps(i, j) = eps;
-            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+           /* if (turb_model == 1) {
+                field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+            } else if (turb_model == 2) {
+                field.nu_t(i, j) = k / eps + field._nu;
+            }*/
         }
         if (cell->is_border(border_position::TOP)) {
             auto k = 2 * wk - field.k(i, j + 1);
             auto eps = 2 * weps - field.eps(i, j + 1);
             field.k(i, j) = k;
             field.eps(i, j) = eps;
-            field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+           /* if (turb_model == 1) {
+                field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+            } else if (turb_model == 2) {
+                field.nu_t(i, j) = k / eps + field._nu;
+            }*/
         }
         if (cell->is_border(border_position::BOTTOM)) {
             auto k = 2 * wk - field.k(i, j - 1);
             auto eps = 2 * weps - field.eps(i, j - 1);
             field.k(i, j) = k;
             field.eps(i, j) = eps;
-            field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
+           /* if (turb_model == 1) {
+                field.nu_t(i, j) = 0.09 * field.k(i, j) * field.k(i, j) / field.eps(i, j) + field._nu;
+            } else if (turb_model == 2) {
+                field.nu_t(i, j) = k / eps + field._nu;
+            }*/
         }
     }
 }

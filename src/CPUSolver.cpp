@@ -10,7 +10,7 @@ void CPUSolver::initialize() {
 void CPUSolver::solve_pre_pressure(Real &dt) {
 
     // Select dt
-    dt = _field.calculate_dt(_grid, _field.calc_temp, _turb_model != 0);
+    dt = _field.calculate_dt(_grid, _field.calc_temp, _turb_model);
 
     // Enforce velocity boundary conditions
     for (auto &boundary : _boundaries) {
@@ -67,11 +67,11 @@ void CPUSolver::solve_post_pressure() {
     Communication::communicate(&params, _field.u_matrix());
     Communication::communicate(&params, _field.v_matrix());
 
-     if (_turb_model == 1) {
+     if (_turb_model != 0) {
         // Compute turbulent viscosity and set boundary conditions
-        _field.calculate_nu_t(_grid);
+        _field.calculate_nu_t(_grid, _turb_model);
         for (const auto &boundary : _boundaries) {
-            boundary->enforce_nu_t(_field);
+            boundary->enforce_nu_t(_field, _turb_model);
         }
         // Communicate turbulence quantities
         Communication::communicate(&params, _field.nu_t_matrix());

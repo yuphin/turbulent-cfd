@@ -72,7 +72,7 @@ class Fields {
      * @param[in] grid in which the calculations are done
      * @param[in] whether to include temperatures
      */
-    Real calculate_dt(Grid &grid, bool calc_temp, bool turbulent);
+    Real calculate_dt(Grid &grid, bool calc_temp, int turbulence);
 
     /// x-velocity index based access and modify
     Real &u(int i, int j);
@@ -136,9 +136,9 @@ class Fields {
     /// turbulent energy matrix
     Matrix<Real> &nu_t_matrix();
 
-    void calculate_nu_t(Grid &grid);
+    void calculate_nu_t(Grid &grid,int turb_model);
 
-    void calculate_k_and_epsilon(Grid &grid);
+    void calculate_k_and_epsilon(Grid &grid, int turb_model);
 
     Real damp_f2(int i, int j);
 
