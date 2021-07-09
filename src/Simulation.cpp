@@ -277,6 +277,14 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         _solver->_boundaries.push_back(
             std::make_unique<NoSlipWallBoundary>(&_solver->_grid.noslip_wall_cells(), wall_vels, wall_temps));
     }
+
+    // TODO
+    for (auto &p : inlet_EPSs) {
+        _solver->_EPSIN = p.second;
+    }
+    for (auto &p : inlet_Ks) {
+        _solver->_KIN = p.second;
+    }
 }
 
 void Simulation::set_file_names(std::string file_name) {

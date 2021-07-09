@@ -16,7 +16,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
         if (abort) exit(code);
     }
 }
-#define chk(ans) \
+#define chk(ans)                                                                                                       \
     { gpuAssert((ans), __FILE__, __LINE__); }
 
 int get_num_blks(int size) { return (size + BLK_SIZE - 1) / BLK_SIZE; }
@@ -421,7 +421,8 @@ __global__ void calc_t(Real *u, Real *v, Real dx, Real dy, Real *t_new, Real *t_
                                               convection_vT(v_stencil, t_laplacian, inv_dy, gamma));
 }
 
-__global__ void calculate_nu_t(Real *NU_T, Real *K, Real *EPS, int *cell_type, Real _nu, int imax, int jmax) {
+__global__ void calculate_nu_t(Real *NU_T, Real *K, Real *EPS, int *cell_type, Real _nu, int imax, int jmax,
+                               const int turb_model) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
     int is_fluid = at(cell_type, i, j);
@@ -430,11 +431,15 @@ __global__ void calculate_nu_t(Real *NU_T, Real *K, Real *EPS, int *cell_type, R
     }
     Real kij = at(K, i, j);
     Real epsij = at(EPS, i, j);
-    at(NU_T, i, j) = 0.09 * kij * kij / epsij + _nu;
+    if (turb_model == 1) {
+        at(NU_T, i, j) = 0.09 * kij * kij / epsij + _nu;
+    } else if (turb_model == 2) {
+        at(NU_T, i, j) = kij / epsij + _nu;
+    }
 }
 
 __global__ void calculate_nu_ij(Real *NU_I, Real *NU_J, Real *K, Real *EPS, int *cell_type, Real _nu, int imax,
-                                int jmax) {
+                                int jmax, const int turb_model) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
     int is_fluid = at(cell_type, i, j);
@@ -446,9 +451,13 @@ __global__ void calculate_nu_ij(Real *NU_I, Real *NU_J, Real *K, Real *EPS, int 
 
     Real num_j = (at(K, i, j) + at(K, i, j + 1)) / 2;
     Real denom_j = (at(EPS, i, j) + at(EPS, i, j + 1)) / 2;
-
-    at(NU_I, i, j) = 0.09 * num_i * num_i / denom_i;
-    at(NU_J, i, j) = 0.09 * num_j * num_j / denom_j;
+    if (turb_model == 1) {
+        at(NU_I, i, j) = 0.09 * num_i * num_i / denom_i;
+        at(NU_J, i, j) = 0.09 * num_j * num_j / denom_j;
+    } else if (turb_model == 2) {
+        at(NU_I, i, j) = 0.5 * num_i / denom_i;
+        at(NU_J, i, j) = 0.5 * num_j / denom_j;
+    }
 }
 
 __global__ void calculate_k_and_epsilon(Real *K_old, Real *EPS_old, Real *K, Real *EPS, Real *NU_T, Real *NU_I,
@@ -480,7 +489,6 @@ __global__ void calculate_k_and_epsilon(Real *K_old, Real *EPS_old, Real *K, Rea
     auto k1_2 = convecton_vKEPS(V_diff, K_stencil, inv_dy);
     auto e1_1 = convecton_uKEPS(U_diff, EPS_stencil, inv_dx);
     auto e1_2 = convecton_vKEPS(V_diff, EPS_stencil, inv_dy);
-
     auto k2 = laplacian_nu(K_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
     auto e2 = laplacian_nu(EPS_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1.3);
 
@@ -488,6 +496,47 @@ __global__ void calculate_k_and_epsilon(Real *K_old, Real *EPS_old, Real *K, Rea
     auto e3 = 1.44 * eij * k3 / kij;
     auto e4 = f2_coeff * 1.92 * eij * eij / kij;
     auto kij_new = kij + dt * (-(k1_1 + k1_2) + k2 + k3 - eij);
+    auto epsij_new = eij + dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
+    at(K, i, j) = kij_new;
+    at(EPS, i, j) = epsij_new;
+}
+
+__global__ void calculate_k_and_omega(Real *K_old, Real *EPS_old, Real *K, Real *EPS, Real *NU_T, Real *NU_I,
+                                        Real *NU_J, Real *U, Real *V, int *cell_type, Real _nu, int imax, int jmax,
+                                        Real dt, Real inv_dx, Real inv_dy) {
+    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
+    int is_fluid = at(cell_type, i, j);
+    if (i >= imax || j >= jmax || is_fluid == 0) {
+        return;
+    }
+    Real f2_coeff = 1;
+    auto nut = at(NU_T, i, j);
+    auto kij = at(K_old, i, j);
+    auto eij = at(EPS_old, i, j);
+    Real K_stencil[5] = {at(K_old, i + 1, j), at(K_old, i, j), at(K_old, i - 1, j), at(K_old, i, j + 1),
+                         at(K_old, i, j - 1)};
+    Real EPS_stencil[5] = {at(EPS_old, i + 1, j), at(EPS_old, i, j), at(EPS_old, i - 1, j), at(EPS_old, i, j + 1),
+                           at(EPS_old, i, j - 1)};
+    Real U_diff[2] = {at(U, i - 1, j), at(U, i, j)};
+    Real V_diff[2] = {at(V, i, j - 1), at(V, i, j)};
+    Real NU_I_diff[2] = {at(NU_I, i, j), at(NU_I, i - 1, j)};
+    Real NU_J_diff[2] = {at(NU_J, i, j), at(NU_J, i, j - 1)};
+    Real U_stencil[6] = {at(U, i, j),         at(U, i - 1, j), at(U, i, j + 1),
+                         at(U, i - 1, j + 1), at(U, i, j - 1), at(U, i - 1, j - 1)};
+    Real V_stencil[6] = {at(V, i, j),         at(V, i, j - 1), at(V, i + 1, j),
+                         at(V, i + 1, j - 1), at(V, i - 1, j), at(V, i - 1, j - 1)};
+    auto k1_1 = convecton_uKEPS(U_diff, K_stencil, inv_dx);
+    auto k1_2 = convecton_vKEPS(V_diff, K_stencil, inv_dy);
+    auto e1_1 = convecton_uKEPS(U_diff, EPS_stencil, inv_dx);
+    auto e1_2 = convecton_vKEPS(V_diff, EPS_stencil, inv_dy);
+    auto k2 = laplacian_nu(K_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
+    auto e2 = laplacian_nu(EPS_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
+
+    auto k3 = nut * mean_strain_rate_squared(U_stencil, V_stencil, inv_dx, inv_dy);
+    auto e3 = 5/9 * eij * k3 / kij;
+    auto e4 = 3 / 40 * eij * eij;
+    auto kij_new = kij + dt * (-(k1_1 + k1_2) + k2 + k3 - 0.09 * kij * eij);
     auto epsij_new = eij + dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
     at(K, i, j) = kij_new;
     at(EPS, i, j) = epsij_new;
@@ -632,7 +681,7 @@ __global__ void p_boundary(Real *p, int imax, int jmax, uint32_t *neighborhood, 
 }
 
 __global__ void nu_t_boundary(Real *NU_T, Real *K, Real *EPS, int imax, int jmax, uint32_t *neighborhood,
-                              int *cell_type, Real wk, Real weps, Real _nu) {
+                              int *cell_type, Real wk, Real weps, Real _nu, const int turb_model) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
     int is_fluid = at(cell_type, i, j);
@@ -668,7 +717,7 @@ __global__ void nu_t_boundary(Real *NU_T, Real *K, Real *EPS, int imax, int jmax
         if (valid) {
             at(K, i, j) = k;
             at(EPS, i, j) = eps;
-            at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
+            //at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
         }
     } else { // Other
         int diag = 0;
@@ -718,7 +767,11 @@ __global__ void nu_t_boundary(Real *NU_T, Real *K, Real *EPS, int imax, int jmax
         if (diag || valid) {
             at(K, i, j) = k;
             at(EPS, i, j) = eps;
-            at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
+            if (turb_model == 1) {
+                at(NU_T, i, j) = 0.09 * k * k / eps + _nu; 
+            } else if (turb_model == 2) {
+                at(NU_T, i, j) = k / eps + _nu; 
+            }
         }
     }
 }
@@ -770,7 +823,7 @@ __global__ void calc_rs(Real *f, Real *g, Real *rs, Real dx, Real dy, int imax, 
 
 Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *v_residual, Real *nu_residual,
                   Real *k_residual, Real *eps_residual, Real *nu_t, Real *k, Real *eps, Real dx, Real dy, Real tau,
-                  Real nu, Real alpha, bool calc_temp, bool turbulent) {
+                  Real nu, Real alpha, bool calc_temp, int turb_model) {
     // Calculate uv max
     int size = imax * jmax;
     int num_blks(get_num_blks(size));
@@ -790,7 +843,7 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
 
     reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(u, u_residual, size);
     reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(v, v_residual, size);
-    if (turbulent) {
+    if (turb_model != 0) {
         reduce_min<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(nu_t, nu_residual, size);
         reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(k, k_residual, size);
         reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(eps, eps_residual, size);
@@ -801,15 +854,15 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
         num_blks = get_num_blks(size);
         reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(u_residual, u_residual, size);
         reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(v_residual, v_residual, size);
-        if (turbulent) {
-            reduce_min<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(nu_t, nu_residual, size);
-            reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(k, k_residual, size);
-            reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(eps, eps_residual, size);
+        if (turb_model != 0) {
+            reduce_min<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(nu_residual, nu_residual, size);
+            reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(k_residual, k_residual, size);
+            reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(eps_residual, eps_residual, size);
         }
     }
     cudaMemcpy(&u_max_abs, u_residual, sizeof(Real), cudaMemcpyDeviceToHost);
     cudaMemcpy(&v_max_abs, v_residual, sizeof(Real), cudaMemcpyDeviceToHost);
-    if (turbulent) {
+    if (turb_model != 0) {
         cudaMemcpy(&nu_min, nu_residual, sizeof(Real), cudaMemcpyDeviceToHost);
         cudaMemcpy(&k_max, k_residual, sizeof(Real), cudaMemcpyDeviceToHost);
         cudaMemcpy(&eps_max, eps_residual, sizeof(Real), cudaMemcpyDeviceToHost);
@@ -831,13 +884,17 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
         Real cond_temp = 1 / (2 * alpha * (inv_dx2 + inv_dy2));
         min_cond = std::min(min_cond, cond_temp);
     }
-    if (turbulent) {
+    if (turb_model != 0) {
         Real cond_5 = 1 / (2 * k_max * (1 / dx2 + 1 / dy2));
-        Real cond_6 = 1 / (2 * eps_max * (1 / dx2 + 1 / dy2));
+        Real cond_6;
+        if (turb_model == 1) {
+            cond_6 = 1 / (2 * eps_max * (1 / dx2 + 1 / dy2));
+        } else if (turb_model == 2) {
+            cond_6 = 1 / (2 * (eps_max * 0.09 * k_max) * (1 / dx2 + 1 / dy2));
+        }
         min_cond = std::min(min_cond, cond_5);
         min_cond = std::min(min_cond, cond_6);
     }
-
     return tau * min_cond;
 }
 void CudaSolver::initialize() {
@@ -1034,7 +1091,7 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
     dt = calculate_dt(_grid.imaxb(), _grid.jmaxb(), U, V, U_residual, V_residual, NU_residual, K_residual, EPS_residual,
                       NU_T, K, EPS, _grid.dx(), _grid.dy(), _field._tau, _field._nu, _field._alpha, _field.calc_temp,
-                      _turb_model != 0);
+                      _turb_model);
     _field._dt = dt;
     uv_boundary(U, V, row_start_u, row_start_v, col_idx_u, col_idx_v, mat_u, mat_v, rhs_vec_u, rhs_vec_v, grid_size);
     if (_field.calc_temp) {
@@ -1091,23 +1148,34 @@ void CudaSolver::solve_post_pressure() {
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
     calc_vel<<<num_blks_2d, blk_size_2d>>>(U, V, P, F, G, cell_type, _field._dt, grid_x, grid_y, _grid.dx(),
                                            _grid.dy());
-    if (_turb_model == 1) {
+    if (_turb_model != 0) {
         chk(cudaMemcpy(K_old, K, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
         chk(cudaMemcpy(EPS_old, EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
-        calculate_nu_t<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, cell_type, _field._nu, grid_x, grid_y);
-        calculate_nu_ij<<<num_blks_2d, blk_size_2d>>>(NU_I, NU_J, K, EPS, cell_type, _field._nu, grid_x, grid_y);
-        calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, cell_type,
-                                                              _field._nu, grid_x, grid_y, _field._dt, 1 / _grid.dx(),
-                                                              1 / _grid.dy());
+        calculate_nu_t<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, cell_type, _field._nu, grid_x, grid_y, _turb_model);
+        calculate_nu_ij<<<num_blks_2d, blk_size_2d>>>(NU_I, NU_J, K, EPS, cell_type, _field._nu, grid_x, grid_y, _turb_model);
+        if (_turb_model == 1) {
+            calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V,
+                                                                  cell_type, _field._nu, grid_x, grid_y, _field._dt,
+                                                                  1 / _grid.dx(), 1 / _grid.dy()); 
+        } else if (_turb_model == 2) {
+            calculate_k_and_omega<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V,
+                                                                  cell_type, _field._nu, grid_x, grid_y, _field._dt,
+                                                                  1 / _grid.dx(), 1 / _grid.dy()); 
+        }
         // TODO : Implement KIN and EPSIN
-        nu_t_boundary<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, grid_x, grid_y, neighborhood, cell_type, 0, 0,
-                                                    _field._nu);
+        nu_t_boundary<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, grid_x, grid_y, neighborhood, cell_type, _KIN, _EPSIN,
+                                                    _field._nu, _turb_model);
     }
     chk(cudaMemcpy(_field._U._container.data(), U, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     chk(cudaMemcpy(_field._V._container.data(), V, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     chk(cudaMemcpy(_field._P._container.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     if (_field.calc_temp) {
         chk(cudaMemcpy(_field._T._container.data(), T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+    }
+    if (_turb_model != 0) {
+        chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     }
 }
 

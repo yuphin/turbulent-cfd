@@ -33,7 +33,9 @@ struct Solver {
 
     // Turbulence modeling method
     int _turb_model = 0;
-
+    
+    Real _EPSIN;
+    Real _KIN;
     
     friend class Logger;
     Logger logger = Logger();
