@@ -175,12 +175,16 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     if (simulation_type_int == 0) {
         _solver = std::make_unique<CPUSolver>();
 
-    } else if (simulation_type_int == 1) {
+    }
+#ifdef USE_CUDA
+    else if (simulation_type_int == 1) {
         _solver = std::make_unique<CudaSolver>();
-
-    } else if (simulation_type_int == 2) {
+#endif
+#ifdef USE_VULKAN
+    else if (simulation_type_int == 2) {
         _solver = std::make_unique<VulkanSolver>();
     }
+#endif
 
     // Prandtl number = nu / alpha
     if (pr != REAL_MAX) {

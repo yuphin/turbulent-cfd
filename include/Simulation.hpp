@@ -14,8 +14,12 @@
 #include "Communication.hpp"
 #include "Utilities.hpp"
 #include "CPUSolver.hpp"
+#ifdef USE_VULKAN
 #include "VulkanSolver.hpp"
+#endif
+#ifdef USE_CUDA
 #include "CUDASolver.hpp"
+#endif
 
 /**
  * @brief Class to hold and orchestrate the simulation flow.

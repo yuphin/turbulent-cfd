@@ -16,7 +16,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
         if (abort) exit(code);
     }
 }
-#define chk(ans)                                                                                                       \
+#define chk(ans) \
     { gpuAssert((ans), __FILE__, __LINE__); }
 
 int get_num_blks(int size) { return (size + BLK_SIZE - 1) / BLK_SIZE; }
