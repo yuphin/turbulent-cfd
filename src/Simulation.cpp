@@ -179,6 +179,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
 #ifdef USE_CUDA
     else if (simulation_type_int == 1) {
         _solver = std::make_unique<CudaSolver>();
+    }
 #endif
 #ifdef USE_VULKAN
     else if (simulation_type_int == 2) {
