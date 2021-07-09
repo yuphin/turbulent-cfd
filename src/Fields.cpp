@@ -23,7 +23,7 @@ Fields::Fields(Real nu, Real dt, Real tau, int imax, int jmax, Real UI, Real VI,
     _NU_J = Matrix<Real>(imax + 2, jmax + 2, 0.0);
     _K = Matrix<Real>(imax + 2, jmax + 2, KI);
     _EPS = Matrix<Real>(imax + 2, jmax + 2, EPSI);
-
+    _S = Matrix<Real>(imax + 2, jmax + 2, 0.0);
     _PI = PI;
     _TI = TI;
     _UI = UI;
@@ -81,7 +81,6 @@ void Fields::calculate_nu_t(Grid &grid, int turb_model) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-
         Real fnu_coeff = 1;
         auto kij = k(i, j);
         auto epsij = eps(i, j);
@@ -89,6 +88,11 @@ void Fields::calculate_nu_t(Grid &grid, int turb_model) {
             nu_t(i, j) = fnu_coeff * 0.09 * kij * kij / epsij + _nu;
         } else if (turb_model == 2) {
             nu_t(i, j) = kij / epsij + _nu;
+        } else if (turb_model == 3) { // K-omega SST
+            const Real a1 = 5.0 / 9.0;
+            auto dist = current_cell->closest_dist;
+            auto f2 = calculate_f2_sst(epsij, kij, dist);
+            nu_t(i, j) = a1 * kij / (std::max(a1 * epsij, _S(i, j) * f2)) + _nu;
         }
         assert(!isnan(nu_t(i, j)));
         assert(!isinf(nu_t(i, j)));
@@ -97,25 +101,66 @@ void Fields::calculate_nu_t(Grid &grid, int turb_model) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-        Real fnu_coeff = 1;
+
         if (turb_model == 1) {
+            Real fnu_coeff = 1;
             auto num_i = (k(i, j) + k(i + 1, j)) / 2;
             auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
             auto num_j = (k(i, j) + k(i, j + 1)) / 2;
             auto denom_j = (eps(i, j) + eps(i, j + 1)) / 2;
             nu_i(i, j) = fnu_coeff * 0.09 * num_i * num_i / denom_i;
-            nu_j(i, j) = fnu_coeff * 0.09 * num_j * num_j / denom_j; 
+            nu_j(i, j) = fnu_coeff * 0.09 * num_j * num_j / denom_j;
         } else if (turb_model == 2) {
             auto num_i = (k(i, j) + k(i + 1, j)) / 2;
             auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
             auto num_j = (k(i, j) + k(i, j + 1)) / 2;
             auto denom_j = (eps(i, j) + eps(i, j + 1)) / 2;
             nu_i(i, j) = 0.5 * num_i / denom_i;
-            nu_j(i, j) = 0.5 * num_j / denom_j;  
+            nu_j(i, j) = 0.5 * num_j / denom_j;
+        } else if (turb_model == 3) {
+            auto num_i = (k(i, j) + k(i + 1, j)) / 2;
+            auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
+            auto num_j = (k(i, j) + k(i, j + 1)) / 2;
+            auto denom_j = (eps(i, j) + eps(i, j + 1)) / 2;
+            constexpr Real a1 = 5.0 / 9.0;
+            auto dist = current_cell->closest_dist;
+            auto f2_1 = calculate_f2_sst(denom_i, num_i, dist);
+            auto f2_2 = calculate_f2_sst(denom_j, num_j, dist);
+            nu_i(i, j) = 0.85 * a1 * num_i / (std::max(a1 * denom_i, _S(i, j) * f2_1));
+            nu_j(i, j) = 0.5 * a1 * num_j / (std::max(a1 * denom_j, _S(i, j) * f2_2));
         }
-      
+        assert(!isnan(nu_i(i, j)));
+        assert(!isnan(nu_j(i, j)));
     }
     calculate_k_and_epsilon(grid, turb_model);
+}
+
+Real Fields::calculate_f1_sst(Grid &grid, Real omega, Real dk_di, Real dw_di, Real k, Real dist) {
+    Real cd_kw = std::max(2 * 0.856 * 1 / omega * dk_di * dw_di, 1e-10);
+    Real f1 =
+        std::tanh(std::pow(std::min(std::max(std::sqrt(k) / (0.09 * omega * dist), 500 * _nu / (dist * dist * omega)),
+                                    4 * 0.856 * k / (cd_kw * dist * dist)),
+                           4));
+    return f1;
+}
+
+Real Fields::calculate_f2_sst(Real omega, Real k, Real dist) {
+    Real max_sqr = std::max(2 * std::sqrt(k) / (0.09 * omega * dist), 500 * _nu / (dist * dist * omega));
+    return std::tanh(max_sqr * max_sqr);
+}
+
+Real Fields::calculate_sst_term(Grid &grid, Matrix<Real> &K, Matrix<Real> &EPS, Real omega, Real k, Real dist, int i,
+                                int j) {
+    Real dk_dx = (K(i, j) - K(i - 1, j)) / grid.dx();
+    Real dw_dx = (EPS(i, j) - EPS(i - 1, j)) / grid.dx();
+    Real dk_dy = (K(i, j) - K(i, j - 1)) / grid.dy();
+    Real dw_dy = (EPS(i, j) - EPS(i, j - 1)) / grid.dy();
+
+    Real f1_x = calculate_f1_sst(grid, omega, dk_dx, dw_dx, k, dist);
+    Real f1_y = calculate_f1_sst(grid, omega, dk_dy, dw_dy, k, dist);
+    Real res_x = 2 * (1 - f1_x) * 0.856 * 1 / omega * dk_dx * dw_dx;
+    Real res_y = 2 * (1 - f1_y) * 0.856 * 1 / omega * dk_dy * dw_dy;
+    return res_x + res_y;
 }
 
 void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
@@ -137,7 +182,7 @@ void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
             auto k2 = Discretization::laplacian_nu(K_OLD, _nu, _NU_I, _NU_J, i, j);
             auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j, 1.3);
 
-            auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, i, j);
+            auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, _S,i, j);
             auto e3 = 1.44 * eij * k3 / kij;
             auto e4 = f2_coeff * 1.92 * eij * eij / kij;
             auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - eij);
@@ -163,9 +208,9 @@ void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
             auto k2 = Discretization::laplacian_nu(K_OLD, _nu, _NU_I, _NU_J, i, j);
             auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j);
 
-            auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, i, j);
-            auto e3 = 5/9 * eij * k3 / kij;
-            auto e4 = 3 / 40 * eij * eij;
+            auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, _S, i, j);
+            auto e3 = 5.0/9.0 * eij * k3 / kij;
+            auto e4 = 3.0 / 40.0 * eij * eij;
             auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - 0.09 * kij * eij);
             auto epsij_new = eij + _dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
             k(i, j) = kij_new;
@@ -174,6 +219,37 @@ void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
             assert(epsij_new > 0);
         } 
     
+    } else if (turb_model == 3) { // K-omega SST
+        for (const auto &current_cell : grid.fluid_cells()) {
+            int i = current_cell->i();
+            int j = current_cell->j();
+            Real f2_coeff = 1;
+            auto nut = nu_t(i, j);
+            auto kij = K_OLD(i, j);
+            auto eij = EPS_OLD(i, j);
+            auto k1_1 = Discretization::convection_uKEPS(_U, K_OLD, i, j);
+            auto k1_2 = Discretization::convection_vKEPS(_V, K_OLD, i, j);
+            auto e1_1 = Discretization::convection_uKEPS(_U, EPS_OLD, i, j);
+            auto e1_2 = Discretization::convection_vKEPS(_V, EPS_OLD, i, j);
+
+            auto k2 = Discretization::laplacian_nu(K_OLD, _nu, _NU_I, _NU_J, i, j);
+            auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j);
+
+            auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, _S, i, j);
+            k3 = std::min(k3, 10 * 0.09 * kij * eij);
+            auto e3 = 5.0 / 9 * eij * k3 / kij;
+            auto e4 = 3.0 / 40 * eij * eij;
+            auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - 0.09 * kij * eij);
+            auto dist = current_cell->closest_dist;
+            auto sst_term = calculate_sst_term(grid, K_OLD, EPS_OLD, eij, kij, dist, i, j);
+            auto epsij_new = eij + _dt * (-(e1_1 + e1_2) + e2 + e3 - e4 + sst_term);
+            k(i, j) = kij_new;
+            eps(i, j) = epsij_new;
+            assert(!isnan(kij_new));
+            assert(!isnan(epsij_new));
+            assert(kij_new > 0);
+            assert(epsij_new > 0);
+        }
     }
   
 }
@@ -275,7 +351,7 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp, int turbulence) {
         Real cond_6;
         if (turbulence == 1) {
             cond_6 = 1 / (2 * eps_max  * (1 / dx2 + 1 / dy2));
-        } else if (turbulence == 2) {
+        } else if (turbulence == 2 || turbulence == 3) {
             cond_6 = 1 / (2 * (eps_max * 0.09 * k_max) * (1 / dx2 + 1 / dy2));
         }
         minimum = std::min(minimum, cond_5);

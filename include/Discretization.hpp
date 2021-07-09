@@ -82,7 +82,7 @@ class Discretization {
     static Real laplacian_nu(const Matrix<Real> &P, Real nu, const Matrix<Real> &nu_i, const Matrix<Real> &nu_j, int i,
                              int j,
                              Real coeff = 1);
-    static Real mean_strain_rate_squared(const Matrix<Real> &U, const Matrix<Real> &V, int i, int j);
+    static Real mean_strain_rate_squared(const Matrix<Real> &U, const Matrix<Real> &V, Matrix<Real> &S, int i, int j);
     /**
      * @brief Laplacian term discretization using central difference
      *

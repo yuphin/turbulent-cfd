@@ -258,6 +258,8 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         std::cout << "Turbulence model: K-Epsilon\n";
     } else if (turb_model == 2) {
         std::cout << "Turbulence model: K-Omega\n";
+    } else if (turb_model == 3) {
+        std::cout << "Turbulence model: K-Omega SST\n";
     }
 
     // Construct boundaries

@@ -13,6 +13,7 @@ Grid::Grid(std::string geom_name, Domain &domain, std::vector<std::vector<int>> 
 
     _cells = Matrix<Cell>(_domain.size_x + 2, _domain.size_y + 2);
     assign_cell_types(geometry_data);
+    preprocess_geometry();
 }
 
 void Grid::assign_cell_types(std::vector<std::vector<int>> &geometry_data) {

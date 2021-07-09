@@ -140,6 +140,12 @@ class Fields {
 
     void calculate_k_and_epsilon(Grid &grid, int turb_model);
 
+     Real calculate_f1_sst(Grid &grid, Real omega, Real dk_di, Real dw_di, Real k, Real dist);
+
+    Real calculate_f2_sst(Real omega, Real k, Real dist);
+    Real calculate_sst_term(Grid &grid, Matrix<Real> &K, Matrix<Real> &EPS, Real omega, Real k, Real dist, int i,
+                            int j);
+
     Real damp_f2(int i, int j);
 
     Real damp_fnu(int i, int j);
@@ -161,6 +167,9 @@ class Fields {
 
     /// Initial eps
     Real _EPSI;
+
+    // strain tensor
+    Matrix<Real> _S;
 
     /// x-velocity matrix
     Matrix<Real> _U;

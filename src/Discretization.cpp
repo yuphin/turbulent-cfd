@@ -135,7 +135,8 @@ Real Discretization::laplacian_nu(const Matrix<Real> &P, Real nu, const Matrix<R
     return result;
 }
 
-Real Discretization::mean_strain_rate_squared(const Matrix<Real> &U, const Matrix<Real> &V, int i, int j) {
+Real Discretization::mean_strain_rate_squared(const Matrix<Real> &U, const Matrix<Real> &V, Matrix<Real> &S, int i,
+                                              int j) {
     Real result = 0;
     constexpr int METHOD = 0;
     if (METHOD == 0) {
@@ -157,6 +158,7 @@ Real Discretization::mean_strain_rate_squared(const Matrix<Real> &U, const Matri
         Real dudx = (2 / 3) * (U(i, j) - U(i - 1, j)) / _dx;
         Real dvdy = (2 / 3) * (V(i, j) - V(i, j - 1)) / _dx;
         result = 2 * (dudy + dvdx + dudx + dvdy) * (dudy + dvdx + dudx + dvdy);
+        S(i, j) = (dudy + dvdx);
     }
     return result;
 }

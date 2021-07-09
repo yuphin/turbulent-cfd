@@ -189,7 +189,7 @@ void Boundary::enforce_t_adiabatic_diag(Fields &field, Cell *cell) {
     }
 }
 
-void Boundary::enforce_nu_t(Fields &field, int turb_model) {
+void Boundary::enforce_nu_t(Fields &field, int turb_model, Real dx, Real dy) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();
@@ -204,9 +204,9 @@ void Boundary::enforce_nu_t(Fields &field, int turb_model) {
                 field.eps(i, j) = eps_interp;
                 if (turb_model == 1) {
                     field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
-                } else if (turb_model == 2) {
+                } else if (turb_model == 2 || turb_model == 3) {
                     field.nu_t(i, j) = k_interp / eps_interp + field._nu;
-                }
+                } 
             }
             if (cell->is_border(border_position::RIGHT) && cell->is_border(border_position::BOTTOM)) {
                 auto k_interp = (field.k(i + 1, j) + field.k(i, j - 1)) / 2.0;
@@ -215,7 +215,7 @@ void Boundary::enforce_nu_t(Fields &field, int turb_model) {
                 field.eps(i, j) = eps_interp;
                 if (turb_model == 1) {
                     field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
-                } else if (turb_model == 2) {
+                } else if (turb_model == 2 || turb_model == 3) {
                     field.nu_t(i, j) = k_interp / eps_interp + field._nu;
                 }
             }
@@ -226,7 +226,7 @@ void Boundary::enforce_nu_t(Fields &field, int turb_model) {
                 field.eps(i, j) = eps_interp;
                 if (turb_model == 1) {
                     field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
-                } else if (turb_model == 2) {
+                } else if (turb_model == 2 || turb_model == 3) {
                     field.nu_t(i, j) = k_interp / eps_interp + field._nu;
                 }
             }
@@ -237,7 +237,7 @@ void Boundary::enforce_nu_t(Fields &field, int turb_model) {
                 field.eps(i, j) = eps_interp;
                 if (turb_model == 1) {
                     field.nu_t(i, j) = 0.09 * k_interp * k_interp / eps_interp + field._nu;
-                } else if (turb_model == 2) {
+                } else if (turb_model == 2 || turb_model == 3) {
                     field.nu_t(i, j) = k_interp / eps_interp + field._nu;
                 }
             }
@@ -249,9 +249,9 @@ void Boundary::enforce_nu_t(Fields &field, int turb_model) {
                 field.eps(i, j) = eps;
                 if (turb_model == 1) {
                     field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
-                } else if (turb_model == 2) {
+                } else if (turb_model == 2 || turb_model == 3) {
                     field.nu_t(i, j) = k / eps + field._nu;
-                }
+                } 
             }
             if (cell->is_border(border_position::LEFT)) {
                 auto k = field.k(i - 1, j);
@@ -260,9 +260,9 @@ void Boundary::enforce_nu_t(Fields &field, int turb_model) {
                 field.eps(i, j) = eps;
                 if (turb_model == 1) {
                     field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
-                } else if (turb_model == 2) {
+                } else if (turb_model == 2 || turb_model == 3) {
                     field.nu_t(i, j) = k / eps + field._nu;
-                }
+                } 
             }
             if (cell->is_border(border_position::TOP)) {
                 auto k = field.k(i, j + 1);
@@ -271,7 +271,7 @@ void Boundary::enforce_nu_t(Fields &field, int turb_model) {
                 field.eps(i, j) = eps;
                 if (turb_model == 1) {
                     field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
-                } else if (turb_model == 2) {
+                } else if (turb_model == 2 || turb_model == 3) {
                     field.nu_t(i, j) = k / eps + field._nu;
                 }
             }
@@ -282,9 +282,9 @@ void Boundary::enforce_nu_t(Fields &field, int turb_model) {
                 field.eps(i, j) = eps;
                 if (turb_model == 1) {
                     field.nu_t(i, j) = 0.09 * k * k / eps + field._nu;
-                } else if (turb_model == 2) {
+                } else if (turb_model == 2 || turb_model == 3) {
                     field.nu_t(i, j) = k / eps + field._nu;
-                }
+                } 
             }
         } else if (!cell->borders().size()) {
             field.nu_t(i, j) = field._nu;
@@ -364,7 +364,7 @@ void InletBoundary::enforce_t(Fields &field) {
     }
 }
 
-void InletBoundary::enforce_nu_t(Fields &field, int turb_model) {
+void InletBoundary::enforce_nu_t(Fields &field, int turb_model, Real dx, Real dy) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();

@@ -71,7 +71,7 @@ void CPUSolver::solve_post_pressure() {
         // Compute turbulent viscosity and set boundary conditions
         _field.calculate_nu_t(_grid, _turb_model);
         for (const auto &boundary : _boundaries) {
-            boundary->enforce_nu_t(_field, _turb_model);
+            boundary->enforce_nu_t(_field, _turb_model, _grid.dx(), _grid.dy());
         }
         // Communicate turbulence quantities
         Communication::communicate(&params, _field.nu_t_matrix());

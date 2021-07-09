@@ -81,6 +81,9 @@ class Cell {
     /// Getter of cell id
     int id() const;
 
+    Real closest_dist;
+    Real closest_wall_idx;
+
   private:
     /// x index
     int _i{0};
