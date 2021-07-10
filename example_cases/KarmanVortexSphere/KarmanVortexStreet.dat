@@ -85,9 +85,11 @@ jproc         1
 
 KI          0.03
 EPSI        28
+#EPSI        0.0756
 
 KIN_2          0.00001
 EPSIN_2        28
+#EPSIN_2        0.0000252
 
 #--------------------------------------------
 #       turbulence model
@@ -116,7 +118,7 @@ solver 1
 #	   default is 0
 #--------------------------------------------
 
-simulation 0
+simulation 1
 
 #--------------------------------------------
 #      preconditioner(if pcg is selected)

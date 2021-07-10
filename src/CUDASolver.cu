@@ -503,7 +503,7 @@ __global__ void calculate_nu_ij(Real *NU_I, Real *NU_J, Real *K, Real *EPS, Real
 
 __global__ void calculate_k_and_epsilon(Real *K_old, Real *EPS_old, Real *K, Real *EPS, Real *NU_T, Real *NU_I,
                                         Real *NU_J, Real *U, Real *V, int *cell_type, Real _nu, int imax, int jmax,
-                                        Real dt, Real inv_dx, Real inv_dy) {
+                                        Real dt, Real inv_dx, Real inv_dy, int _turb_model, Real *S, Real *dists) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
     int is_fluid = at(cell_type, i, j);
@@ -531,67 +531,25 @@ __global__ void calculate_k_and_epsilon(Real *K_old, Real *EPS_old, Real *K, Rea
     auto e1_1 = convecton_uKEPS(U_diff, EPS_stencil, inv_dx);
     auto e1_2 = convecton_vKEPS(V_diff, EPS_stencil, inv_dy);
     auto k2 = laplacian_nu(K_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
-    auto e2 = laplacian_nu(EPS_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1.3);
-
-    auto k3 = nut * mean_strain_rate_squared(U_stencil, V_stencil, inv_dx, inv_dy);
-    auto e3 = 1.44 * eij * k3 / kij;
-    auto e4 = f2_coeff * 1.92 * eij * eij / kij;
-    auto kij_new = kij + dt * (-(k1_1 + k1_2) + k2 + k3 - eij);
-    auto epsij_new = eij + dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
-    at(K, i, j) = kij_new;
-    at(EPS, i, j) = epsij_new;
-}
-
-__global__ void calculate_k_and_omega(Real *K_old, Real *EPS_old, Real *K, Real *EPS, Real *NU_T, Real *NU_I,
-                                      Real *NU_J, Real *U, Real *V, Real *dists, Real *S, int *cell_type, Real _nu,
-                                      int imax, int jmax, Real dt, Real inv_dx, Real inv_dy, int turb_model) {
-    uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
-    int is_fluid = at(cell_type, i, j);
-    if (i >= imax || j >= jmax || is_fluid == 0) {
-        return;
-    }
-    Real f2_coeff = 1;
-    auto nut = at(NU_T, i, j);
-    auto kij = at(K_old, i, j);
-    auto eij = at(EPS_old, i, j);
-    Real K_stencil[5] = {at(K_old, i + 1, j), at(K_old, i, j), at(K_old, i - 1, j), at(K_old, i, j + 1),
-                         at(K_old, i, j - 1)};
-    Real EPS_stencil[5] = {at(EPS_old, i + 1, j), at(EPS_old, i, j), at(EPS_old, i - 1, j), at(EPS_old, i, j + 1),
-                           at(EPS_old, i, j - 1)};
-    Real U_diff[2] = {at(U, i - 1, j), at(U, i, j)};
-    Real V_diff[2] = {at(V, i, j - 1), at(V, i, j)};
-    Real NU_I_diff[2] = {at(NU_I, i, j), at(NU_I, i - 1, j)};
-    Real NU_J_diff[2] = {at(NU_J, i, j), at(NU_J, i, j - 1)};
-    Real U_stencil[6] = {at(U, i, j),         at(U, i - 1, j), at(U, i, j + 1),
-                         at(U, i - 1, j + 1), at(U, i, j - 1), at(U, i - 1, j - 1)};
-    Real V_stencil[6] = {at(V, i, j),         at(V, i, j - 1), at(V, i + 1, j),
-                         at(V, i + 1, j - 1), at(V, i - 1, j), at(V, i - 1, j - 1)};
-    auto k1_1 = convecton_uKEPS(U_diff, K_stencil, inv_dx);
-    auto k1_2 = convecton_vKEPS(V_diff, K_stencil, inv_dy);
-    auto e1_1 = convecton_uKEPS(U_diff, EPS_stencil, inv_dx);
-    auto e1_2 = convecton_vKEPS(V_diff, EPS_stencil, inv_dy);
-    auto k2 = laplacian_nu(K_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
-    auto e2 = laplacian_nu(EPS_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
+    auto e2 = laplacian_nu(EPS_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, _turb_model == 1 ? 1.3 : 1);
     Real k3;
-    if (turb_model == 2) {
+    if (_turb_model != 3) {
         k3 = nut * mean_strain_rate_squared(U_stencil, V_stencil, inv_dx, inv_dy);
-    } else if (turb_model == 3) {
+    } else {
         k3 = nut * mean_strain_rate_squared_store_S(U_stencil, V_stencil, S, i, j, imax, jmax, inv_dx, inv_dy);
-    }
-    if (turb_model == 3) {
         k3 = real_min(k3, 10 * 0.09 * kij * eij);
     }
-    auto e3 = 5.0 / 9.0 * eij * k3 / kij;
-    auto e4 = 3.0 / 40.0 * eij * eij;
-    Real sst_term;
-    if (turb_model == 3) {
+    auto e3 = (_turb_model == 1 ? 1.44 : 5.0 / 9) * eij * k3 / kij;
+    auto e4 = _turb_model == 1 ? f2_coeff * 1.92 * eij * eij / kij : 3.0 / 40 * eij * eij;
+    Real eij_mul = _turb_model == 1 ? 1 : 0.09 * kij;
+    auto kij_new = kij + dt * (-(k1_1 + k1_2) + k2 + k3 - eij_mul * eij);
+    Real sst_term = 0;
+    if (_turb_model == 3) {
         Real K_diff[3] = {at(K_old, i, j), at(K_old, i - 1, j), at(K_old, i, j - 1)};
         Real EPS_diff[3] = {at(EPS_old, i, j), at(EPS_old, i - 1, j), at(EPS_old, i, j - 1)};
         auto dist = at(dists, i, j);
         sst_term = calculate_sst_term(K_diff, EPS_diff, kij, eij, dist, inv_dx, inv_dy, _nu);
     }
-    auto kij_new = kij + dt * (-(k1_1 + k1_2) + k2 + k3 - 0.09 * kij * eij);
     auto epsij_new = eij + dt * (-(e1_1 + e1_2) + e2 + e3 - e4 + sst_term);
     at(K, i, j) = kij_new;
     at(EPS, i, j) = epsij_new;
@@ -1222,18 +1180,27 @@ void CudaSolver::solve_post_pressure() {
                                                      _turb_model);
         calculate_nu_ij<<<num_blks_2d, blk_size_2d>>>(NU_I, NU_J, K, EPS, dists, S, cell_type, _field._nu, grid_x,
                                                       grid_y, _turb_model);
-        if (_turb_model == 1) {
-            calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V,
-                                                                  cell_type, _field._nu, grid_x, grid_y, _field._dt,
-                                                                  1 / _grid.dx(), 1 / _grid.dy());
-        } else if (_turb_model == 2 || _turb_model == 3) {
+        if (_turb_model != 0) {
+            calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(
+                K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, cell_type, _field._nu, grid_x, grid_y, _field._dt,
+                1 / _grid.dx(), 1 / _grid.dy(), _turb_model, S, dists);
+        } /*else if (_turb_model == 2 || _turb_model == 3) {
             calculate_k_and_omega<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, dists,
                                                                 S, cell_type, _field._nu, grid_x, grid_y, _field._dt,
                                                                 1 / _grid.dx(), 1 / _grid.dy(), _turb_model);
-        }
+            chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+            chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+            chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        }*/
+        chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
         // TODO : Implement KIN and EPSIN
         nu_t_boundary<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, grid_x, grid_y, neighborhood, cell_type, _KIN, _EPSIN,
                                                     _field._nu, _turb_model);
+        chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     }
     chk(cudaMemcpy(_field._U._container.data(), U, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     chk(cudaMemcpy(_field._V._container.data(), V, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
