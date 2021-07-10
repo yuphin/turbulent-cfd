@@ -10,6 +10,11 @@ layout(binding = 14) buffer Residual //residual
 	double res[];
 };
 
+layout(set = 1, binding = 22) buffer KepsResidual
+{
+	double kepsres[];
+};
+
 layout(binding = 31) buffer Counter
 {
 	int cnt;
@@ -25,6 +30,10 @@ void main(){
 		    max_value = res[2*idx + 0];
 		} else if(UV == 1){
             max_value = res[2*idx + 1];
+		} else if(UV == 2){ // K
+		    max_value = kepsres[2*idx + 0];
+		} else if(UV == 3){ // Eps
+            max_value = kepsres[2*idx + 1];
 		}
 	}
 	memoryBarrier();
@@ -47,9 +56,13 @@ void main(){
 			res[2 * gl_WorkGroupID.x + 0] = max_value;
 		} else if(UV == 1){
 			res[2 * gl_WorkGroupID.x + 1] = max_value;
+		}else if(UV == 2){
+			kepsres[2 * gl_WorkGroupID.x + 0] = max_value;
+		}else if(UV == 3){
+			kepsres[2 * gl_WorkGroupID.x + 1] = max_value;
 		}
     }
-	if(UV == 1 && idx == 0){
+	if((UV == 1 || UV == 3) && idx == 0){
 		cnt = cnt + 1;
 	}
 }

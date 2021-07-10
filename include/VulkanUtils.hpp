@@ -40,6 +40,8 @@ struct UBOData {
     Real tau;
     int num_diags;
     int num_fluid_cells;
+    Real win;
+    Real weps;
 };
 
 template <typename T, size_t Size> char (*countof_helper(T (&_Array)[Size]))[Size];
@@ -530,7 +532,7 @@ class GPUSimulation {
         return (uint32_t *)str;
     }
 
-    Pipeline create_compute_pipeline(const std::string& shader_path, uint32_t specialization_data = -1) {
+    Pipeline create_compute_pipeline(const std::string &shader_path, std::vector<uint32_t> specialization_data = {}) {
         uint32_t filelength;
         uint32_t *code = read_file(filelength, shader_path.c_str());
         VkShaderModuleCreateInfo create_info = {};
@@ -542,16 +544,17 @@ class GPUSimulation {
         VkPipeline pipeline;
         VK_CHECK(vkCreateShaderModule(context.device, &create_info, NULL, &compute_shader_module));
         delete[] code;
-
-        VkSpecializationMapEntry entry;
-        entry.constantID = 0;
-        entry.size = sizeof(uint32_t);
-        entry.offset = 0;
+        std::vector<VkSpecializationMapEntry> entries(specialization_data.size());
+        for (int i = 0; i < entries.size(); i++) {
+            entries[i].constantID = i;
+            entries[i].size = sizeof(uint32_t);
+            entries[i].offset = i * sizeof(uint32_t); 
+        }
         VkSpecializationInfo specialization_info{};
-        specialization_info.dataSize = sizeof(uint32_t);
-        specialization_info.mapEntryCount = 1;
-        specialization_info.pMapEntries = &entry;
-        specialization_info.pData = &specialization_data;
+        specialization_info.dataSize = specialization_data.size() * sizeof(uint32_t);
+        specialization_info.mapEntryCount = specialization_data.size();
+        specialization_info.pMapEntries = entries.data();
+        specialization_info.pData = specialization_data.data();
 
         VkPushConstantRange push_constant_range{};
         push_constant_range.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -562,7 +565,7 @@ class GPUSimulation {
         shader_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shader_stage_create_info.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         shader_stage_create_info.module = compute_shader_module;
-        if (specialization_data != -1) {
+        if (!specialization_data.empty()) {
             shader_stage_create_info.pSpecializationInfo = &specialization_info;
         }
         shader_stage_create_info.pName = "main";
@@ -723,6 +726,9 @@ void calc_residual(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &c
 
 void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer, Pipeline &min_max_uv_pipeline,
             Pipeline &reduce_u_pipeline, Pipeline &reduce_v_pipeline, int command_idx, int dim);
+
+void reduce_single(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_buffer, Pipeline &op_pipeline,
+                   Pipeline &reduce_pipeline, int command_idx, int dim);
 
 void scalar_div(GPUSimulation &simulation, Pipeline &pipeline, int command_idx);
 

@@ -110,7 +110,7 @@ __device__ Real sor_helper(Real ar[4], Real inv_dx, Real inv_dy) {
     return result;
 }
 
-__device__ Real convecton_uKEPS(Real U[2], Real T[5], Real inv_dx) {
+__device__ Real convection_UKEPS(Real U[2], Real T[5], Real inv_dx) {
     constexpr int METHOD = 0;
 
     if (METHOD == 0) {
@@ -120,7 +120,7 @@ __device__ Real convecton_uKEPS(Real U[2], Real T[5], Real inv_dx) {
     }
 }
 
-__device__ Real convecton_vKEPS(Real V[2], Real T[5], Real inv_dy) {
+__device__ Real convection_VKEPS(Real V[2], Real T[5], Real inv_dy) {
     constexpr int METHOD = 0;
     if (METHOD == 0) {
         return convection_vT(V, T, inv_dy, 1);

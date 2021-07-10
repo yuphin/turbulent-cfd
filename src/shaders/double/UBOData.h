@@ -1,3 +1,4 @@
+
 layout(push_constant) uniform UBOData {
 	int imax;
     int jmax;
@@ -20,4 +21,19 @@ layout(push_constant) uniform UBOData {
     double tau;
     int num_diags;
     int num_fluid_cells;
+    double wk;
+    double weps;
 };
+
+double dexp(double x) {
+    double s = 1.0;
+    for(int i = 10; i > 0; i--){
+        s = 1 + x * s / i;
+    }
+    return s;
+}
+
+double dtanh(double x){
+    double exp2x = dexp( 2 *x);
+    return (exp2x - 1) / (exp2x + 1);
+}

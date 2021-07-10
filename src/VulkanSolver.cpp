@@ -2,7 +2,13 @@
 
 void VulkanSolver::solve_pre_pressure(Real &dt) {
     simulation.run_command_buffer(0);
+    std::vector<Real> nuts(_grid._domain.total_size);
+    std::vector<Real> keps(_grid._domain.total_size);
     dt = *(Real *)dt_buffer.data;
+    nu_t_residual_buffer.copy(scratch_buffer, 3);
+    nuts.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._NU_T.size());
+    keps_residual_buffer.copy(scratch_buffer, 3);
+    keps.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._K.size());
 }
 
 void VulkanSolver::solve_pressure(Real &res, uint32_t &it) {
@@ -65,6 +71,14 @@ void VulkanSolver::solve_post_pressure() {
         t_new_buffer.copy(scratch_buffer, 3);
         _field._T._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._T.size());
     }
+    if (_turb_model != 0) {
+        nu_t_buffer.copy(scratch_buffer, 3);
+        _field._NU_T._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._NU_T.size());
+        k_buffer.copy(scratch_buffer, 3);
+        _field._K._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._K.size());
+        eps_buffer.copy(scratch_buffer, 3);
+        _field._EPS._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._EPS.size());
+    }
 }
 
 void VulkanSolver::initialize() {
@@ -117,6 +131,15 @@ void VulkanSolver::initialize() {
             neighbors[j * _grid.imaxb() + i] = data;
         }
     }
+
+    std::vector<Real> dists_vec;
+    if (_turb_model == 3) {
+        dists_vec.resize(grid_size);
+        for (int i = 0; i < grid_size; i++) {
+            dists_vec[i] = _grid._cells._container[i].closest_dist;
+        }
+    }
+
     DiagonalSparseMatrix<Real> A_matrix_diag =
         create_diagonal_matrix(A, _grid.imaxb(), _grid.jmaxb(), {-_grid.imaxb(), -1, 0, 1, _grid.imaxb()});
     DiagonalSparseMatrix<Real> A_precond_diag;
@@ -141,7 +164,9 @@ void VulkanSolver::initialize() {
                     _field._VI,
                     _field._tau,
                     0,
-                    _grid.fluid_cells().size()};
+                    _grid.fluid_cells().size(),
+                    _KIN,
+                    _EPSIN};
     if (_preconditioner != -1) {
         A_precond_diag = create_preconditioner_spai(A, _grid, _preconditioner);
         data.num_diags = A_precond_diag.num_diags;
@@ -162,42 +187,59 @@ void VulkanSolver::initialize() {
     } else {
         shader_path_prefix += "double/";
     }
-    fg_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_fg.comp.spv", _field.calc_temp);
+    fg_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_fg.comp.spv",
+                                                     {_field.calc_temp, (uint32_t)_turb_model});
     rs_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_rs.comp.spv");
     vel_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_vel.comp.spv");
-    p_pipeline_red = simulation.create_compute_pipeline(shader_path_prefix + "calc_p_redblack_gs.comp.spv", 0);
-    p_pipeline_black = simulation.create_compute_pipeline(shader_path_prefix + "calc_p_redblack_gs.comp.spv", 1);
+    p_pipeline_red = simulation.create_compute_pipeline(shader_path_prefix + "calc_p_redblack_gs.comp.spv", {0});
+    p_pipeline_black = simulation.create_compute_pipeline(shader_path_prefix + "calc_p_redblack_gs.comp.spv", {1});
     residual_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_r.comp.spv");
     p_boundary_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "boundary_p.comp.spv");
     v_boundary_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "boundary_v.comp.spv");
     fg_boundary_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "boundary_fg.comp.spv");
-    spmv_a_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "spmv.comp.spv", 0);
-    saxpy_0_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", 0);
-    saxpy_1_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", 1);
-    saxpy_2_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", 2);
-    vec_dot_vec_0_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", 0);
-    vec_dot_vec_1_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", 1);
+    spmv_a_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "spmv.comp.spv", {0});
+    saxpy_0_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", {0});
+    saxpy_1_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", {1});
+    saxpy_2_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", {2});
+    vec_dot_vec_0_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", {0});
+    vec_dot_vec_1_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", {1});
     if (_preconditioner != -1) {
-        vec_dot_vec_2_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", 2);
-        spmv_m_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "spmv.comp.spv", 1);
-        saxpy_3_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", 3);
+        vec_dot_vec_2_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", {2});
+        spmv_m_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "spmv.comp.spv", {1});
+        saxpy_3_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", {3});
     }
-    div_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", 0);
-    div_store_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", 1);
-    sqrt_residual_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", 2);
-    reduce_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce.comp.spv", 0);
+    div_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", {0});
+    div_store_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", {1});
+    sqrt_residual_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", {2});
+    reduce_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce.comp.spv", {0});
     inc_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "increment.comp.spv");
     negate_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "negate.comp.spv");
-    min_max_uv_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "min_max_uv.comp.spv");
-    reduce_u_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_uv.comp.spv", 0);
-    reduce_v_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_uv.comp.spv", 1);
-    calc_dt_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_dt.comp.spv", _field.calc_temp);
+    min_max_uv_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "min_max_uv.comp.spv", {0});
+    reduce_u_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_uv.comp.spv", {0});
+    reduce_v_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_uv.comp.spv", {1});
+    calc_dt_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_dt.comp.spv",
+                                                          {_field.calc_temp, (uint32_t)_turb_model});
     boundary_uv_branchless_pipeline =
         simulation.create_compute_pipeline(shader_path_prefix + "boundary_uv_branchless.comp.spv");
     if (_field.calc_temp) {
         calc_t_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_temp.comp.spv");
         boundary_t_branchless =
             simulation.create_compute_pipeline(shader_path_prefix + "boundary_t_branchless.comp.spv");
+    }
+    if (_turb_model != 0) {
+        calc_nu_t_pipeline =
+            simulation.create_compute_pipeline(shader_path_prefix + "calc_nu_t.comp.spv", {(uint32_t)_turb_model});
+        calc_nu_ij_pipeline =
+            simulation.create_compute_pipeline(shader_path_prefix + "calc_nu_ij.comp.spv", {(uint32_t)_turb_model});
+        calc_k_epsilon_pipeline =
+            simulation.create_compute_pipeline(shader_path_prefix + "calc_k_eps.comp.spv", {(uint32_t)_turb_model});
+        nu_t_boundary_pipeline =
+            simulation.create_compute_pipeline(shader_path_prefix + "boundary_nu_t.comp.spv", {(uint32_t)_turb_model});
+        min_nu_t_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "min.comp.spv");
+        reduce_nu_t_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_min.comp.spv");
+        max_k_eps_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "min_max_uv.comp.spv", {1});
+        reduce_k_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_uv.comp.spv", {2});
+        reduce_eps_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_uv.comp.spv", {3});
     }
 
     cell_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -278,6 +320,66 @@ void VulkanSolver::initialize() {
     dt_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                      VK_SHARING_MODE_EXCLUSIVE, sizeof(Real));
+    if (_turb_model != 0) {
+        k_buffer.create(&simulation.context,
+                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                            VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, _field._K.size() * sizeof(Real),
+                        _field._K._container.data(), true);
+        eps_buffer.create(&simulation.context,
+                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                          _field._EPS.size() * sizeof(Real), _field._EPS._container.data(), true);
+        k_old_buffer.create(
+            &simulation.context,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, _field._K.size() * sizeof(Real));
+        eps_old_buffer.create(
+            &simulation.context,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, _field._K.size() * sizeof(Real));
+        nu_t_buffer.create(&simulation.context,
+                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                           _field._NU_T.size() * sizeof(Real), _field._NU_T._container.data(), true);
+        nu_i_buffer.create(&simulation.context,
+                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                           _field._NU_I.size() * sizeof(Real), _field._NU_I._container.data(), true);
+        nu_j_buffer.create(&simulation.context,
+                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                           _field._NU_J.size() * sizeof(Real), _field._NU_J._container.data(), true);
+        s_buffer.create(
+            &simulation.context,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, _field._NU_J.size() * sizeof(Real));
+        nu_t_residual_buffer.create(
+            &simulation.context,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, grid_size * sizeof(Real));
+
+        keps_residual_buffer.create(
+            &simulation.context,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE, grid_size * sizeof(Real));
+        if (_turb_model == 3) {
+            dists_buffer.create(&simulation.context,
+                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                                dists_vec.size() * sizeof(Real), dists_vec.data(), true);
+            s_buffer.create(&simulation.context,
+                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SHARING_MODE_EXCLUSIVE,
+                            _field._S.size() * sizeof(Real), _field._S._container.data(), true);
+        }
+    }
 
     auto u_matrix_data = U_fixed.value.data();
     auto u_matrix_size = U_fixed.value.size();
@@ -376,6 +478,21 @@ void VulkanSolver::initialize() {
         descriptor_list.push_back({m_data_buffer, 18});
         descriptor_list.push_back({m_offset_buffer, 19});
     }
+    if (_turb_model != 0) {
+        descriptor_list.push_back({nu_t_buffer, 12, 1});
+        descriptor_list.push_back({k_buffer, 13, 1});
+        descriptor_list.push_back({eps_buffer, 14, 1});
+        if (_turb_model == 3) {
+            descriptor_list.push_back({dists_buffer, 15, 1});
+            descriptor_list.push_back({s_buffer, 16, 1});
+        }
+        descriptor_list.push_back({nu_i_buffer, 17, 1});
+        descriptor_list.push_back({nu_j_buffer, 18, 1});
+        descriptor_list.push_back({k_old_buffer, 19, 1});
+        descriptor_list.push_back({eps_old_buffer, 20, 1});
+        descriptor_list.push_back({nu_t_residual_buffer, 21, 1});
+        descriptor_list.push_back({keps_residual_buffer, 22, 1});
+    }
     simulation.push_descriptors(descriptor_list);
     if (_field.calc_temp) {
         simulation.push_descriptors({{t_old_buffer, 22},
@@ -434,6 +551,21 @@ VulkanSolver::~VulkanSolver() {
         t_col_index.destroy();
         t_boundary_matrix_buffer.destroy();
     }
+    if (_turb_model != 0) {
+        k_buffer.destroy();
+        eps_buffer.destroy();
+        k_old_buffer.destroy();
+        eps_old_buffer.destroy();
+        nu_t_buffer.destroy();
+        nu_i_buffer.destroy();
+        nu_j_buffer.destroy();
+        nu_t_residual_buffer.destroy();
+        keps_residual_buffer.destroy();
+        if (_turb_model == 3) {
+            dists_buffer.destroy();
+            s_buffer.destroy();
+        }
+    }
     std::vector<Pipeline> pipelines_to_destroy = {fg_pipeline,
                                                   rs_pipeline,
                                                   vel_pipeline,
@@ -469,6 +601,16 @@ VulkanSolver::~VulkanSolver() {
         pipelines_to_destroy.push_back(calc_t_pipeline);
         pipelines_to_destroy.push_back(boundary_t_branchless);
     }
+    if (_turb_model != 0) {
+        pipelines_to_destroy.push_back(calc_nu_t_pipeline);
+        pipelines_to_destroy.push_back(calc_nu_ij_pipeline);
+        pipelines_to_destroy.push_back(calc_k_epsilon_pipeline);
+        pipelines_to_destroy.push_back(nu_t_boundary_pipeline);
+        pipelines_to_destroy.push_back(min_nu_t_pipeline);
+        pipelines_to_destroy.push_back(max_k_eps_pipeline);
+        pipelines_to_destroy.push_back(reduce_k_pipeline);
+        pipelines_to_destroy.push_back(reduce_nu_t_pipeline);
+    }
     simulation.cleanup(pipelines_to_destroy);
 }
 
@@ -483,7 +625,21 @@ void VulkanSolver::record_simulation_step(int command_idx) {
     simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, grid_size, 1);
     uv_max(simulation, residual_buffer, counter_buffer, min_max_uv_pipeline, reduce_u_pipeline, reduce_v_pipeline,
            command_idx, grid_size);
-    barrier(simulation, residual_buffer, command_idx);
+    std::vector<VkBufferMemoryBarrier> res_barriers = {
+        buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)
+    };
+    if (_turb_model != 0) {
+        simulation.record_command_buffer(max_k_eps_pipeline, command_idx, 1024, 1, grid_size, 1);
+        uv_max(simulation, keps_residual_buffer, counter_buffer, max_k_eps_pipeline, reduce_k_pipeline, reduce_eps_pipeline,
+               command_idx, grid_size);
+        reduce_single(simulation, nu_t_residual_buffer, counter_buffer, min_nu_t_pipeline, reduce_nu_t_pipeline,
+                      command_idx, grid_size);
+        res_barriers.push_back(buffer_barrier(keps_residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT));
+        res_barriers.push_back(buffer_barrier(nu_t_residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT));
+    }
+    vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, res_barriers.size(), res_barriers.data(), 0, 0);
+
     simulation.record_command_buffer(calc_dt_pipeline, command_idx, 1, 1, 1, 1);
     simulation.record_command_buffer(boundary_uv_branchless_pipeline, command_idx, 1024, 1, grid_size, 1);
     std::array<VkBufferMemoryBarrier, 3> uvdt_barriers = {
@@ -650,6 +806,26 @@ void VulkanSolver::record_post_pressure(int command_idx) {
         buffer_barrier(v_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT)};
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, uv_barriers.data(), 0, 0);
+    if (_turb_model != 0) {
+        k_buffer.copy(k_old_buffer, command_idx, false);
+        eps_buffer.copy(eps_old_buffer, command_idx, false);
+        simulation.record_command_buffer(calc_nu_t_pipeline, command_idx, 32, 32, grid_x, grid_y);
+        barrier(simulation, nu_t_buffer, command_idx);
+        simulation.record_command_buffer(calc_nu_ij_pipeline, command_idx, 32, 32, grid_x, grid_y);
+        std::array<VkBufferMemoryBarrier, 2> nu_ij_barriers = {
+            buffer_barrier(nu_i_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+            buffer_barrier(nu_j_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)};
+        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, nu_ij_barriers.data(), 0, 0);
+
+        simulation.record_command_buffer(calc_k_epsilon_pipeline, command_idx, 32, 32, grid_x, grid_y);
+        std::array<VkBufferMemoryBarrier, 2> k_eps_barriers = {
+            buffer_barrier(k_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT),
+            buffer_barrier(eps_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)};
+        vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, k_eps_barriers.data(), 0, 0);
+        simulation.record_command_buffer(nu_t_boundary_pipeline, command_idx, 32, 32, grid_x, grid_y);
+    }
     simulation.write_timestamp(command_idx, 5);
     simulation.end_recording(command_idx);
 }

@@ -525,10 +525,10 @@ __global__ void calculate_k_and_epsilon(Real *K_old, Real *EPS_old, Real *K, Rea
                          at(U, i - 1, j + 1), at(U, i, j - 1), at(U, i - 1, j - 1)};
     Real V_stencil[6] = {at(V, i, j),         at(V, i, j - 1), at(V, i + 1, j),
                          at(V, i + 1, j - 1), at(V, i - 1, j), at(V, i - 1, j - 1)};
-    auto k1_1 = convecton_uKEPS(U_diff, K_stencil, inv_dx);
-    auto k1_2 = convecton_vKEPS(V_diff, K_stencil, inv_dy);
-    auto e1_1 = convecton_uKEPS(U_diff, EPS_stencil, inv_dx);
-    auto e1_2 = convecton_vKEPS(V_diff, EPS_stencil, inv_dy);
+    auto k1_1 = convection_UKEPS(U_diff, K_stencil, inv_dx);
+    auto k1_2 = convection_VKEPS(V_diff, K_stencil, inv_dy);
+    auto e1_1 = convection_UKEPS(U_diff, EPS_stencil, inv_dx);
+    auto e1_2 = convection_VKEPS(V_diff, EPS_stencil, inv_dy);
     auto k2 = laplacian_nu(K_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
     auto e2 = laplacian_nu(EPS_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, _turb_model == 1 ? 1.3 : 1);
     Real k3;
@@ -966,8 +966,9 @@ void CudaSolver::initialize() {
     if (_preconditioner != -1) {
         A_precond_diag = create_preconditioner_spai(A_pcg, _grid, _preconditioner);
     }
-    std::vector<Real> dists_vec(grid_size);
+    std::vector<Real> dists_vec;
     if (_turb_model == 3) {
+        dists_vec.resize(grid_size);
         for (int i = 0; i < grid_size; i++) {
             dists_vec[i] = _grid._cells._container[i].closest_dist;
         }
@@ -1178,27 +1179,12 @@ void CudaSolver::solve_post_pressure() {
                                                      _turb_model);
         calculate_nu_ij<<<num_blks_2d, blk_size_2d>>>(NU_I, NU_J, K, EPS, dists, S, cell_type, _field._nu, grid_x,
                                                       grid_y, _turb_model);
-        if (_turb_model != 0) {
-            calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(
-                K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, cell_type, _field._nu, grid_x, grid_y, _field._dt,
-                1 / _grid.dx(), 1 / _grid.dy(), _turb_model, S, dists);
-        } /*else if (_turb_model == 2 || _turb_model == 3) {
-            calculate_k_and_omega<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, dists,
-                                                                S, cell_type, _field._nu, grid_x, grid_y, _field._dt,
-                                                                1 / _grid.dx(), 1 / _grid.dy(), _turb_model);
-            chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-            chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-            chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-        }*/
-        chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-        chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-        chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, cell_type,
+                                                              _field._nu, grid_x, grid_y, _field._dt, 1 / _grid.dx(),
+                                                              1 / _grid.dy(), _turb_model, S, dists);
         // TODO : Implement KIN and EPSIN
         nu_t_boundary<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, grid_x, grid_y, neighborhood, cell_type, _KIN, _EPSIN,
                                                     _field._nu, _turb_model);
-        chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-        chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-        chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     }
     chk(cudaMemcpy(_field._U._container.data(), U, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
     chk(cudaMemcpy(_field._V._container.data(), V, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));

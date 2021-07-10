@@ -53,6 +53,19 @@ struct VulkanSolver : public Solver {
     Buffer t_row_start;
     Buffer t_col_index;
     Buffer t_boundary_matrix_buffer;
+
+    Buffer k_buffer;
+    Buffer eps_buffer;
+    Buffer k_old_buffer;
+    Buffer eps_old_buffer;
+    Buffer nu_t_buffer;
+    Buffer nu_i_buffer;
+    Buffer nu_j_buffer;
+    Buffer dists_buffer;
+    Buffer s_buffer;
+    Buffer nu_t_residual_buffer;
+    Buffer keps_residual_buffer;
+
     Pipeline fg_pipeline;
     Pipeline rs_pipeline;
     Pipeline vel_pipeline;
@@ -84,6 +97,17 @@ struct VulkanSolver : public Solver {
     Pipeline calc_dt_pipeline;
     Pipeline boundary_uv_branchless_pipeline;
     Pipeline sqrt_residual_pipeline;
+
+    Pipeline calc_nu_t_pipeline;
+    Pipeline calc_nu_ij_pipeline;
+    Pipeline calc_k_epsilon_pipeline;
+    Pipeline nu_t_boundary_pipeline;
+    Pipeline min_nu_t_pipeline;
+    Pipeline max_k_eps_pipeline;
+    Pipeline reduce_k_pipeline;
+    Pipeline reduce_eps_pipeline;
+    Pipeline reduce_nu_t_pipeline;
+
     uint64_t timestamps[6] = {};
     SparseMatrix<Real> A;
     SparseMatrix<Real> U;
