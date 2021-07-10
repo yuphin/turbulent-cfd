@@ -156,40 +156,48 @@ void VulkanSolver::initialize() {
     simulation.create_command_pool();
     simulation.create_fences();
     simulation.create_query_pool(32, VK_QUERY_TYPE_TIMESTAMP);
-    fg_pipeline = simulation.create_compute_pipeline("src/shaders/calc_fg.comp.spv", _field.calc_temp);
-    rs_pipeline = simulation.create_compute_pipeline("src/shaders/calc_rs.comp.spv");
-    vel_pipeline = simulation.create_compute_pipeline("src/shaders/calc_vel.comp.spv");
-    p_pipeline_red = simulation.create_compute_pipeline("src/shaders/calc_p_redblack_gs.comp.spv", 0);
-    p_pipeline_black = simulation.create_compute_pipeline("src/shaders/calc_p_redblack_gs.comp.spv", 1);
-    residual_pipeline = simulation.create_compute_pipeline("src/shaders/calc_r.comp.spv");
-    p_boundary_pipeline = simulation.create_compute_pipeline("src/shaders/boundary_p.comp.spv");
-    v_boundary_pipeline = simulation.create_compute_pipeline("src/shaders/boundary_v.comp.spv");
-    fg_boundary_pipeline = simulation.create_compute_pipeline("src/shaders/boundary_fg.comp.spv");
-    spmv_a_pipeline = simulation.create_compute_pipeline("src/shaders/spmv.comp.spv", 0);
-    saxpy_0_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 0);
-    saxpy_1_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 1);
-    saxpy_2_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 2);
-    vec_dot_vec_0_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 0);
-    vec_dot_vec_1_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 1);
-    if (_preconditioner != -1) {
-        vec_dot_vec_2_pipeline = simulation.create_compute_pipeline("src/shaders/vec_dot_vec.comp.spv", 2);
-        spmv_m_pipeline = simulation.create_compute_pipeline("src/shaders/spmv.comp.spv", 1);
-        saxpy_3_pipeline = simulation.create_compute_pipeline("src/shaders/saxpy.comp.spv", 3);
+    std::string shader_path_prefix = "src/shaders/";
+    if (sizeof(Real) == 4) {
+        shader_path_prefix += "float/";
+    } else {
+        shader_path_prefix += "double/";
     }
-    div_pipeline = simulation.create_compute_pipeline("src/shaders/div.comp.spv", 0);
-    div_store_pipeline = simulation.create_compute_pipeline("src/shaders/div.comp.spv", 1);
-    sqrt_residual_pipeline = simulation.create_compute_pipeline("src/shaders/div.comp.spv", 2);
-    reduce_pipeline = simulation.create_compute_pipeline("src/shaders/reduce.comp.spv", 0);
-    inc_pipeline = simulation.create_compute_pipeline("src/shaders/increment.comp.spv");
-    negate_pipeline = simulation.create_compute_pipeline("src/shaders/negate.comp.spv");
-    min_max_uv_pipeline = simulation.create_compute_pipeline("src/shaders/min_max_uv.comp.spv");
-    reduce_u_pipeline = simulation.create_compute_pipeline("src/shaders/reduce_uv.comp.spv", 0);
-    reduce_v_pipeline = simulation.create_compute_pipeline("src/shaders/reduce_uv.comp.spv", 1);
-    calc_dt_pipeline = simulation.create_compute_pipeline("src/shaders/calc_dt.comp.spv", _field.calc_temp);
-    boundary_uv_branchless_pipeline = simulation.create_compute_pipeline("src/shaders/boundary_uv_branchless.comp.spv");
+    fg_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_fg.comp.spv", _field.calc_temp);
+    rs_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_rs.comp.spv");
+    vel_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_vel.comp.spv");
+    p_pipeline_red = simulation.create_compute_pipeline(shader_path_prefix + "calc_p_redblack_gs.comp.spv", 0);
+    p_pipeline_black = simulation.create_compute_pipeline(shader_path_prefix + "calc_p_redblack_gs.comp.spv", 1);
+    residual_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_r.comp.spv");
+    p_boundary_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "boundary_p.comp.spv");
+    v_boundary_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "boundary_v.comp.spv");
+    fg_boundary_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "boundary_fg.comp.spv");
+    spmv_a_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "spmv.comp.spv", 0);
+    saxpy_0_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", 0);
+    saxpy_1_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", 1);
+    saxpy_2_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", 2);
+    vec_dot_vec_0_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", 0);
+    vec_dot_vec_1_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", 1);
+    if (_preconditioner != -1) {
+        vec_dot_vec_2_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "vec_dot_vec.comp.spv", 2);
+        spmv_m_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "spmv.comp.spv", 1);
+        saxpy_3_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "saxpy.comp.spv", 3);
+    }
+    div_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", 0);
+    div_store_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", 1);
+    sqrt_residual_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "div.comp.spv", 2);
+    reduce_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce.comp.spv", 0);
+    inc_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "increment.comp.spv");
+    negate_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "negate.comp.spv");
+    min_max_uv_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "min_max_uv.comp.spv");
+    reduce_u_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_uv.comp.spv", 0);
+    reduce_v_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "reduce_uv.comp.spv", 1);
+    calc_dt_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_dt.comp.spv", _field.calc_temp);
+    boundary_uv_branchless_pipeline =
+        simulation.create_compute_pipeline(shader_path_prefix + "boundary_uv_branchless.comp.spv");
     if (_field.calc_temp) {
-        calc_t_pipeline = simulation.create_compute_pipeline("src/shaders/calc_temp.comp.spv");
-        boundary_t_branchless = simulation.create_compute_pipeline("src/shaders/boundary_t_branchless.comp.spv");
+        calc_t_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_temp.comp.spv");
+        boundary_t_branchless =
+            simulation.create_compute_pipeline(shader_path_prefix + "boundary_t_branchless.comp.spv");
     }
 
     cell_buffer.create(&simulation.context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -385,7 +393,6 @@ void VulkanSolver::initialize() {
     }
     record_post_pressure(2);
 }
-
 VulkanSolver::~VulkanSolver() {
     scratch_buffer.destroy();
     rs_buffer.destroy();
@@ -402,7 +409,7 @@ VulkanSolver::~VulkanSolver() {
     if (_preconditioner != -1) {
         m_data_buffer.destroy();
         m_offset_buffer.destroy();
-        z_buffer.destroy(); 
+        z_buffer.destroy();
     }
     d_buffer.destroy();
     spmv_result_buffer.destroy();
@@ -427,34 +434,32 @@ VulkanSolver::~VulkanSolver() {
         t_col_index.destroy();
         t_boundary_matrix_buffer.destroy();
     }
-    std::vector<Pipeline> pipelines_to_destroy = {
-        fg_pipeline,
-        rs_pipeline,
-        vel_pipeline,
-        p_pipeline_red,
-        p_pipeline_black,
-        residual_pipeline,
-        p_boundary_pipeline,
-        v_boundary_pipeline,
-        fg_boundary_pipeline,
-        spmv_a_pipeline,
-        saxpy_0_pipeline,
-        saxpy_1_pipeline,
-        saxpy_2_pipeline,
-        reduce_pipeline,
-        vec_dot_vec_0_pipeline,
-        vec_dot_vec_1_pipeline,
-        div_pipeline,
-        div_store_pipeline,
-        inc_pipeline,
-        negate_pipeline,
-        min_max_uv_pipeline,
-        reduce_u_pipeline,
-        reduce_v_pipeline,
-        calc_dt_pipeline,
-        boundary_uv_branchless_pipeline,
-        sqrt_residual_pipeline
-    };
+    std::vector<Pipeline> pipelines_to_destroy = {fg_pipeline,
+                                                  rs_pipeline,
+                                                  vel_pipeline,
+                                                  p_pipeline_red,
+                                                  p_pipeline_black,
+                                                  residual_pipeline,
+                                                  p_boundary_pipeline,
+                                                  v_boundary_pipeline,
+                                                  fg_boundary_pipeline,
+                                                  spmv_a_pipeline,
+                                                  saxpy_0_pipeline,
+                                                  saxpy_1_pipeline,
+                                                  saxpy_2_pipeline,
+                                                  reduce_pipeline,
+                                                  vec_dot_vec_0_pipeline,
+                                                  vec_dot_vec_1_pipeline,
+                                                  div_pipeline,
+                                                  div_store_pipeline,
+                                                  inc_pipeline,
+                                                  negate_pipeline,
+                                                  min_max_uv_pipeline,
+                                                  reduce_u_pipeline,
+                                                  reduce_v_pipeline,
+                                                  calc_dt_pipeline,
+                                                  boundary_uv_branchless_pipeline,
+                                                  sqrt_residual_pipeline};
     if (_preconditioner != -1) {
         pipelines_to_destroy.push_back(vec_dot_vec_2_pipeline);
         pipelines_to_destroy.push_back(spmv_m_pipeline);
@@ -624,7 +629,7 @@ void VulkanSolver::record_sor_solver(int command_idx) {
     barrier(simulation, residual_buffer, command_idx);
     simulation.record_command_buffer(sqrt_residual_pipeline, command_idx, 1, 1, 1, 1);
     barrier(simulation, residual_buffer, command_idx);
-    residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(float));
+    residual_buffer.copy(scratch_buffer, command_idx, false, 0, 0, sizeof(Real));
     simulation.end_recording(command_idx);
 }
 

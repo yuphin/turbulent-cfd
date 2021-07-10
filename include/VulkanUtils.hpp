@@ -22,22 +22,22 @@ struct UBOData {
     int imax;
     int jmax;
     int size;
-    float nu;
-    float alpha;
-    float beta;
-    float gx;
-    float gy;
-    float dx;
-    float dy;
-    float dx2;
-    float dy2;
-    float inv_dx;
-    float inv_dy;
-    float gamma;
-    float PI;
-    float UI;
-    float VI;
-    float tau;
+    Real nu;
+    Real alpha;
+    Real beta;
+    Real gx;
+    Real gy;
+    Real dx;
+    Real dy;
+    Real dx2;
+    Real dy2;
+    Real inv_dx;
+    Real inv_dy;
+    Real gamma;
+    Real PI;
+    Real UI;
+    Real VI;
+    Real tau;
     int num_diags;
     int num_fluid_cells;
 };
@@ -419,6 +419,7 @@ class GPUSimulation {
 
         // None for now
         VkPhysicalDeviceFeatures device_features = {};
+        device_features.shaderFloat64 = true;
 
         device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         device_create_info.enabledLayerCount = enabled_layers.size();
@@ -529,9 +530,9 @@ class GPUSimulation {
         return (uint32_t *)str;
     }
 
-    Pipeline create_compute_pipeline(const char *shader_path, uint32_t specialization_data = -1) {
+    Pipeline create_compute_pipeline(const std::string& shader_path, uint32_t specialization_data = -1) {
         uint32_t filelength;
-        uint32_t *code = read_file(filelength, shader_path);
+        uint32_t *code = read_file(filelength, shader_path.c_str());
         VkShaderModuleCreateInfo create_info = {};
         create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         create_info.pCode = code;

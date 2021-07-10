@@ -79,4 +79,5 @@ iproc         1
 jproc         1
 
 solver 1
-simulation vulkan
+model 0
+simulation 2

@@ -28,7 +28,7 @@ layout(std430, binding = 22) readonly buffer T_old
  	float t_old[];
 };
 
-layout(std430, binding = 23) writeonly buffer T_new
+layout(std430, binding = 23) buffer T_new
 {
  	float t_new[];
 };

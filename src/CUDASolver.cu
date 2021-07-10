@@ -438,7 +438,6 @@ __device__ Real calculate_f2_sst(Real omega, Real k, Real dist, Real nu) {
 __device__ Real calculate_sst_term(Real K[3], Real EPS[3], Real kij, Real eij, Real dist, Real inv_dx, Real inv_dy,
                                    Real nu) {
 
-    int a = 4;
     Real dk_dx = (K[0] - K[1]) * inv_dx;
     Real dw_dx = (EPS[0] - EPS[1]) * inv_dx;
     Real dk_dy = (K[0] - K[2]) * inv_dy;
@@ -630,7 +629,6 @@ __global__ void fg_boundary(Real *f, Real *g, Real *u, Real *v, int imax, int jm
     if (i >= imax || j >= jmax || is_fluid == 1) {
         return;
     }
-    uint32_t type = at(neighborhood, i, j) >> 8;
     uint32_t neighbors = at(neighborhood, i, j) & 0xFF;
 
     if ((neighbors & 0x1) == 1) {

@@ -138,14 +138,14 @@ void Fields::calculate_nu_t(Grid &grid, int turb_model) {
 Real Fields::calculate_f1_sst(Grid &grid, Real omega, Real dk_di, Real dw_di, Real k, Real dist) {
     Real cd_kw = std::max(2 * 0.856 * 1 / omega * dk_di * dw_di, 1e-10);
     Real f1 =
-        std::tanh(std::pow(std::min(std::max(std::sqrt(k) / (0.09 * omega * dist), 500 * _nu / (dist * dist * omega)),
-                                    4 * 0.856 * k / (cd_kw * dist * dist)),
+        std::tanh(std::pow(std::min(std::max(std::sqrt(k) / (Real(0.09) * omega * dist), Real(500) * _nu / (dist * dist * omega)),
+                                    Real(4 * 0.856) * k / (cd_kw * dist * dist)),
                            4));
     return f1;
 }
 
 Real Fields::calculate_f2_sst(Real omega, Real k, Real dist) {
-    Real max_sqr = std::max(2 * std::sqrt(k) / (0.09 * omega * dist), 500 * _nu / (dist * dist * omega));
+    Real max_sqr = std::max(Real(2) * std::sqrt(k) / (Real(0.09) * omega * dist), Real(500) * _nu / (dist * dist * omega));
     return std::tanh(max_sqr * max_sqr);
 }
 
@@ -236,7 +236,7 @@ void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
             auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j);
 
             auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, _S, i, j);
-            k3 = std::min(k3, 10 * 0.09 * kij * eij);
+            k3 = std::min(k3, Real(10) * Real(0.09) * kij * eij);
             auto e3 = 5.0 / 9 * eij * k3 / kij;
             auto e4 = 3.0 / 40 * eij * eij;
             auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - 0.09 * kij * eij);

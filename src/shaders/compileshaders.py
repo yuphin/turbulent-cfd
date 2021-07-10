@@ -48,35 +48,37 @@ def findSpirvOpt():
 
 glslang_path = findGlslang()
 spirvopt_path = findSpirvOpt()
-dir_path = os.path.dirname(os.path.realpath(__file__))
-dir_path = dir_path.replace('\\', '/')
-for root, dirs, files in os.walk(dir_path):
-    for file in files:
-        if file.endswith(".vert") or file.endswith(".frag") or file.endswith(".comp") or \
-           file.endswith(".geom") or file.endswith(".tesc") or file.endswith(".tese") or \
-           file.endswith(".rgen") or file.endswith(".rchit") or file.endswith(".rmiss") or \
-           file.endswith(".glsl"):
-
-            file_short = file[:file.index(".glsl")]
-            input_file = os.path.join(root, file)
-            output_file = file_short + ".spv"
-
-            add_params = ""
-            if args.g:
-                add_params = "-g"
-
-            if file.endswith(".rgen") or file.endswith(".rchit") or file.endswith(".rmiss"):
-               add_params = add_params + " --target-env vulkan1.2"
-
-            res = subprocess.call("%s -V %s --target-env vulkan1.2 -o %s %s" % (glslang_path, input_file, output_file, add_params), shell=True)
-
-            if res != 0:
-                sys.exit()
-    
-    if(spirvopt_path):
-        print("Optimizing shaders...")
+subdirs = ['double', 'float']
+for dp in subdirs:
+    os.chdir(dp)
+    for root, dirs, files in os.walk(os.getcwd()):
         for file in files:
-            if(file.endswith(".spv")):
-                res_opt = subprocess.call("%s -O %s -o %s" % (spirvopt_path, file, file), shell=True)
-                if res_opt != 0:
+            if file.endswith(".vert") or file.endswith(".frag") or file.endswith(".comp") or \
+            file.endswith(".geom") or file.endswith(".tesc") or file.endswith(".tese") or \
+            file.endswith(".rgen") or file.endswith(".rchit") or file.endswith(".rmiss") or \
+            file.endswith(".glsl"):
+
+                file_short = file[:file.index(".glsl")]
+                input_file = os.path.join(root, file)
+                output_file = file_short + ".spv"
+
+                add_params = ""
+                if args.g:
+                    add_params = "-g"
+
+                if file.endswith(".rgen") or file.endswith(".rchit") or file.endswith(".rmiss"):
+                    add_params = add_params + " --target-env vulkan1.2"
+
+                res = subprocess.call("%s -V %s --target-env vulkan1.2 -o %s %s" % (glslang_path, input_file, output_file, add_params), shell=True)
+
+                if res != 0:
                     sys.exit()
+        
+        if(spirvopt_path):
+            print("Optimizing shaders...")
+            for file in files:
+                if(file.endswith(".spv")):
+                    res_opt = subprocess.call("%s -O %s -o %s" % (spirvopt_path, file, file), shell=True)
+                    if res_opt != 0:
+                        sys.exit()
+    os.chdir('..')

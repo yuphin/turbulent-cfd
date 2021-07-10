@@ -1,0 +1,23 @@
+layout(push_constant) uniform UBOData {
+	int imax;
+    int jmax;
+    int size;
+    double nu;
+    double alpha;
+    double beta;
+    double gx;
+    double gy;
+    double dx;
+    double dy;
+    double dx2;
+    double dy2;
+    double inv_dx;
+    double inv_dy;
+    double gamma;
+    double PI;
+    double UI;
+    double VI;
+    double tau;
+    int num_diags;
+    int num_fluid_cells;
+};
