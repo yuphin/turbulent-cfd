@@ -6,10 +6,16 @@
 #define real_max(v1, v2) fmaxf(v1, v2)
 #define real_min(v1, v2) fminf(v1, v2)
 #define real_abs(v1) fabsf(v1)
+#define real_tanh(v1) tanhf(v1)
+#define real_pow(v1, v2) powf(v1, v2)
+#define real_sqrt(v1) sqrtf(v1)
 #else
 #define real_max(v1, v2) fmax(v1,v2)
 #define real_min(v1, v2) fmin(v1,v2)
 #define real_abs(v1) fabs(v1)
+#define real_tanh(v1) tanh(v1)
+#define real_pow(v1, v2) pow(v1, v2)
+#define real_sqrt(v1) sqrt(v1)
 #endif
 
 struct CudaSolver : public Solver {
@@ -75,6 +81,8 @@ struct CudaSolver : public Solver {
     Real *K_old;
     Real *EPS;
     Real *EPS_old;
+    Real *dists;
+    Real *S;
 
     Real *dx;
     Real *dy;

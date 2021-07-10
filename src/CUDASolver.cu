@@ -421,8 +421,37 @@ __global__ void calc_t(Real *u, Real *v, Real dx, Real dy, Real *t_new, Real *t_
                                               convection_vT(v_stencil, t_laplacian, inv_dy, gamma));
 }
 
-__global__ void calculate_nu_t(Real *NU_T, Real *K, Real *EPS, int *cell_type, Real _nu, int imax, int jmax,
-                               const int turb_model) {
+__device__ Real calculate_f1_sst(Real omega, Real dk_di, Real dw_di, Real k, Real dist, Real nu) {
+    Real cd_kw = real_max(2 * 0.856 * 1 / omega * dk_di * dw_di, 1e-10);
+    Real f1 =
+        real_tanh(real_pow(real_min(real_max(real_sqrt(k) / (0.09 * omega * dist), 500 * nu / (dist * dist * omega)),
+                                    4 * 0.856 * k / (cd_kw * dist * dist)),
+                           4));
+    return f1;
+}
+
+__device__ Real calculate_f2_sst(Real omega, Real k, Real dist, Real nu) {
+    Real max_sqr = real_max(2 * real_sqrt(k) / (0.09 * omega * dist), 500 * nu / (dist * dist * omega));
+    return real_tanh(max_sqr * max_sqr);
+}
+
+__device__ Real calculate_sst_term(Real K[3], Real EPS[3], Real kij, Real eij, Real dist, Real inv_dx, Real inv_dy,
+                                   Real nu) {
+
+    int a = 4;
+    Real dk_dx = (K[0] - K[1]) * inv_dx;
+    Real dw_dx = (EPS[0] - EPS[1]) * inv_dx;
+    Real dk_dy = (K[0] - K[2]) * inv_dy;
+    Real dw_dy = (EPS[0] - EPS[2]) * inv_dy;
+    Real f1_x = calculate_f1_sst(eij, dk_dx, dw_dx, kij, dist, nu);
+    Real f1_y = calculate_f1_sst(eij, dk_dy, dw_dy, kij, dist, nu);
+    Real res_x = 2 * (1 - f1_x) * 0.856 * 1 / eij * dk_dx * dw_dx;
+    Real res_y = 2 * (1 - f1_y) * 0.856 * 1 / eij * dk_dy * dw_dy;
+    return res_x + res_y;
+}
+
+__global__ void calculate_nu_t(Real *NU_T, Real *K, Real *EPS, Real *dists, Real *S, int *cell_type, Real _nu, int imax,
+                               int jmax, const int turb_model) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
     int is_fluid = at(cell_type, i, j);
@@ -435,11 +464,16 @@ __global__ void calculate_nu_t(Real *NU_T, Real *K, Real *EPS, int *cell_type, R
         at(NU_T, i, j) = 0.09 * kij * kij / epsij + _nu;
     } else if (turb_model == 2) {
         at(NU_T, i, j) = kij / epsij + _nu;
+    } else if (turb_model == 3) {
+        const Real a1 = 5.0 / 9.0;
+        auto dist = at(dists, i, j);
+        auto f2 = calculate_f2_sst(epsij, kij, dist, _nu);
+        at(NU_T, i, j) = a1 * kij / (real_max(a1 * epsij, at(S, i, j) * f2)) + _nu;
     }
 }
 
-__global__ void calculate_nu_ij(Real *NU_I, Real *NU_J, Real *K, Real *EPS, int *cell_type, Real _nu, int imax,
-                                int jmax, const int turb_model) {
+__global__ void calculate_nu_ij(Real *NU_I, Real *NU_J, Real *K, Real *EPS, Real *dists, Real *S, int *cell_type,
+                                Real _nu, int imax, int jmax, const int turb_model) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
     int is_fluid = at(cell_type, i, j);
@@ -457,6 +491,13 @@ __global__ void calculate_nu_ij(Real *NU_I, Real *NU_J, Real *K, Real *EPS, int 
     } else if (turb_model == 2) {
         at(NU_I, i, j) = 0.5 * num_i / denom_i;
         at(NU_J, i, j) = 0.5 * num_j / denom_j;
+    } else if (turb_model == 3) {
+        constexpr Real a1 = 5.0 / 9.0;
+        auto dist = at(dists, i, j);
+        auto f2_1 = calculate_f2_sst(denom_i, num_i, dist, _nu);
+        auto f2_2 = calculate_f2_sst(denom_j, num_j, dist, _nu);
+        at(NU_I, i, j) = 0.85 * a1 * num_i / real_max(a1 * denom_i, at(S, i, j) * f2_1);
+        at(NU_J, i, j) = 0.5 * a1 * num_j / real_max(a1 * denom_j, at(S, i, j) * f2_2);
     }
 }
 
@@ -502,8 +543,8 @@ __global__ void calculate_k_and_epsilon(Real *K_old, Real *EPS_old, Real *K, Rea
 }
 
 __global__ void calculate_k_and_omega(Real *K_old, Real *EPS_old, Real *K, Real *EPS, Real *NU_T, Real *NU_I,
-                                        Real *NU_J, Real *U, Real *V, int *cell_type, Real _nu, int imax, int jmax,
-                                        Real dt, Real inv_dx, Real inv_dy) {
+                                      Real *NU_J, Real *U, Real *V, Real *dists, Real *S, int *cell_type, Real _nu,
+                                      int imax, int jmax, Real dt, Real inv_dx, Real inv_dy, int turb_model) {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
     uint32_t j = blockIdx.y * blockDim.y + threadIdx.y;
     int is_fluid = at(cell_type, i, j);
@@ -532,12 +573,26 @@ __global__ void calculate_k_and_omega(Real *K_old, Real *EPS_old, Real *K, Real 
     auto e1_2 = convecton_vKEPS(V_diff, EPS_stencil, inv_dy);
     auto k2 = laplacian_nu(K_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
     auto e2 = laplacian_nu(EPS_stencil, NU_I_diff, NU_J_diff, inv_dx, inv_dy, _nu, 1);
-
-    auto k3 = nut * mean_strain_rate_squared(U_stencil, V_stencil, inv_dx, inv_dy);
-    auto e3 = 5/9 * eij * k3 / kij;
-    auto e4 = 3 / 40 * eij * eij;
+    Real k3;
+    if (turb_model == 2) {
+        k3 = nut * mean_strain_rate_squared(U_stencil, V_stencil, inv_dx, inv_dy);
+    } else if (turb_model == 3) {
+        k3 = nut * mean_strain_rate_squared_store_S(U_stencil, V_stencil, S, i, j, imax, jmax, inv_dx, inv_dy);
+    }
+    if (turb_model == 3) {
+        k3 = real_min(k3, 10 * 0.09 * kij * eij);
+    }
+    auto e3 = 5.0 / 9.0 * eij * k3 / kij;
+    auto e4 = 3.0 / 40.0 * eij * eij;
+    Real sst_term;
+    if (turb_model == 3) {
+        Real K_diff[3] = {at(K_old, i, j), at(K_old, i - 1, j), at(K_old, i, j - 1)};
+        Real EPS_diff[3] = {at(EPS_old, i, j), at(EPS_old, i - 1, j), at(EPS_old, i, j - 1)};
+        auto dist = at(dists, i, j);
+        sst_term = calculate_sst_term(K_diff, EPS_diff, kij, eij, dist, inv_dx, inv_dy, _nu);
+    }
     auto kij_new = kij + dt * (-(k1_1 + k1_2) + k2 + k3 - 0.09 * kij * eij);
-    auto epsij_new = eij + dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
+    auto epsij_new = eij + dt * (-(e1_1 + e1_2) + e2 + e3 - e4 + sst_term);
     at(K, i, j) = kij_new;
     at(EPS, i, j) = epsij_new;
 }
@@ -717,7 +772,7 @@ __global__ void nu_t_boundary(Real *NU_T, Real *K, Real *EPS, int imax, int jmax
         if (valid) {
             at(K, i, j) = k;
             at(EPS, i, j) = eps;
-            //at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
+            // at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
         }
     } else { // Other
         int diag = 0;
@@ -768,9 +823,9 @@ __global__ void nu_t_boundary(Real *NU_T, Real *K, Real *EPS, int imax, int jmax
             at(K, i, j) = k;
             at(EPS, i, j) = eps;
             if (turb_model == 1) {
-                at(NU_T, i, j) = 0.09 * k * k / eps + _nu; 
-            } else if (turb_model == 2) {
-                at(NU_T, i, j) = k / eps + _nu; 
+                at(NU_T, i, j) = 0.09 * k * k / eps + _nu;
+            } else if (turb_model == 2 || turb_model == 3) {
+                at(NU_T, i, j) = k / eps + _nu;
             }
         }
     }
@@ -889,7 +944,7 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
         Real cond_6;
         if (turb_model == 1) {
             cond_6 = 1 / (2 * eps_max * (1 / dx2 + 1 / dy2));
-        } else if (turb_model == 2) {
+        } else if (turb_model == 2 || turb_model == 3) {
             cond_6 = 1 / (2 * (eps_max * 0.09 * k_max) * (1 / dx2 + 1 / dy2));
         }
         min_cond = std::min(min_cond, cond_5);
@@ -955,6 +1010,13 @@ void CudaSolver::initialize() {
     if (_preconditioner != -1) {
         A_precond_diag = create_preconditioner_spai(A_pcg, _grid, _preconditioner);
     }
+    std::vector<Real> dists_vec(grid_size);
+    if (_turb_model == 3) {
+        for (int i = 0; i < grid_size; i++) {
+            dists_vec[i] = _grid._cells._container[i].closest_dist;
+        }
+    }
+
     num_offsets_a = A_matrix_diag.offsets.size();
     num_offsets_m = A_precond_diag.offsets.size();
     auto t_matrix_data = T_fixed.value.data();
@@ -1012,6 +1074,11 @@ void CudaSolver::initialize() {
         cudaMemset(NU_J, 0, grid_size * sizeof(Real));
         cudaMemcpy(K, _field._K._container.data(), grid_size * sizeof(Real), cudaMemcpyHostToDevice);
         cudaMemcpy(EPS, _field._EPS._container.data(), grid_size * sizeof(Real), cudaMemcpyHostToDevice);
+        if (_turb_model == 3) {
+            cudaMalloc(&dists, grid_size * sizeof(Real));
+            cudaMalloc(&S, grid_size * sizeof(Real));
+            cudaMemcpy(dists, dists_vec.data(), grid_size * sizeof(Real), cudaMemcpyHostToDevice);
+        }
     }
     cudaMalloc(&P_residual, grid_size * sizeof(Real));
     cudaMalloc(&cell_type, grid_size * sizeof(int));
@@ -1151,16 +1218,18 @@ void CudaSolver::solve_post_pressure() {
     if (_turb_model != 0) {
         chk(cudaMemcpy(K_old, K, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
         chk(cudaMemcpy(EPS_old, EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
-        calculate_nu_t<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, cell_type, _field._nu, grid_x, grid_y, _turb_model);
-        calculate_nu_ij<<<num_blks_2d, blk_size_2d>>>(NU_I, NU_J, K, EPS, cell_type, _field._nu, grid_x, grid_y, _turb_model);
+        calculate_nu_t<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, dists, S, cell_type, _field._nu, grid_x, grid_y,
+                                                     _turb_model);
+        calculate_nu_ij<<<num_blks_2d, blk_size_2d>>>(NU_I, NU_J, K, EPS, dists, S, cell_type, _field._nu, grid_x,
+                                                      grid_y, _turb_model);
         if (_turb_model == 1) {
             calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V,
                                                                   cell_type, _field._nu, grid_x, grid_y, _field._dt,
-                                                                  1 / _grid.dx(), 1 / _grid.dy()); 
-        } else if (_turb_model == 2) {
-            calculate_k_and_omega<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V,
-                                                                  cell_type, _field._nu, grid_x, grid_y, _field._dt,
-                                                                  1 / _grid.dx(), 1 / _grid.dy()); 
+                                                                  1 / _grid.dx(), 1 / _grid.dy());
+        } else if (_turb_model == 2 || _turb_model == 3) {
+            calculate_k_and_omega<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, dists,
+                                                                S, cell_type, _field._nu, grid_x, grid_y, _field._dt,
+                                                                1 / _grid.dx(), 1 / _grid.dy(), _turb_model);
         }
         // TODO : Implement KIN and EPSIN
         nu_t_boundary<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, grid_x, grid_y, neighborhood, cell_type, _KIN, _EPSIN,
@@ -1201,6 +1270,10 @@ CudaSolver::~CudaSolver() {
         cudaFree(K_old);
         cudaFree(EPS_old);
         cudaFree(EPS);
+        if (_turb_model == 3) {
+            cudaFree(dists);
+            cudaFree(S);
+        }
     }
     cudaFree(P_residual);
     cudaFree(cell_type);

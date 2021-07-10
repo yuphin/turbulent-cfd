@@ -90,67 +90,7 @@ class Grid {
     Domain _domain;
     Matrix<Cell> _cells;
 
-     void preprocess_geometry() {
-        auto at = [this](int i, int j) { return &_cells._container[j * _domain.imax + i]; };
-        auto get_idx = [this](int i, int j) { return j * _domain.imax + i; };
-        for (auto cell : _fluid_cells) {
-            int i = cell->i();
-            int j = cell->j();
-            cell_type ct;
-            Real dist_x_p = 0;
-            Real dist_y_p = 0;
-            Real dist_x_n = 0;
-            Real dist_y_n = 0;
-            int idx_i_p = i;
-            do {
-                idx_i_p++;
-                ct = at(idx_i_p, j)->type();
-                // dist_x_p += at(idx_i_p, j)->dx;
-                dist_x_p += dx();
-            } while (ct == cell_type::FLUID);
-            if (ct != cell_type::FREESLIP_WALL && ct != cell_type::NOSLIP_WALL) {
-                dist_x_p = REAL_MAX;
-            }
-            int idx_i_n = i;
-            do {
-                idx_i_n--;
-                ct = at(idx_i_n, j)->type();
-                // dist_x_n += at(idx_i_n, j)->dx;
-                dist_x_n += dx();
-            } while (ct == cell_type::FLUID);
-            if (ct != cell_type::FREESLIP_WALL && ct != cell_type::NOSLIP_WALL) {
-                dist_x_n = REAL_MAX;
-            }
-            int idx_j_p = j;
-            do {
-                idx_j_p++;
-                ct = at(i, idx_j_p)->type();
-                // dist_y_p += at(i, idx_j_p)->dy;
-                dist_y_p += dy();
-            } while (ct == cell_type::FLUID);
-            if (ct != cell_type::FREESLIP_WALL && ct != cell_type::NOSLIP_WALL) {
-                dist_y_p = REAL_MAX;
-            }
-            int idx_j_n = j;
-            do {
-                idx_j_n--;
-                ct = at(i, idx_j_n)->type();
-                // dist_y_n += at(i, idx_j_n)->dy;
-                dist_y_n += dy();
-            } while (ct == cell_type::FLUID);
-            if (ct != cell_type::FREESLIP_WALL && ct != cell_type::NOSLIP_WALL) {
-                dist_y_n = REAL_MAX;
-            }
-            Cell *cell = at(i, j);
-            std::array<int, 4> idxs = {get_idx(idx_i_p, j), get_idx(idx_i_n, j), get_idx(i, idx_j_p),
-                                       get_idx(i, idx_j_n)};
-            std::array<Real, 4> dists = {dist_x_p, dist_x_n, dist_y_p, dist_y_n};
-            Real *min_xy = std::min_element(dists.data(), dists.data() + 4);
-            int min_idx = min_xy - dists.data();
-            cell->closest_dist = *min_xy;
-            cell->closest_wall_idx = idxs[min_idx];
-        }
-    }
+    void preprocess_geometry();
 
   private:
     /// Build cell data structures with given geometrical data

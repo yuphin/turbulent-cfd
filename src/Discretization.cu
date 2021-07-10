@@ -140,7 +140,14 @@ __device__ Real laplacian_nu(Real ar[5], Real nu_i[2], Real nu_j[2], Real inv_dx
     return result;
 }
 
-__device__ Real mean_strain_rate_squared(Real U[6], Real V[6], Real inv_dx, Real inv_dy) { 
+__device__ Real calculate_strain_tensor(Real U[6], Real V[6], Real inv_dx, Real inv_dy) {
+    auto shear_1 = (U[2] + U[3] - U[4] - U[5]) * (0.25 * inv_dy);
+    auto shear_2 = (V[2] + V[3] - V[4] - V[5]) * (0.25 * inv_dx);
+    auto shear = shear_1 + shear_2;
+    return shear;
+}
+
+__device__ Real mean_strain_rate_squared(Real U[6], Real V[6], Real inv_dx, Real inv_dy) {
     // U offsets:
     // 0,0 / -1,0 / 0,1 / -1,1 / 0,-1 / -1,-1
     // V offsets:
@@ -152,12 +159,28 @@ __device__ Real mean_strain_rate_squared(Real U[6], Real V[6], Real inv_dx, Real
         Real invdy2 = inv_dy * inv_dy;
         Real u_diff = U[0] - U[1];
         Real v_diff = V[0] - V[1];
-        auto shear_1 = (U[2] + U[3] - U[4] - U[5]) * (0.25 * inv_dy);
-        auto shear_2 = (V[2] + V[3] - V[4] - V[5]) * (0.25 * inv_dx);
-        auto shear = shear_1 + shear_2;
+        auto shear = calculate_strain_tensor(U, V, inv_dx, inv_dy);
         result = (u_diff * u_diff) * invdx2 + v_diff * v_diff * invdy2 + shear * shear;
     } else {
-        // TODO 
+        // TODO
+    }
+    return result;
+}
+
+__device__ Real mean_strain_rate_squared_store_S(Real U[6], Real V[6], Real *S, int i, int j, int imax, int jmax,
+                                                 Real inv_dx, Real inv_dy) {
+    constexpr int METHOD = 0;
+    Real result = 0;
+    if (METHOD == 0) {
+        Real invdx2 = inv_dx * inv_dx;
+        Real invdy2 = inv_dy * inv_dy;
+        Real u_diff = U[0] - U[1];
+        Real v_diff = V[0] - V[1];
+        auto shear = calculate_strain_tensor(U, V, inv_dx, inv_dy);
+        result = (u_diff * u_diff) * invdx2 + v_diff * v_diff * invdy2 + shear * shear;
+        at(S, i, j) = shear;
+    } else {
+        // TODO
     }
     return result;
 }
