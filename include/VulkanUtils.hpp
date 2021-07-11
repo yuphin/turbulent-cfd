@@ -444,8 +444,9 @@ class GPUSimulation {
     }
 
     void create_descriptor_pool() {
-        std::vector<VkDescriptorPoolSize> pool_sizes = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32},
-                                                        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 32}};
+        std::vector<VkDescriptorPoolSize> pool_sizes = {
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32},
+        };
         VkDescriptorPoolCreateInfo descriptor_pool_create_info = {};
         descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         descriptor_pool_create_info.maxSets = 32;
@@ -549,7 +550,7 @@ class GPUSimulation {
         for (int i = 0; i < entries.size(); i++) {
             entries[i].constantID = i;
             entries[i].size = sizeof(uint32_t);
-            entries[i].offset = i * sizeof(uint32_t); 
+            entries[i].offset = i * sizeof(uint32_t);
         }
         VkSpecializationInfo specialization_info{};
         specialization_info.dataSize = specialization_data.size() * sizeof(uint32_t);
