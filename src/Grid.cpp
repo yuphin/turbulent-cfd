@@ -67,7 +67,6 @@ void Grid::preprocess_geometry() {
         if (ct != cell_type::FREESLIP_WALL && ct != cell_type::NOSLIP_WALL) {
             dist_y_n = REAL_MAX;
         }
-        Cell *cell = at(i, j);
         std::array<int, 4> idxs = {get_idx(idx_i_p, j), get_idx(idx_i_n, j), get_idx(i, idx_j_p), get_idx(i, idx_j_n)};
         std::array<Real, 4> dists = {dist_x_p, dist_x_n, dist_y_p, dist_y_n};
         Real *min_xy = std::min_element(dists.data(), dists.data() + 4);

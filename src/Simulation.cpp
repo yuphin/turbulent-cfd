@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <ctime>
-#include <execution>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
