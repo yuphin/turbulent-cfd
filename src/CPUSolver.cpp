@@ -75,6 +75,8 @@ void CPUSolver::solve_post_pressure() {
         }
         // Communicate turbulence quantities
         Communication::communicate(&params, _field.nu_t_matrix());
+        Communication::communicate(&params, _field._NU_I);
+        Communication::communicate(&params, _field._NU_J);
         Communication::communicate(&params, _field.k_matrix());
         Communication::communicate(&params, _field.eps_matrix());
     }
