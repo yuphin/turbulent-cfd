@@ -19,9 +19,9 @@ struct Domain {
     int jmax{-1};
 
     /// Cell length
-    Real dx{-1.0};
+    std::vector<Real> dx{-1.0};
     /// Cell height
-    Real dy{-1.0};
+    std::vector<Real> dy{-1.0};
 
     /// Number of cells in x direction
     int size_x{-1};

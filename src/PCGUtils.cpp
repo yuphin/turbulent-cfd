@@ -91,8 +91,8 @@ void build_pcg_matrix(Fields &_field, Grid &_grid, const std::vector<std::unique
                       FixedSparseMatrix<Real> &U_fixed, FixedSparseMatrix<Real> &V_fixed,
                       FixedSparseMatrix<Real> &T_fixed) {
     int dim_x = _grid.imaxb();
-    auto dx = _grid.dx();
-    auto dy = _grid.dy();
+    auto dx = _grid.dx()[0];
+    auto dy = _grid.dy()[0];
     Real inv_dx2 = 1 / (dx * dx);
     Real inv_dy2 = 1 / (dy * dy);
     Real div = inv_dx2 + inv_dy2;

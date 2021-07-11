@@ -30,7 +30,7 @@ class Grid {
      *
      */
     Grid(std::string geom_name, Domain &domain, 
-         std::vector<std::vector<int>> &geometry_data);
+         std::vector<std::vector<int>> &geometry_data, Real mindx, Real mindy);
 
     /// index based cell access
     Cell cell(int i, int j) const;
@@ -48,9 +48,12 @@ class Grid {
     const Domain &domain() const;
 
     /// access cell size in x-direction
-    Real dx() const;
+    std::vector<Real> dx() const;
     /// access cell size in y-direction
-    Real dy() const;
+    std::vector<Real> dy() const;
+
+    Real mindx() const;
+    Real mindy() const;
 
     /**
      * @brief Access inflow cells
@@ -101,6 +104,8 @@ class Grid {
     std::vector<Cell *> _noslip_wall_cells;
 
 
-    Real _dx;
-    Real _dy;
+    std::vector<Real> _dx;
+    std::vector<Real> _dy;
+    Real _mindx;
+    Real _mindy;
 };

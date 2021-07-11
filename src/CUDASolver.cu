@@ -1033,29 +1033,29 @@ void CudaSolver::solve_pre_pressure(Real &dt) {
     dim3 blk_size_2d(BLK_SIZE_2D, BLK_SIZE_2D);
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
     dt = calculate_dt(_grid.imaxb(), _grid.jmaxb(), U, V, U_residual, V_residual, NU_residual, K_residual, EPS_residual,
-                      NU_T, K, EPS, _grid.dx(), _grid.dy(), _field._tau, _field._nu, _field._alpha, _field.calc_temp,
+                      NU_T, K, EPS, _grid.dx()[0], _grid.dy()[0], _field._tau, _field._nu, _field._alpha, _field.calc_temp,
                       _turb_model != 0);
     _field._dt = dt;
     uv_boundary(U, V, row_start_u, row_start_v, col_idx_u, col_idx_v, mat_u, mat_v, rhs_vec_u, rhs_vec_v, grid_size);
     if (_field.calc_temp) {
         t_boundary(T, row_start_t, col_idx_t, mat_t, rhs_vec_t, grid_size);
         chk(cudaMemcpy(T_temp, T, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
-        calc_t<<<num_blks_2d, blk_size_2d>>>(U, V, _grid.dx(), _grid.dy(), T, T_temp, cell_type, _field._alpha, dt,
+        calc_t<<<num_blks_2d, blk_size_2d>>>(U, V, _grid.dx()[0], _grid.dy()[0], T, T_temp, cell_type, _field._alpha, dt,
                                              _discretization._gamma, _grid.imaxb(), _grid.jmaxb());
     }
     std::vector<Real> fcpu(grid_size);
     std::vector<Real> gcpu(grid_size);
     if (_turb_model != 0) {
-        calc_fg_turbulent<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, NU_T, _field.calc_temp, _grid.dx(), _grid.dy(), T,
+        calc_fg_turbulent<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, NU_T, _field.calc_temp, _grid.dx()[0], _grid.dy()[0], T,
                                                         cell_type, dt, _discretization._gamma, _field._nu, _field._beta,
                                                         _field._gx, _field._gy, grid_x, grid_y);
     } else {
-        calc_fg<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, _field.calc_temp, _grid.dx(), _grid.dy(), T, cell_type, dt,
+        calc_fg<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, _field.calc_temp, _grid.dx()[0], _grid.dy()[0], T, cell_type, dt,
                                               _discretization._gamma, _field._nu, _field._beta, _field._gx, _field._gy,
                                               grid_x, grid_y);
     }
     fg_boundary<<<num_blks_2d, blk_size_2d>>>(F, G, U, V, grid_x, grid_y, neighborhood, cell_type);
-    calc_rs<<<num_blks_2d, blk_size_2d>>>(F, G, RS, _grid.dx(), _grid.dy(), grid_x, grid_y, dt, cell_type);
+    calc_rs<<<num_blks_2d, blk_size_2d>>>(F, G, RS, _grid.dx()[0], _grid.dy()[0], grid_x, grid_y, dt, cell_type);
 }
 
 void CudaSolver::solve_pressure(Real &res, uint32_t &it) {
@@ -1078,7 +1078,7 @@ void CudaSolver::solve_pressure(Real &res, uint32_t &it) {
 
     } else if (solver_type == SolverType::SOR) {
         solve_sor(P, P_temp, P_residual, p_residual_out, neighborhood, _grid.imaxb(), _grid.jmaxb(), RS, cell_type, it,
-                  _max_iter, _grid.dx(), _grid.dy(), _field._PI, _tolerance, res, _grid.fluid_cells().size());
+                  _max_iter, _grid.dx()[0], _grid.dy()[0], _field._PI, _tolerance, res, _grid.fluid_cells().size());
     }
 }
 
@@ -1089,16 +1089,16 @@ void CudaSolver::solve_post_pressure() {
     int num_blks(get_num_blks(grid_size));
     dim3 blk_size_2d(BLK_SIZE_2D, BLK_SIZE_2D);
     dim3 num_blks_2d = get_num_blks_2d(grid_x, grid_y);
-    calc_vel<<<num_blks_2d, blk_size_2d>>>(U, V, P, F, G, cell_type, _field._dt, grid_x, grid_y, _grid.dx(),
-                                           _grid.dy());
+    calc_vel<<<num_blks_2d, blk_size_2d>>>(U, V, P, F, G, cell_type, _field._dt, grid_x, grid_y, _grid.dx()[0],
+                                           _grid.dy()[0]);
     if (_turb_model == 1) {
         chk(cudaMemcpy(K_old, K, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
         chk(cudaMemcpy(EPS_old, EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToDevice));
         calculate_nu_t<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, cell_type, _field._nu, grid_x, grid_y);
         calculate_nu_ij<<<num_blks_2d, blk_size_2d>>>(NU_I, NU_J, K, EPS, cell_type, _field._nu, grid_x, grid_y);
         calculate_k_and_epsilon<<<num_blks_2d, blk_size_2d>>>(K_old, EPS_old, K, EPS, NU_T, NU_I, NU_J, U, V, cell_type,
-                                                              _field._nu, grid_x, grid_y, _field._dt, 1 / _grid.dx(),
-                                                              1 / _grid.dy());
+                                                              _field._nu, grid_x, grid_y, _field._dt, 1 / _grid.dx()[0],
+                                                              1 / _grid.dy()[0]);
         // TODO : Implement KIN and EPSIN
         nu_t_boundary<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, grid_x, grid_y, neighborhood, cell_type, 0, 0,
                                                     _field._nu);

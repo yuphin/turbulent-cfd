@@ -7,9 +7,10 @@
 #include <sstream>
 #include <vector>
 
-Grid::Grid(std::string geom_name, Domain &domain, std::vector<std::vector<int>> &geometry_data) {
-
+Grid::Grid(std::string geom_name, Domain &domain, std::vector<std::vector<int>> &geometry_data, Real mindx, Real mindy) {
     _domain = domain;
+    _mindx = mindx;
+    _mindy = mindy;
 
     _cells = Matrix<Cell>(_domain.size_x + 2, _domain.size_y + 2);
     assign_cell_types(geometry_data);
@@ -199,9 +200,13 @@ int Grid::jmaxb() const { return _domain.size_y + 2; }
 
 Cell Grid::cell(int i, int j) const { return _cells(i, j); }
 
-Real Grid::dx() const { return _domain.dx; }
+std::vector<Real> Grid::dx() const { return _domain.dx; }
 
-Real Grid::dy() const { return _domain.dy; }
+std::vector<Real> Grid::dy() const { return _domain.dy; }
+
+Real Grid::mindx() const { return _mindx; }
+
+Real Grid::mindy() const { return _mindy; }
 
 const Domain &Grid::domain() const { return _domain; }
 

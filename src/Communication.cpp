@@ -6,7 +6,7 @@ void Communication::init_mpi(Params *params) {
     MPI_Comm_rank(MPI_COMM_WORLD, &params->world_rank);
 }
 
-void Communication::init_params(Params *params, int imax, int jmax) {
+void Communication::init_params(Params *params, int imax, int jmax, const std::vector<Real> &dx_global, const std::vector<Real> &dy_global) {
     int iproc = params->iproc;
     int jproc = params->jproc;    
     int wr = params->world_rank;
@@ -32,7 +32,16 @@ void Communication::init_params(Params *params, int imax, int jmax) {
     if (coords.y == jproc - 1) {
         params->size_y += jmax % jproc;
         params->jmax += jmax % jproc;
-    }   
+    }
+    params->start_x = 0.0;
+    params->start_y = 0.0;
+    for (int i = 0; i < params->imin; ++i) {
+        params->start_x += dx_global[i];
+    }
+    for (int j = 0; j < params->jmin; ++j) {
+        params->start_y += dy_global[j];
+    }
+
 
 #if FLUICHEN_LOG
     std::cout << "Rank: " << wr << "(" << coords.x << "," << coords.y << ")"

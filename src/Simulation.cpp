@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <ctime>
-#include <execution>
+// #include <execution>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -61,6 +61,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     Real KI = REAL_MAX;
     Real EPSI = REAL_MAX;
     int refine = 0;
+    int adaptive = 0;
     int turb_model = 0;
     std::unordered_map<int, Real> wall_temps;
     std::unordered_map<int, Real> wall_vels;
@@ -107,6 +108,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
                 if (var == "simulation") file >> simulation_type_int;
                 if (var == "preconditioner") file >> preconditioner;
                 if (var == "refine") file >> refine;
+                if (var == "adaptive") file >> adaptive;
                 if (var == "model") file >> turb_model;
                 if (var == "KI") file >> KI;
                 if (var == "EPSI") file >> EPSI;
@@ -166,6 +168,13 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         }
         nu = 0.0;
     }
+
+    if (adaptive && (solver_type_int != 0 || simulation_type_int != 0)) {
+        solver_type_int = 0;
+        simulation_type_int = 0;
+        std::cout << "Adaptive grid only supported with SOR and CPU! Switching now..." << std::endl;
+    }
+
     if (solver_type_int == (int)SolverType::SOR) {
         solver_type = SolverType::SOR;
     } else if (solver_type_int == (int)SolverType::PCG) {
@@ -215,16 +224,31 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         global_geometry = build_lid_driven_cavity(imax, jmax);
     }
 
-    global_geometry = refine_geometry(global_geometry, refine, imax, jmax);
+    std::vector<Real> dx_global;
+    std::vector<Real> dy_global;
+    global_geometry = refine_geometry(global_geometry, refine, adaptive, imax, jmax, dx_global, dy_global, xlength, ylength);
+
     global_size_x = imax;
     global_size_y = jmax;
-    Communication::init_params(&params, imax, jmax);
+    Communication::init_params(&params, imax, jmax, dx_global, dy_global);
+
+    std::vector<Real> dx;
+    for (int x = params.imin; x < params.imax + 1; ++x) {
+        dx.push_back(dx_global[x]);
+    }
+    std::vector<Real> dy;
+    for (int y = params.jmin; y < params.jmax + 1; ++y) {
+        dy.push_back(dy_global[y]);
+    }
+
+    Real mindx = *std::min_element(dx_global.begin(), dx_global.end());
+    Real mindy = *std::min_element(dy_global.begin(), dy_global.end());;
 
     auto local_geometry = partition(global_geometry, params.imin, params.imax, params.jmin, params.jmax);
     // Build up the domain
     Domain domain;
-    domain.dx = xlength / (Real)imax;
-    domain.dy = ylength / (Real)jmax;
+    domain.dx = dx;
+    domain.dy = dy;
     domain.domain_size_x = params.size_x;
     domain.domain_size_y = params.size_y;
     domain.x_length = xlength;
@@ -238,7 +262,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     domain.size_y = params.size_y;
     domain.total_size = domain.imax * domain.jmax;
 
-    _solver->_grid = Grid(_geom_name, domain, local_geometry);
+    _solver->_grid = Grid(_geom_name, domain, local_geometry, mindx, mindy);
     _solver->_discretization = Discretization(domain.dx, domain.dy, gamma);
     _solver->_max_iter = itermax;
     _solver->_tolerance = eps;
@@ -252,12 +276,14 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     if (TI != REAL_MAX) {
         _solver->_field.calc_temp = true;
     }
-    if (turb_model == 0) {
-        std::cout << "Turbulence model: off\n";
-    } else if (turb_model == 1) {
-        std::cout << "Turbulence model: K-Epsilon\n";
-    } else if (turb_model == 2) {
-        std::cout << "Turbulence model: K-Omega\n";
+    if (params.world_rank == 0) {
+        if (turb_model == 0) {
+            std::cout << "Turbulence model: off\n";
+        } else if (turb_model == 1) {
+            std::cout << "Turbulence model: K-Epsilon\n";
+        } else if (turb_model == 2) {
+            std::cout << "Turbulence model: K-Omega\n";
+        }
     }
 
     // Construct boundaries
@@ -336,14 +362,16 @@ void Simulation::simulate(Params &params) {
     while (t < _t_end) {
         // Print progress bar
         if (params.world_rank == 0) logger.progress_bar(t, _t_end);
-
         _solver->solve_pre_pressure(dt);
         uint32_t it;
         Real res;
         _solver->solve_pressure(res, it);
+
+        /*
         if (params.world_rank == 0) {
             std::cout << "Iter count: " << it << " ";
         }
+        */
         // Check if max_iter was reached
         if (params.world_rank == 0 && it == _solver->_max_iter) {
             logger.max_iter_warning();
@@ -371,13 +399,13 @@ void Simulation::output_vtk(int timestep, Params &params) {
     // Create grid
     vtkSmartPointer<vtkPoints> points = vtkSmartPointer<vtkPoints>::New();
 
-    Real dx = _solver->_grid.dx();
-    Real dy = _solver->_grid.dy();
+    std::vector<Real> dx = _solver->_grid.dx();
+    std::vector<Real> dy = _solver->_grid.dy();
     int i = params.world_rank % params.iproc;
     int j = params.world_rank / params.iproc;
 
-    Real base_x = i * ((int)(global_size_x / params.iproc)) * dx + dx;
-    Real base_y = j * ((int)(global_size_y / params.jproc)) * dy + dy;
+    Real base_x = params.start_x + dx[0];
+    Real base_y = params.start_y + dy[0];
 
     Real z = 0;
     Real y = base_y;
@@ -385,10 +413,12 @@ void Simulation::output_vtk(int timestep, Params &params) {
         Real x = base_x;
         for (int row = 0; row < _solver->_grid.domain().size_x + 1; row++) {
             points->InsertNextPoint(x, y, z);
-            x += dx;
+            // std::cout << x << std::endl;
+            x += dx[row + 1];
         }
-        y += dy;
+        y += dy[col + 1];
     }
+
 
     // Specify the dimensions of the grid
     structuredGrid->SetDimensions(_solver->_grid.domain().size_x + 1, _solver->_grid.domain().size_y + 1, 1);

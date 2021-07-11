@@ -68,15 +68,20 @@ void CPUSolver::solve_post_pressure() {
     Communication::communicate(&params, _field.v_matrix());
 
      if (_turb_model != 0) {
+        // Communicate turbulence quantities
         // Compute turbulent viscosity and set boundary conditions
         _field.calculate_nu_t(_grid, _turb_model);
+        Communication::communicate(&params, _field.nu_t_matrix());
+        Communication::communicate(&params, _field._NU_I);
+        Communication::communicate(&params, _field._NU_J);
+        _field.calculate_k_and_epsilon(_grid, _turb_model);
+        Communication::communicate(&params, _field.k_matrix());
+        Communication::communicate(&params, _field.eps_matrix());    
+
         for (const auto &boundary : _boundaries) {
             boundary->enforce_nu_t(_field, _turb_model);
         }
-        // Communicate turbulence quantities
-        Communication::communicate(&params, _field.nu_t_matrix());
-        Communication::communicate(&params, _field.k_matrix());
-        Communication::communicate(&params, _field.eps_matrix());
+
     }
 }
 
@@ -88,9 +93,9 @@ Real CPUSolver::solve_pcg(uint32_t &it) {
     int dim_x = _grid.imaxb();
     int dim = _grid.domain().total_size;
     auto at = [dim_x](int i, int j) { return j * dim_x + i; };
-    Real inv_dx2 = 1 / (_grid.dx() * _grid.dx());
-    Real inv_dy2 = 1 / (_grid.dy() * _grid.dy());
-    Real div = inv_dx2 + inv_dy2;
+    // Real inv_dx2 = 1 / (_grid.dx() * _grid.dx());
+    // Real inv_dy2 = 1 / (_grid.dy() * _grid.dy());
+    // Real div = inv_dx2 + inv_dy2;
     solver.solve(A, _field._RS._container, _field._P._container, pcg_residual, pcg_iters, 0);
     it = pcg_iters;
     return pcg_residual;
@@ -98,15 +103,21 @@ Real CPUSolver::solve_pcg(uint32_t &it) {
 }
 
 Real CPUSolver::solve_sor() {
-    Real dx = _grid.dx();
-    Real dy = _grid.dy();
+    std::vector<Real> dx = _grid.dx();
+    std::vector<Real> dy = _grid.dy();
 
-    Real coeff = _omega / (2.0f * (1.0 / (dx * dx) + 1.0 / (dy * dy))); // = _omega * h^2 / 4.0, if dx == dy == h
+    // Real coeff = _omega / (2.0f * (1.0 / (dx * dx) + 1.0 / (dy * dy))); // = _omega * h^2 / 4.0, if dx == dy == h
 
     for (auto currentCell : _grid.fluid_cells()) {
         int i = currentCell->i();
         int j = currentCell->j();
+        
+        Real dx_left = (dx[i-1] + dx[i]) / 2;
+        Real dx_right = (dx[i] + dx[i+1]) / 2;
+        Real dy_bot = (dy[j - 1] + dy[j]) / 2;
+        Real dy_top = (dy[j] + dy[j + 1]) / 2;
 
+        Real coeff = _omega / (1.0 / (dx_left * dx[i]) + 1.0 / (dx_right * dx[i]) + 1.0 / (dy_bot * dy[j]) + 1.0 / (dy_top * dy[j]));
         _field.p(i, j) = (1.0 - _omega) * _field.p(i, j) +
                          coeff * (Discretization::sor_helper(_field.p_matrix(), i, j) - _field.rs(i, j));
     }
@@ -133,8 +144,8 @@ Real CPUSolver::solve_sor() {
 
 void CPUSolver::build_pcg_matrix() {
     int dim_x = _grid.imaxb();
-    auto dx = _grid.dx();
-    auto dy = _grid.dy();
+    auto dx = _grid.dx()[0];
+    auto dy = _grid.dy()[0];
     Real inv_dx2 = 1 / (dx * dx);
     Real inv_dy2 = 1 / (dy * dy);
     Real div = inv_dx2 + inv_dy2;

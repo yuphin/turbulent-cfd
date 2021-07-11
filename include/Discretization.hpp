@@ -17,7 +17,7 @@ class Discretization {
      * @param[in] cell size in y direction
      * @param[in] upwinding coefficient
      */
-    Discretization(Real dx, Real dy, Real gamma);
+    Discretization(std::vector<Real> dx, std::vector<Real> dy, Real gamma);
 
     /**
      * @brief Diffusion discretization in 2D using central differences
@@ -134,7 +134,7 @@ class Discretization {
     static Real _gamma;
 
   private:
-    static Real _dx;
-    static Real _dy;
+    static std::vector<Real> _dx;
+    static std::vector<Real> _dy;
    
 };

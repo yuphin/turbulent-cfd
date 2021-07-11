@@ -140,6 +140,8 @@ class Fields {
 
     void calculate_k_and_epsilon(Grid &grid, int turb_model);
 
+    Real damp_f1(int i, int j);
+
     Real damp_f2(int i, int j);
 
     Real damp_fnu(int i, int j);

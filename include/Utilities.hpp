@@ -81,6 +81,8 @@ struct Params {
     int jmax;
     int size_x;
     int size_y;
+    Real start_x;
+    Real start_y;
 };
 struct BoundaryData{
     uint32_t neighborhood = 0;
@@ -221,7 +223,8 @@ std::vector<std::vector<int>> build_lid_driven_cavity(int xdim, int ydim);
 std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec, int imin, int imax, int jmin,
                                         int jmax);
 
-std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>> &vec, int refine, int &imax, int &jmax);
+std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>> &vec, int refine, int adaptive, int &imax, 
+                                        int &jmax, std::vector<Real> &dx, std::vector<Real> &dy, Real xlength, Real ylength);
 
 bool is_inlet(int id);
 bool is_outlet(int id);

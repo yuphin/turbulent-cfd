@@ -1,6 +1,7 @@
 #include "Utilities.hpp"
 #include <sstream>
 #include <cmath>
+#include <algorithm>
 
 std::vector<std::vector<int>> parse_geometry_file(std::string filedoc, int xdim, int ydim) {
     std::vector<std::vector<int>> geometry_data(xdim + 2, std::vector<int>(ydim + 2, 0));
@@ -68,61 +69,149 @@ std::vector<std::vector<int>> partition(const std::vector<std::vector<int>> &vec
     return result;
 }
 
-std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>> &vec, int refine, int &imax, int &jmax)
+std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>> &vec, int refine, int adaptive, 
+                            int &imax, int &jmax, std::vector<Real> &dx, std::vector<Real> &dy, Real xlength, Real ylength)
 {
+    if (adaptive) {
+        refine = 2; // !!!!!!!!!! hardcoded still !!!!!!!!!!!!!!!        
+    }
+
     int iold = imax;
     int jold = jmax;
-    imax = (imax + 1) * std::pow(2, refine) - 1;
-    jmax = (jmax + 1) * std::pow(2, refine) - 1;
+    Real dxmax = xlength / iold;
+    Real dymax = ylength / jold;
+
+    Real refine_fac = std::pow(2, refine);
+    imax = imax * refine_fac;
+    jmax = jmax * refine_fac;
+
+    dx = std::vector(imax +2, (1.0 / refine_fac) * dxmax);
+    dy = std::vector(jmax + 2, (1.0 / refine_fac) * dymax);
 
     int steps = std::pow(2, refine);
-
     std::vector<std::vector<int>> geometry_data(imax + 2, std::vector<int>(jmax + 2, 0));
-    for (int i = 0; i < iold + 1; i++) {
-        for (int j = 0; j < jold + 1; j++) {
+
+    for (int i = 0; i < iold; i++) {
+        for (int j = 0; j < jold; j++) {
             for (int ii = 0; ii < steps; ii++) {
                 for (int jj = 0; jj < steps; jj++) {
-                    geometry_data[i*steps + ii][j*steps + jj] = vec[i][j];
+                    geometry_data[i*steps + ii + 1][j*steps + jj + 1] = vec[i+1][j+1];
                 }
             }
         }
     }
 
-    for (int j = 0; j < jold + 1; j++) {
-        for (int jj = 0; jj < steps; jj++) {
-            geometry_data[imax+1][j*steps + jj] = vec[iold+1][j];
+    // Fill domain boundaries
+    for (int i = 0; i < iold; i++) {
+        for (int ii = 0; ii < steps; ii++) {
+            geometry_data[i*steps + ii + 1][0] = vec[i+1][0];
+            geometry_data[i*steps + ii + 1][jmax + 1] = vec[i+1][jold + 1];
         }
     }
 
-    for (int i = 0; i < iold + 1; i++) {
-        for (int ii = 0; ii < steps; ii++) {
-            geometry_data[i*steps+ii][jmax+1] = vec[i][jold+1];
-        }
-    }
-    /*
-    for (int j = 0; j < jold + 1; j++) {
+    for (int j = 0; j < jold; j++) {
         for (int jj = 0; jj < steps; jj++) {
-            for (int ii = 1; ii < steps; ii++) {
-                if (vec[1][j] == 0) {
-                    geometry_data[ii][j*steps + jj] = 0;
-                }                
-            }
+            geometry_data[0][j*steps + jj + 1] = vec[0][j+1];    
+            geometry_data[imax + 1][j*steps + jj + 1] = vec[iold + 1][j+1];
         }
     }
+    
+    geometry_data[0][0] = vec[0][0];
+    geometry_data[0][jmax+1] = vec[0][jold+1];
+    geometry_data[imax+1][0] = vec[iold+1][0];
+    geometry_data[imax+1][jmax+1] = vec[iold+1][jold+1];
 
-    for (int i = 0; i < iold + 1; i++) {
-        for (int ii = 0; ii < steps; ii++) {
-            for (int jj = 1; jj < steps; jj++) {
-                if (vec[i][1] == 0) {
-                    geometry_data[i*steps+ii][jj] = 0;
-                }                
+
+
+    if (adaptive) {
+
+        std::vector<int> wallrows(jold+2, 0);
+        std::vector<int> wallcols(iold+2, 0);        
+        for (int i = 1; i < iold+1; i++) {
+            for (int j = 1; j < jold+1; j++) {
+                if (vec[i][j] == 0 && (vec[i][j-1] > 9 || vec[i][j+1] > 9)) {
+                    wallrows[j] = 1;
+                }
+                if (vec[i][j] == 0 && (vec[i-1][j] > 9 || vec[i+1][j] > 9)) {
+                    wallcols[i] = 1;
+                }
             }
         }
+       
+        std::vector<std::vector<int>> final_geom;
+        std::vector<Real> dx_mult;
+        std::vector<Real> dy_mult;
+
+        final_geom.push_back(geometry_data[0]);
+        dx_mult.push_back(1.0 * dxmax);
+        for (int i = 1; i < iold+1; ++i) {
+            if (wallcols[i]) {
+                final_geom.push_back(geometry_data[(i-1)*4+1]);
+                dx_mult.push_back(0.25 * dxmax);
+                final_geom.push_back(geometry_data[(i-1)*4+2]);
+                dx_mult.push_back(0.25 * dxmax);
+                final_geom.push_back(geometry_data[(i-1)*4+3]);
+                dx_mult.push_back(0.25 * dxmax);
+                final_geom.push_back(geometry_data[(i-1)*4+4]);
+                dx_mult.push_back(0.25 * dxmax);
+            }
+            else if (wallcols[i-1] || wallcols[i+1]) {
+                final_geom.push_back(geometry_data[(i-1)*4+1]);
+                dx_mult.push_back(0.5 * dxmax);
+                final_geom.push_back(geometry_data[(i-1)*4+3]);
+                dx_mult.push_back(0.5 * dxmax);                
+            }
+            else {
+                final_geom.push_back(geometry_data[(i-1)*4 + 1]);
+                dx_mult.push_back(1.0 * dxmax);
+            }
+        }
+        dx_mult.push_back(1.0 * dxmax);
+
+        final_geom.push_back(geometry_data[geometry_data.size() - 1]);
+
+        std::vector<int> delete_inds;
+        dy_mult.push_back(1.0 * dymax);
+        for (int j = 1; j < jold+1; ++j) {
+            if (wallrows[j]) {
+                dy_mult.push_back(0.25 * dymax);
+                dy_mult.push_back(0.25 * dymax);
+                dy_mult.push_back(0.25 * dymax);
+                dy_mult.push_back(0.25 * dymax);
+                continue;
+            }
+            else if (wallrows[j-1] || wallrows[j+1]) {
+                delete_inds.push_back((j-1)*4 + 2);
+                delete_inds.push_back((j-1)*4 + 4);
+                dy_mult.push_back(0.5 * dymax);
+                dy_mult.push_back(0.5 * dymax);
+            }
+            else {
+                delete_inds.push_back((j-1)*4 + 2);
+                delete_inds.push_back((j-1)*4 + 3);
+                delete_inds.push_back((j-1)*4 + 4);
+                dy_mult.push_back(1.0 * dymax);
+            }
+        }
+        dy_mult.push_back(1.0 * dymax);
+        std::reverse(delete_inds.begin(), delete_inds.end());
+
+        for (auto &ind :delete_inds) {
+            for (auto &col : final_geom) {
+                col.erase(col.begin() + ind);
+            }
+        }
+
+        geometry_data = final_geom;
+        dx = dx_mult;
+        dy = dy_mult;
+        imax = final_geom.size() - 2;
+        jmax = final_geom[0].size() - 2;
     }
-    */
 
     return geometry_data;
 }
+
 
 bool is_inlet(int id) { return id >= 2 && id <= 9; }
 

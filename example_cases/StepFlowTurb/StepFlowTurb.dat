@@ -1,20 +1,21 @@
 #--------------------------------------------
 #           geometry file            
 #--------------------------------------------
-geo_file    NACA0012_Airfoil.pgm
+geo_file    StepFlow.pgm
 
 #--------------------------------------------
 #            size of the domain             
 #--------------------------------------------
-xlength      105
-ylength      35
+xlength      12
+ylength      2
 
 #--------------------------------------------
 #            number of cells
 #--------------------------------------------
-imax        299
-jmax        99
+imax        120
+jmax        60
 refine      0
+adaptive    0
 
 #--------------------------------------------
 #               time steps
@@ -23,14 +24,14 @@ refine      0
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end        50
+t_end        100
 tau          0.5
 
 #--------------------------------------------
 #               output
 # dt_value: time interval for writing files
 #--------------------------------------------
-dt_value     0.05
+dt_value     1.0
 
 #--------------------------------------------
 #               pressure
@@ -39,16 +40,15 @@ dt_value     0.05
 # omg: relaxation factor for SOR
 # gamma: upwind differencing factor
 #--------------------------------------------
-itermax      2000
-eps          0.0001
+itermax      1000
+eps          0.001
 omg          1.7
 gamma        0.5
 
 #--------------------------------------------
 #     kinematic viscosity
 #--------------------------------------------
-
-nu        0.00001
+nu        0.00005
 
 #--------------------------------------------
 #        gravity / external forces
@@ -64,30 +64,21 @@ PI          0
 #--------------------------------------------
 #       initial velocity
 #--------------------------------------------
-UI          25.75 
-VI          3.62
+UI          0
+VI          0
 
 #--------------------------------------------
 #       inlet velocity
 #--------------------------------------------
-UIN_2        25.75 
-VIN_2        3.62
+UIN_2        1.0
+VIN_2        0
 
 #--------------------------------------------
 #       number of processes in x and y direction
 #--------------------------------------------
 
-iproc         1
+iproc         4
 jproc         1
-
-#--------------------------------------------
-#       turbulence parameters
-#--------------------------------------------
-
-KI          0.1
-EPSI        20
-KIN_2         0.1
-EPSIN_2       20
 
 #--------------------------------------------
 #       turbulence model
@@ -119,15 +110,11 @@ solver 0
 simulation 0
 
 #--------------------------------------------
-#      preconditioner(if pcg is selected)
-#	   -1 -> Off
-#	   0 -> SPAI via first order approximation
-#		    through a Jacobi preconditioner
-#	   1 -> SPAI via an SSOR preconditioner
-#	   2 -> Jacobi preconditioner
-#	   Note: Not all preconditioners are guarenteed to work
-#	   default is -1
+#       turbulence parameters
 #--------------------------------------------
 
-preconditioner -1
+KI              0.003
+EPSI            0.0005
 
+KIN_2          0.003
+EPSIN_2        0.0005

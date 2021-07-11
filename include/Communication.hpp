@@ -10,7 +10,7 @@ class Communication {
 
   public:
     static void init_mpi(Params *params);
-    static void init_params(Params *params, int imax, int jmax);
+    static void init_params(Params *params, int imax, int jmax, const std::vector<Real> &dx_global, const std::vector<Real> &dy_global);
     
     static void communicate(Params *params, Matrix<Real> &matrix);
     static void reduce_min();

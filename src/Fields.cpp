@@ -37,8 +37,8 @@ void Fields::calculate_rs(Grid &grid) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-        Real f_diff = 1 / grid.dx() * (f(i, j) - f(i - 1, j));
-        Real g_diff = 1 / grid.dy() * (g(i, j) - g(i, j - 1));
+        Real f_diff = 1 / grid.dx()[i] * (f(i, j) - f(i - 1, j));
+        Real g_diff = 1 / grid.dy()[j] * (g(i, j) - g(i, j - 1));
         rs(i, j) = 1 / dt() * (f_diff + g_diff);
     }
 }
@@ -47,8 +47,8 @@ void Fields::calculate_velocities(Grid &grid) {
     for (const auto &current_cell : grid.fluid_cells()) {
         int i = current_cell->i();
         int j = current_cell->j();
-        u(i, j) = f(i, j) - dt() / grid.dx() * (p(i + 1, j) - p(i, j));
-        v(i, j) = g(i, j) - dt() / grid.dy() * (p(i, j + 1) - p(i, j));
+        u(i, j) = f(i, j) - dt() / grid.dx()[i] * (p(i + 1, j) - p(i, j));
+        v(i, j) = g(i, j) - dt() / grid.dy()[j] * (p(i, j + 1) - p(i, j));
     }
 }
 
@@ -82,7 +82,7 @@ void Fields::calculate_nu_t(Grid &grid, int turb_model) {
         int i = current_cell->i();
         int j = current_cell->j();
 
-        Real fnu_coeff = 1;
+        Real fnu_coeff = 1;       
         auto kij = k(i, j);
         auto epsij = eps(i, j);
         if (turb_model == 1) {
@@ -98,6 +98,7 @@ void Fields::calculate_nu_t(Grid &grid, int turb_model) {
         int i = current_cell->i();
         int j = current_cell->j();
         Real fnu_coeff = 1;
+
         if (turb_model == 1) {
             auto num_i = (k(i, j) + k(i + 1, j)) / 2;
             auto denom_i = (eps(i, j) + eps(i + 1, j)) / 2;
@@ -115,7 +116,6 @@ void Fields::calculate_nu_t(Grid &grid, int turb_model) {
         }
       
     }
-    calculate_k_and_epsilon(grid, turb_model);
 }
 
 void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
@@ -125,6 +125,7 @@ void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
         for (const auto &current_cell : grid.fluid_cells()) {
             int i = current_cell->i();
             int j = current_cell->j();
+            Real f1_coeff = 1;
             Real f2_coeff = 1;
             auto nut = nu_t(i, j);
             auto kij = K_OLD(i, j);
@@ -138,9 +139,10 @@ void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
             auto e2 = Discretization::laplacian_nu(EPS_OLD, _nu, _NU_I, _NU_J, i, j, 1.3);
 
             auto k3 = nut * Discretization::mean_strain_rate_squared(_U, _V, i, j);
-            auto e3 = 1.44 * eij * k3 / kij;
+            auto e3 = f1_coeff * 1.44 * eij * k3 / kij;
             auto e4 = f2_coeff * 1.92 * eij * eij / kij;
             auto kij_new = kij + _dt * (-(k1_1 + k1_2) + k2 + k3 - eij);
+
             auto epsij_new = eij + _dt * (-(e1_1 + e1_2) + e2 + e3 - e4);
             k(i, j) = kij_new;
             eps(i, j) = epsij_new;
@@ -178,10 +180,24 @@ void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
   
 }
 
-Real Fields::damp_f2(int i, int j) { return 1 - 0.3 * std::exp(-std::pow(k(i, j) * k(i, j) / (_nu * eps(i, j)), 2)); }
+Real Fields::damp_f1(int i, int j) {
+    Real dist = 1.0 / 60.0; // distance from wall
+    Real R_t = k(i, j) * k(i, j) / (_nu * eps(i, j));
+    Real R_delta = std::sqrt(k(i, j)) * dist / _nu;
+    Real fnu = std::pow(1 - exp(-0.0165 * R_delta), 2) * (1 + 20.5 / R_t); 
+    return 1 + std::pow(0.05 / fnu, 3);
+}
+
+Real Fields::damp_f2(int i, int j) {
+    Real R_t = k(i, j) * k(i, j) / (_nu * eps(i, j));
+    return 1 - exp(- R_t * R_t);        
+}
 
 Real Fields::damp_fnu(int i, int j) {
-    return std::exp(-3.4 / (std::pow(k(i, j) * k(i, j) / (_nu * eps(i, j) * 50), 2)));
+    Real dist = 1.0 / 60.0; // distance from wall
+    Real R_t = k(i, j) * k(i, j) / (_nu * eps(i, j));
+    Real R_delta = std::sqrt(k(i, j)) * dist / _nu;
+    return std::pow(1 - exp(-0.0165 * R_delta), 2) * (1 + 20.5 / R_t);              
 }
 
 void Fields::calculate_fluxes(Grid &grid, bool calc_temp, bool turbulent) {
@@ -220,8 +236,12 @@ void Fields::calculate_temperatures(Grid &grid) {
 
 Real Fields::calculate_dt(Grid &grid, bool calc_temp, int turbulence) {
 
-    Real dx2 = grid.dx() * grid.dx();
-    Real dy2 = grid.dy() * grid.dy();
+    Real mindx = grid.mindx();
+    Real mindy = grid.mindy();
+
+    Real dx2 = mindx * mindx;
+    Real dy2 = mindy * mindy;
+
 
     // CFL conditions
     Real uMax = *std::max_element(_U.data(), _U.data() + _U.size());
@@ -253,9 +273,12 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp, int turbulence) {
     // Get the global maximums
     maxAbsU = Communication::reduce_all(maxAbsU, MPI_MAX);
     maxAbsV = Communication::reduce_all(maxAbsV, MPI_MAX);
+    nu_min = Communication::reduce_all(nu_min, MPI_MIN);
+    k_max = Communication::reduce_all(k_max, MPI_MAX);
+    eps_max = Communication::reduce_all(eps_max, MPI_MAX);
 
-    Real cond_2 = grid.dx() / maxAbsU;
-    Real cond_3 = grid.dy() / maxAbsV;
+    Real cond_2 = mindx / maxAbsU;
+    Real cond_3 = mindy / maxAbsV;
 
     Real minimum = std::min(cond_2, cond_3);
 
