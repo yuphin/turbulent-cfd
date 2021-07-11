@@ -43,7 +43,7 @@ void main() {
 		float alpha =  res[0];
 		switch(MODE){
 			case 0:
-				p[idx] = p[idx] + alpha * d[idx];
+				p[idx] = p[idx] - alpha * d[idx];
 				break;
 			case 1:
 				r[idx] = r[idx] - alpha * q[idx];

@@ -4,8 +4,7 @@
 #include "UBOData.h"
 
 layout(local_size_x = 1024, local_size_y =1, local_size_z = 1) in;
-layout(constant_id = 0) const uint STORE = 0;
-layout(binding = 14) buffer Residual
+layout(set = 1, binding = 21) buffer NutResidual
 {
 	float res[];
 };

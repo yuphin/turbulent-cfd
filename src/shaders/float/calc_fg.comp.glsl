@@ -3,6 +3,7 @@
 #include "discretization.h"
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 layout(constant_id = 0) const uint CALC_TEMP = 0;
+layout(constant_id = 1) const uint TURBULENT = 0;
 layout(std430, binding = 0) readonly buffer U
 {
  	float u[];
@@ -38,6 +39,11 @@ layout(binding = 23) readonly buffer T
  	float t[];
 };
 
+layout(set = 1, binding = 12) buffer TURB_NU_T
+{
+    float NU_T[];
+};
+
 void main() {
     uint i = gl_GlobalInvocationID.x;
     uint j = gl_GlobalInvocationID.y;
@@ -48,10 +54,15 @@ void main() {
     // 5-point + 1 stencil for U and V
     float u_stencil[6] = float[6](at(u, i+1, j), at(u, i, j), at(u, i-1, j), at(u, i, j+1), at(u, i, j-1), at(u, i-1, j+1));
     float v_stencil[6] = float[6](at(v, i+1, j), at(v, i, j), at(v, i-1, j), at(v, i, j+1), at(v, i, j-1), at(v, i+1, j-1));
-
+    float nu_term1 = nu;
+    float nu_term2 = nu;
+    if(TURBULENT == 1){
+        nu_term1 = (at(NU_T, i, j) + at(NU_T, i + 1, j)) / 2;
+        nu_term2 = (at(NU_T, i, j) + at(NU_T, i, j + 1)) / 2;
+    }
    // Calculate fluxes
-   at(f, i, j) = at(u, i, j ) + dt * (nu * laplacian(u_stencil) - convection_u(u_stencil,v_stencil));
-   at(g, i, j) = at(v, i, j ) + dt * (nu * laplacian(v_stencil) - convection_v(u_stencil,v_stencil));
+   at(f, i, j) = at(u, i, j ) + dt * (nu_term1 * laplacian(u_stencil) - convection_u(u_stencil,v_stencil));
+   at(g, i, j) = at(v, i, j ) + dt * (nu_term2 * laplacian(v_stencil) - convection_v(u_stencil,v_stencil));
 
    if(CALC_TEMP == 1){
        float term1 = at(t, i, j) + at(t, i+1, j);

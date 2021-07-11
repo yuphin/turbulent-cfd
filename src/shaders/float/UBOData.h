@@ -1,3 +1,4 @@
+
 layout(push_constant) uniform UBOData {
 	int imax;
     int jmax;
@@ -20,4 +21,6 @@ layout(push_constant) uniform UBOData {
     float tau;
     int num_diags;
     int num_fluid_cells;
+    float wk;
+    float weps;
 };

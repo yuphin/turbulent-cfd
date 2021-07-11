@@ -5,10 +5,6 @@ void VulkanSolver::solve_pre_pressure(Real &dt) {
     std::vector<Real> nuts(_grid._domain.total_size);
     std::vector<Real> keps(_grid._domain.total_size);
     dt = *(Real *)dt_buffer.data;
-    nu_t_residual_buffer.copy(scratch_buffer, 3);
-    nuts.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._NU_T.size());
-    keps_residual_buffer.copy(scratch_buffer, 3);
-    keps.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._K.size());
 }
 
 void VulkanSolver::solve_pressure(Real &res, uint32_t &it) {
@@ -188,7 +184,7 @@ void VulkanSolver::initialize() {
         shader_path_prefix += "double/";
     }
     fg_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_fg.comp.spv",
-                                                     {_field.calc_temp, (uint32_t)_turb_model});
+                                                     {_field.calc_temp, _turb_model != 0});
     rs_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_rs.comp.spv");
     vel_pipeline = simulation.create_compute_pipeline(shader_path_prefix + "calc_vel.comp.spv");
     p_pipeline_red = simulation.create_compute_pipeline(shader_path_prefix + "calc_p_redblack_gs.comp.spv", {0});
@@ -626,16 +622,17 @@ void VulkanSolver::record_simulation_step(int command_idx) {
     uv_max(simulation, residual_buffer, counter_buffer, min_max_uv_pipeline, reduce_u_pipeline, reduce_v_pipeline,
            command_idx, grid_size);
     std::vector<VkBufferMemoryBarrier> res_barriers = {
-        buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)
-    };
+        buffer_barrier(residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT)};
     if (_turb_model != 0) {
         simulation.record_command_buffer(max_k_eps_pipeline, command_idx, 1024, 1, grid_size, 1);
-        uv_max(simulation, keps_residual_buffer, counter_buffer, max_k_eps_pipeline, reduce_k_pipeline, reduce_eps_pipeline,
-               command_idx, grid_size);
+        uv_max(simulation, keps_residual_buffer, counter_buffer, max_k_eps_pipeline, reduce_k_pipeline,
+               reduce_eps_pipeline, command_idx, grid_size);
         reduce_single(simulation, nu_t_residual_buffer, counter_buffer, min_nu_t_pipeline, reduce_nu_t_pipeline,
                       command_idx, grid_size);
-        res_barriers.push_back(buffer_barrier(keps_residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT));
-        res_barriers.push_back(buffer_barrier(nu_t_residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT));
+        res_barriers.push_back(
+            buffer_barrier(keps_residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT));
+        res_barriers.push_back(
+            buffer_barrier(nu_t_residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT));
     }
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, res_barriers.size(), res_barriers.data(), 0, 0);
@@ -796,10 +793,6 @@ void VulkanSolver::record_post_pressure(int command_idx) {
     simulation.begin_recording(command_idx, 0);
     vkCmdResetQueryPool(simulation.context.command_buffer[command_idx], simulation.query_pool, 0, 6);
     simulation.write_timestamp(command_idx, 4);
-    if (solver_type == SolverType::PCG) {
-        simulation.record_command_buffer(negate_pipeline, command_idx, 1024, 1, grid_size, 1);
-        barrier(simulation, p_buffer, command_idx);
-    }
     simulation.record_command_buffer(vel_pipeline, command_idx, 32, 32, grid_x, grid_y);
     std::array<VkBufferMemoryBarrier, 2> uv_barriers = {
         buffer_barrier(u_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_WRITE_BIT),

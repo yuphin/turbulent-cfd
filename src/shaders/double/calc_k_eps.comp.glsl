@@ -211,6 +211,8 @@ void main() {
         double shear_val = 0;
         k3 = nut * mean_strain_rate_squared_out_shear(U_stencil, V_stencil, i, j, shear_val);
         k3 = min(k3, 10 * 0.09 * kij * eij);
+        // This is needed here for some reason
+        if(k3 < 0) k3 = 0;
         at(S, i, j) = shear_val;
     }
     double e3 = (TURB_MODEL == 1 ? 1.44 : 5.0 / 9.0) * eij * k3 / kij;

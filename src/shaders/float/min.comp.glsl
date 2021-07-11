@@ -8,9 +8,9 @@ layout(set = 1, binding = 12) buffer NUT
 	float NU_T[];
 };
 
-layout(binding = 14) buffer Residual //residual
+layout(set = 1, binding = 21) buffer NutResidual
 {
-	float res[];
+	float nutres[];
 };
 
 shared float data[32];
@@ -28,9 +28,9 @@ void main(){
 	if (gl_SubgroupID == 0) {
     	val = data[gl_SubgroupInvocationID];
 		subgroupBarrier();
-        val = subgroupMax(val);
+        val = subgroupMin(val);
     }
 	if (gl_LocalInvocationID.x == 0) {
-        res[gl_WorkGroupID.x + 0] = val;
+        nutres[gl_WorkGroupID.x + 0] = val;
     }
 }
