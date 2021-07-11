@@ -16,7 +16,7 @@ enum CommandBufferIndex {
     COMMAND_BUFFER_IDX_3,
 };
 
-constexpr int MAX_DESCRIPTOR_SETS = 4;
+constexpr int MAX_DESCRIPTOR_SETS = 2;
 
 struct UBOData {
     int imax;
@@ -445,11 +445,11 @@ class GPUSimulation {
 
     void create_descriptor_pool() {
         std::vector<VkDescriptorPoolSize> pool_sizes = {
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 32},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_DESCRIPTOR_SETS * 32},
         };
         VkDescriptorPoolCreateInfo descriptor_pool_create_info = {};
         descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptor_pool_create_info.maxSets = 32;
+        descriptor_pool_create_info.maxSets = MAX_DESCRIPTOR_SETS;
         descriptor_pool_create_info.poolSizeCount = (uint32_t)pool_sizes.size();
         descriptor_pool_create_info.pPoolSizes = pool_sizes.data();
 
