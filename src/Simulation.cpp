@@ -173,8 +173,9 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
 
     if (simulation_type_int == 0) {
         _solver = std::make_unique<CPUSolver>();
-        std::cout << "Simulation: CPU\n";
-
+        if (params.world_rank == 0) {
+            std::cout << "Simulation: CPU\n";
+        }
     }
 #ifdef USE_CUDA
     else if (simulation_type_int == 1) {
@@ -189,10 +190,12 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     }
 #endif
 
-    if (sizeof(Real) == 4) {
-        std::cout << "Precision: Single\n";
-    } else {
-        std::cout << "Precision: Double\n";
+    if (params.world_rank == 0) {
+        if (sizeof(Real) == 4) {
+            std::cout << "Precision: Single\n";
+        } else {
+            std::cout << "Precision: Double\n";
+        }        
     }
 
     // Prandtl number = nu / alpha
@@ -260,14 +263,16 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     if (TI != REAL_MAX) {
         _solver->_field.calc_temp = true;
     }
-    if (turb_model == 0) {
-        std::cout << "Turbulence model: off\n";
-    } else if (turb_model == 1) {
-        std::cout << "Turbulence model: K-Epsilon\n";
-    } else if (turb_model == 2) {
-        std::cout << "Turbulence model: K-Omega\n";
-    } else if (turb_model == 3) {
-        std::cout << "Turbulence model: K-Omega SST\n";
+    if (params.world_rank == 0) {
+        if (turb_model == 0) {
+            std::cout << "Turbulence model: off\n";
+        } else if (turb_model == 1) {
+            std::cout << "Turbulence model: K-Epsilon\n";
+        } else if (turb_model == 2) {
+            std::cout << "Turbulence model: K-Omega\n";
+        } else if (turb_model == 3) {
+            std::cout << "Turbulence model: K-Omega SST\n";
+        }        
     }
 
     // Construct boundaries
@@ -359,9 +364,11 @@ void Simulation::simulate(Params &params) {
         uint32_t it;
         Real res;
         _solver->solve_pressure(res, it);
+        /*
         if (params.world_rank == 0) {
             std::cout << "Iter count: " << it << " ";
         }
+        */
         // Check if max_iter was reached
         if (params.world_rank == 0 && it == _solver->_max_iter) {
             logger.max_iter_warning();

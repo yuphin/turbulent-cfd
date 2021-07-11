@@ -72,54 +72,43 @@ std::vector<std::vector<int>> refine_geometry(const std::vector<std::vector<int>
 {
     int iold = imax;
     int jold = jmax;
-    imax = (imax + 1) * std::pow(2, refine) - 1;
-    jmax = (jmax + 1) * std::pow(2, refine) - 1;
+
+    Real refine_fac = std::pow(2, refine);
+    imax = imax * refine_fac;
+    jmax = jmax * refine_fac;
 
     int steps = std::pow(2, refine);
-
     std::vector<std::vector<int>> geometry_data(imax + 2, std::vector<int>(jmax + 2, 0));
-    for (int i = 0; i < iold + 1; i++) {
-        for (int j = 0; j < jold + 1; j++) {
+
+    for (int i = 0; i < iold; i++) {
+        for (int j = 0; j < jold; j++) {
             for (int ii = 0; ii < steps; ii++) {
                 for (int jj = 0; jj < steps; jj++) {
-                    geometry_data[i*steps + ii][j*steps + jj] = vec[i][j];
+                    geometry_data[i*steps + ii + 1][j*steps + jj + 1] = vec[i+1][j+1];
                 }
             }
         }
     }
 
-    for (int j = 0; j < jold + 1; j++) {
-        for (int jj = 0; jj < steps; jj++) {
-            geometry_data[imax+1][j*steps + jj] = vec[iold+1][j];
+    // Fill domain boundaries
+    for (int i = 0; i < iold; i++) {
+        for (int ii = 0; ii < steps; ii++) {
+            geometry_data[i*steps + ii + 1][0] = vec[i+1][0];
+            geometry_data[i*steps + ii + 1][jmax + 1] = vec[i+1][jold + 1];
         }
     }
 
-    for (int i = 0; i < iold + 1; i++) {
-        for (int ii = 0; ii < steps; ii++) {
-            geometry_data[i*steps+ii][jmax+1] = vec[i][jold+1];
-        }
-    }
-    /*
-    for (int j = 0; j < jold + 1; j++) {
+    for (int j = 0; j < jold; j++) {
         for (int jj = 0; jj < steps; jj++) {
-            for (int ii = 1; ii < steps; ii++) {
-                if (vec[1][j] == 0) {
-                    geometry_data[ii][j*steps + jj] = 0;
-                }                
-            }
+            geometry_data[0][j*steps + jj + 1] = vec[0][j+1];    
+            geometry_data[imax + 1][j*steps + jj + 1] = vec[iold + 1][j+1];
         }
     }
-
-    for (int i = 0; i < iold + 1; i++) {
-        for (int ii = 0; ii < steps; ii++) {
-            for (int jj = 1; jj < steps; jj++) {
-                if (vec[i][1] == 0) {
-                    geometry_data[i*steps+ii][jj] = 0;
-                }                
-            }
-        }
-    }
-    */
+    
+    geometry_data[0][0] = vec[0][0];
+    geometry_data[0][jmax+1] = vec[0][jold+1];
+    geometry_data[imax+1][0] = vec[iold+1][0];
+    geometry_data[imax+1][jmax+1] = vec[iold+1][jold+1];
 
     return geometry_data;
 }
