@@ -31,9 +31,10 @@ void VulkanSolver::solve_pressure(Real &res, uint32_t &it) {
                 sem_idx ^= 1;
             }
             it += 35;
-            vkWaitForFences(simulation.context.device, simulation.fences.size(), simulation.fences.data(), true,
+            vkWaitForFences(simulation.context.device, (uint32_t)simulation.fences.size(), simulation.fences.data(),
+                            true,
                             100000000000);
-            vkResetFences(simulation.context.device, simulation.fences.size(), simulation.fences.data());
+            vkResetFences(simulation.context.device, (uint32_t)simulation.fences.size(), simulation.fences.data());
             simulation.begin_recording(3, 0);
             barrier(simulation, deltas_buffer, 3, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT);
             vkCmdCopyBuffer(simulation.context.command_buffer[3], deltas_buffer.handle, scratch_buffer.handle, 1,
@@ -160,7 +161,7 @@ void VulkanSolver::initialize() {
                     _field._VI,
                     _field._tau,
                     0,
-                    _grid.fluid_cells().size(),
+                    (uint32_t)_grid.fluid_cells().size(),
                     _KIN,
                     _EPSIN};
     if (_preconditioner != -1) {
@@ -635,7 +636,8 @@ void VulkanSolver::record_simulation_step(int command_idx) {
             buffer_barrier(nu_t_residual_buffer.handle, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT));
     }
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, res_barriers.size(), res_barriers.data(), 0, 0);
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, (uint32_t)res_barriers.size(),
+                         res_barriers.data(), 0, 0);
 
     simulation.record_command_buffer(calc_dt_pipeline, command_idx, 1, 1, 1, 1);
     simulation.record_command_buffer(boundary_uv_branchless_pipeline, command_idx, 1024, 1, grid_size, 1);

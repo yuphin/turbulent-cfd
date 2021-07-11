@@ -340,9 +340,9 @@ class GPUSimulation {
         create_info.flags = 0;
         create_info.pApplicationInfo = &application_info;
 
-        create_info.enabledLayerCount = enabled_layers.size();
+        create_info.enabledLayerCount = (uint32_t)enabled_layers.size();
         create_info.ppEnabledLayerNames = enabled_layers.data();
-        create_info.enabledExtensionCount = enabled_extensions.size();
+        create_info.enabledExtensionCount = (uint32_t)enabled_extensions.size();
         create_info.ppEnabledExtensionNames = enabled_extensions.data();
 
         VK_CHECK(vkCreateInstance(&create_info, NULL, &instance));
@@ -424,7 +424,7 @@ class GPUSimulation {
         device_features.shaderFloat64 = true;
 
         device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        device_create_info.enabledLayerCount = enabled_layers.size();
+        device_create_info.enabledLayerCount = (uint32_t)enabled_layers.size();
         device_create_info.ppEnabledLayerNames = enabled_layers.data();
         device_create_info.pQueueCreateInfos = &queue_create_info;
         device_create_info.queueCreateInfoCount = 1;
@@ -435,7 +435,7 @@ class GPUSimulation {
         vkGetDeviceQueue(context.device, compute_queue_family_index, 0, &context.compute_queue);
     }
     void create_mem(VkDeviceMemory &mem, VkMemoryPropertyFlags mem_flags, size_t size) {
-        uint32_t mem_type_index = find_memory_type(context.physical_device, mem_flags, size);
+        uint32_t mem_type_index = find_memory_type(context.physical_device, mem_flags, (uint32_t)size);
         assert(mem_type_index != ~0u);
         VkMemoryAllocateInfo allocate_info = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
         allocate_info.allocationSize = size;
@@ -449,7 +449,7 @@ class GPUSimulation {
         VkDescriptorPoolCreateInfo descriptor_pool_create_info = {};
         descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         descriptor_pool_create_info.maxSets = 32;
-        descriptor_pool_create_info.poolSizeCount = pool_sizes.size();
+        descriptor_pool_create_info.poolSizeCount = (uint32_t)pool_sizes.size();
         descriptor_pool_create_info.pPoolSizes = pool_sizes.data();
 
         VK_CHECK(vkCreateDescriptorPool(context.device, &descriptor_pool_create_info, NULL, &descriptor_pool));
@@ -457,7 +457,7 @@ class GPUSimulation {
 
     void create_descriptor_set_layout(const std::vector<VkDescriptorSetLayoutBinding> &bindings) {
         VkDescriptorSetLayoutCreateInfo dsl_create_info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        dsl_create_info.bindingCount = bindings.size();
+        dsl_create_info.bindingCount = (uint32_t)bindings.size();
         dsl_create_info.pBindings = bindings.data();
         for (int i = 0; i < MAX_DESCRIPTOR_SETS; i++) {
             VK_CHECK(vkCreateDescriptorSetLayout(context.device, &dsl_create_info, NULL, &descriptor_set_layouts[i]));
@@ -498,7 +498,8 @@ class GPUSimulation {
             write_descriptor_set.pBufferInfo = &descriptor.handle.descriptor;
             write_descriptor_sets.push_back(write_descriptor_set);
         }
-        vkUpdateDescriptorSets(context.device, write_descriptor_sets.size(), write_descriptor_sets.data(), 0, NULL);
+        vkUpdateDescriptorSets(context.device, (uint32_t)write_descriptor_sets.size(), write_descriptor_sets.data(), 0,
+                               NULL);
 
         /*  vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline_layout, 0, 1,
            &descriptor_set, 0, NULL);*/
@@ -552,7 +553,7 @@ class GPUSimulation {
         }
         VkSpecializationInfo specialization_info{};
         specialization_info.dataSize = specialization_data.size() * sizeof(uint32_t);
-        specialization_info.mapEntryCount = specialization_data.size();
+        specialization_info.mapEntryCount = (uint32_t)specialization_data.size();
         specialization_info.pMapEntries = entries.data();
         specialization_info.pData = specialization_data.data();
 
@@ -626,7 +627,8 @@ class GPUSimulation {
 
         vkCmdBindPipeline(context.command_buffer[command_idx], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
         vkCmdBindDescriptorSets(context.command_buffer[command_idx], VK_PIPELINE_BIND_POINT_COMPUTE,
-                                pipeline.pipeline_layout, 0, descriptor_sets.size(), descriptor_sets.data(), 0, NULL);
+                                pipeline.pipeline_layout, 0, (uint32_t)descriptor_sets.size(), descriptor_sets.data(),
+                                0, NULL);
         vkCmdPushConstants(context.command_buffer[command_idx], pipeline.pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT,
                            0, sizeof(UBOData), &data);
         const auto num_wg_x = (uint32_t)ceil(width / float(wg_x));

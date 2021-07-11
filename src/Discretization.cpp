@@ -99,7 +99,7 @@ Real Discretization::convection_uKEPS(const Matrix<Real> &U, const Matrix<Real> 
             (std::abs(U(i, j)) * diff(T, i, j, 1, 0) - std::abs(U(i - 1, j)) * diff(T, i - 1, j, 1, 0)) / dx;
         result += result_fd + result_dc;
     } else {
-        auto idnr = [&](int i, int j) -> Real { return U(i, j) <= 0; };
+        auto idnr = [&](int i, int j) -> int { return U(i, j) <= 0; };
         result = (U(i, j) * T(i + idnr(i, j), j) - U(i - 1, j) * T(i - 1 + idnr(i - 1, j), j)) / dx;
     }
     return result;
@@ -115,7 +115,7 @@ Real Discretization::convection_vKEPS(const Matrix<Real> &V, const Matrix<Real> 
             1 * (std::abs(V(i, j)) * diff(T, i, j, 0, 1) - std::abs(V(i, j - 1)) * diff(T, i, j - 1, 0, 1)) / dy;
         result += result_fd + result_dc;
     } else {
-        auto jdnr = [&](int i, int j) -> Real { return V(i, j) <= 0; };
+        auto jdnr = [&](int i, int j) -> int { return V(i, j) <= 0; };
         result = (V(i, j) * T(i, jdnr(i, j) + j) - V(i, j - 1) * T(i, j - 1 + jdnr(i, j - 1))) / dy;
     }
     return result;

@@ -24,7 +24,7 @@ DiagonalSparseMatrix<Real> create_preconditioner_spai(const SparseMatrix<Real> &
     auto dim_y = _grid.jmaxb();
     SparseMatrix<Real> result(_grid.domain().total_size);
     if (precond_type == 0) {
-        const float omg = 0.5;
+        const Real omg = 0.5;
         SparseMatrix<Real> diag(_grid.domain().total_size);
         SparseMatrix<Real> j_a(_grid.domain().total_size);
         SparseMatrix<Real> j_a_j(_grid.domain().total_size);
@@ -38,7 +38,7 @@ DiagonalSparseMatrix<Real> create_preconditioner_spai(const SparseMatrix<Real> &
         for (int i = 0; i < j_a_j.n; i++) {
             for (const int j : j_a_j.index[i]) {
                 auto elem = j_a_j(i, j);
-                float diag = 0;
+                Real diag = 0;
                 if (i == j) {
                     diag = 2 / A(i, i);
                 }
@@ -57,7 +57,7 @@ DiagonalSparseMatrix<Real> create_preconditioner_spai(const SparseMatrix<Real> &
         }
         diag_offsets = {-dim_x, -1, 0, 1, dim_x};
     } else if (precond_type == 1) {
-        const float omg = 0.5;
+        const Real omg = 0.5;
         SparseMatrix<Real> K_inv(dim_x * dim_y);
         SparseMatrix<Real> K_inv_T(dim_x * dim_y);
         // SSOR preconditioner from "Parallel preconditioned conjugate gradient algorithm on GPU"

@@ -49,8 +49,6 @@ __device__ Real convection_uT(Real U[2], Real T[5], Real inv_dx, Real gamma) {
 }
 
 __device__ Real convection_vT(Real V[2], Real T[5], Real inv_dy, Real gamma) {
-    Real result = 0.0;
-
     Real interp1 = (T[1] + T[3]) / 2;
     Real interp2 = (T[4] + T[1]) / 2;
     Real interp3 = (T[1] - T[3]) / 2;
@@ -110,24 +108,9 @@ __device__ Real sor_helper(Real ar[4], Real inv_dx, Real inv_dy) {
     return result;
 }
 
-__device__ Real convection_UKEPS(Real U[2], Real T[5], Real inv_dx) {
-    constexpr int METHOD = 0;
+__device__ Real convection_UKEPS(Real U[2], Real T[5], Real inv_dx) { return convection_uT(U, T, inv_dx, 1); }
 
-    if (METHOD == 0) {
-        return convection_uT(U, T, inv_dx, 1);
-    } else {
-        // TODO
-    }
-}
-
-__device__ Real convection_VKEPS(Real V[2], Real T[5], Real inv_dy) {
-    constexpr int METHOD = 0;
-    if (METHOD == 0) {
-        return convection_vT(V, T, inv_dy, 1);
-    } else {
-        // TODO
-    }
-}
+__device__ Real convection_VKEPS(Real V[2], Real T[5], Real inv_dy) { return convection_vT(V, T, inv_dy, 1); }
 
 __device__ Real laplacian_nu(Real ar[5], Real nu_i[2], Real nu_j[2], Real inv_dx, Real inv_dy, Real nu, Real coeff) {
     // nu_ij[0] -> nu_ij(i,j)

@@ -220,7 +220,7 @@ void get_abs_max(Real *input, Real *res, Real &out, int size) {
     int smemsize = min(BLK_SIZE, size);
     reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(input, res, size);
     while (num_blks != 1) {
-        size = ceil(size / Real(BLK_SIZE));
+        size = (int)ceil(size / Real(BLK_SIZE));
         smemsize = min(BLK_SIZE, size);
         num_blks = get_num_blks(size);
         reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(res, res, size);
@@ -860,7 +860,7 @@ Real calculate_dt(int imax, int jmax, Real *u, Real *v, Real *u_residual, Real *
         reduce_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(eps, eps_residual, size);
     }
     while (num_blks != 1) {
-        size = ceil(size / Real(BLK_SIZE));
+        size = (int)ceil(size / Real(BLK_SIZE));
         smemsize = min(BLK_SIZE, size);
         num_blks = get_num_blks(size);
         reduce_abs_max<<<num_blks, BLK_SIZE, smemsize * sizeof(Real)>>>(u_residual, u_residual, size);
@@ -974,8 +974,8 @@ void CudaSolver::initialize() {
         }
     }
 
-    num_offsets_a = A_matrix_diag.offsets.size();
-    num_offsets_m = A_precond_diag.offsets.size();
+    num_offsets_a = (int)A_matrix_diag.offsets.size();
+    num_offsets_m = (int)A_precond_diag.offsets.size();
     auto t_matrix_data = T_fixed.value.data();
     auto t_matrix_size = T_fixed.value.size();
     auto t_row_start_data = T_fixed.rowstart.data();
@@ -1159,7 +1159,7 @@ void CudaSolver::solve_pressure(Real &res, uint32_t &it) {
 
     } else if (solver_type == SolverType::SOR) {
         solve_sor(P, P_temp, P_residual, p_residual_out, neighborhood, _grid.imaxb(), _grid.jmaxb(), RS, cell_type, it,
-                  _max_iter, _grid.dx(), _grid.dy(), _field._PI, _tolerance, res, _grid.fluid_cells().size());
+                  _max_iter, _grid.dx(), _grid.dy(), _field._PI, _tolerance, res, (int)_grid.fluid_cells().size());
     }
 }
 

@@ -47,7 +47,7 @@ void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_
                                                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
-    int num_wgs = ceil(dim / 1024.0f);
+    int num_wgs = (int)ceil(dim / 1024.0f);
 
     VkBufferMemoryBarrier fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
                                                         VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
@@ -58,7 +58,7 @@ void vec_dp(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_
     std::vector<VkBufferMemoryBarrier> barriers{res_barrier, fill_barrier};
     while (num_wgs != 1) {
         simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
-        num_wgs = ceil(num_wgs / 1024.0f);
+        num_wgs = (int)ceil(num_wgs / 1024.0f);
         if (num_wgs > 1) {
             vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, barriers.data(), 0, 0);
@@ -91,7 +91,7 @@ void calc_residual(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &c
     std::vector<VkBufferMemoryBarrier> barriers{res_barrier, counter_barrier};
     while (num_wgs != 1) {
         simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
-        num_wgs = ceil(num_wgs / 1024.0f);
+        num_wgs = (int)ceil(num_wgs / 1024.0f);
         if (num_wgs > 1) {
             vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, barriers.data(), 0, 0);
@@ -111,7 +111,7 @@ void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_
     simulation.record_command_buffer(min_max_uv_pipeline, command_idx, 1024, 1, dim, 1);
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
-    int num_wgs = ceil(dim / 1024.0f);
+    int num_wgs = (int)ceil(dim / 1024.0f);
     vkCmdFillBuffer(simulation.context.command_buffer[command_idx], counter_buffer.handle, 0, counter_buffer.size, 1);
     fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
                                   VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
@@ -123,7 +123,7 @@ void uv_max(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &counter_
     while (num_wgs != 1) {
         simulation.record_command_buffer(reduce_u_pipeline, command_idx, 1024, 1, num_wgs, 1);
         simulation.record_command_buffer(reduce_v_pipeline, command_idx, 1024, 1, num_wgs, 1);
-        num_wgs = ceil(num_wgs / 1024.0f);
+        num_wgs = (int)ceil(num_wgs / 1024.0f);
         if (num_wgs > 1) {
             vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, barriers.data(), 0, 0);
@@ -143,7 +143,7 @@ void reduce_single(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &c
     simulation.record_command_buffer(op_pipeline, command_idx, 1024, 1, dim, 1);
     vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &res_barrier, 0, 0);
-    int num_wgs = ceil(dim / 1024.0f);
+    int num_wgs = (int)ceil(dim / 1024.0f);
     vkCmdFillBuffer(simulation.context.command_buffer[command_idx], counter_buffer.handle, 0, counter_buffer.size, 1);
     fill_barrier = buffer_barrier(counter_buffer.handle, VK_ACCESS_TRANSFER_WRITE_BIT,
                                   VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT);
@@ -154,7 +154,7 @@ void reduce_single(GPUSimulation &simulation, Buffer &residual_buffer, Buffer &c
     std::vector<VkBufferMemoryBarrier> barriers{res_barrier, counter_barrier};
     while (num_wgs != 1) {
         simulation.record_command_buffer(reduce_pipeline, command_idx, 1024, 1, num_wgs, 1);
-        num_wgs = ceil(num_wgs / 1024.0f);
+        num_wgs = (int)ceil(num_wgs / 1024.0f);
         if (num_wgs > 1) {
             vkCmdPipelineBarrier(simulation.context.command_buffer[command_idx], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 2, barriers.data(), 0, 0);
