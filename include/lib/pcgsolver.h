@@ -701,38 +701,6 @@ struct SparsePCGSolver
       min_diagonal_ratio=min_diagonal_ratio_;
    }
 
-   void dia_multiply(DiagonalSparseMatrix<Real> &A, std::vector<Real> &s, std::vector<Real> &z) {
-       for (int r = 0; r < A.dim; r++) {
-           Real dot = 0;
-           z[r] = 0;
-           for (int n = 0; n < A.num_diags; n++) {
-               int col = r + A.offsets[n];
-               Real val = A.data[A.dim * n + r];
-               if (col >= 0 && col < A.dim) dot += val * s[col];
-           }
-           z[r] += dot;
-       }
-   }
-
-   DiagonalSparseMatrix<Real> create_diagonal_matrix(const SparseMatrix<Real> &A, int dim_x, int dim_y,
-                                                     const std::vector<int> offsets) {
-       DiagonalSparseMatrix<Real> A_diag;
-       A_diag.dim = A.n;
-       A_diag.offsets = offsets;
-       A_diag.num_diags = offsets.size();
-       A_diag.data.resize(offsets.size() * A.n);
-       int cnt = 0;
-       for (auto r = 0; r < A.n; r++) {
-           for (int n = 0; n < A_diag.num_diags; n++) {
-               auto c = A_diag.offsets[n] + r;
-               if (c >= 0 && c < A.n) {
-                   A_diag.data[A.n * n + r] = A(r, c);
-               }
-           }
-       }
-       return A_diag;
-   }
-
    bool solve(const SparseMatrix<T> &matrix, const std::vector<T> &rhs, std::vector<T> &result, T &relative_residual_out, int &iterations_out, int precondition=2)
    {
       int n=matrix.n;
@@ -757,33 +725,15 @@ struct SparsePCGSolver
       }
 
       s=z;
-      std::vector<Real> z2 = z;
       fixed_matrix.construct_from_matrix(matrix);
-      auto diag_mtrx = create_diagonal_matrix(matrix, result.size(), result.size(), {-102, -1, 0, 1, 102});
       int iteration;
       for(iteration=0; iteration<max_iterations; ++iteration){
          multiply(fixed_matrix, s, z);
-          dia_multiply(diag_mtrx, s, z2);
          double alpha=rho/InstantBLAS<int,T>::dot(s, z);
-         auto test = InstantBLAS<int, T>::dot(s, z);
-         Real dsum = 0;
-         Real qsum = 0;
-         for (int i = 1225; i < 1250; i++) {
-             dsum += s[i];
-             qsum += z2[i];
-         }
-         for (int i = 0; i < result.size(); i++) {
-             auto v1 = z[i];
-             auto v2 = z2[i];
-             if (v1 != v2) {
-                 int a = 4;
-             }
-         }
          InstantBLAS<int,T>::add_scaled(-alpha, s, result);
          InstantBLAS<int,T>::add_scaled(-alpha, z, r);
          residual_out=InstantBLAS<int,T>::abs_max(r);
 		 relative_residual_out = residual_out / residual_0;
-      
          if(residual_out<=tol) {
             iterations_out=iteration+1;
             return true; 
