@@ -59,7 +59,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     SolverType solver_type;
     Real KI = REAL_MAX;
     Real EPSI = REAL_MAX;
-    int refine = 0;
+    int refine = 0;        /* Refinement based on power of 2 */
     int turb_model = 0;
     std::unordered_map<int, Real> wall_temps;
     std::unordered_map<int, Real> wall_vels;
