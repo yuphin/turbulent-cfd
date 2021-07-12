@@ -15,7 +15,7 @@ cd build
 cmake ..
 make
 ```
-Make sure you delete you CMake cache if you change these settings midway through the build. \newline
+Make sure you delete you CMake cache if you change these settings midway through the build. 
 Also note that the Vulkan code is only tested and designed on a RTX 3060 GPU, therefore there may be problems on lower-end hardware.
 
 In order to run **Fluidchen**, the case file should be given as input parameter. Some default case files are located in the `example_cases` directory. If you installed **Fluidchen**, you can execute them from anywhere you want as  
