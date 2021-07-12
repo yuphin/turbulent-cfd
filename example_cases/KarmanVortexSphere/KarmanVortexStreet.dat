@@ -118,7 +118,7 @@ solver 1
 #	   default is 0
 #--------------------------------------------
 
-simulation 1
+simulation 0
 
 #--------------------------------------------
 #      preconditioner(if pcg is selected)

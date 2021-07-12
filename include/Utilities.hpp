@@ -92,6 +92,8 @@ struct Params {
     int jmax;
     int size_x;
     int size_y;
+    Real start_x;
+    Real start_y;
 };
 
 ///
