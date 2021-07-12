@@ -63,9 +63,11 @@ class Simulation {
     /// Solution file outputting frequency
     Real _output_freq;
 
+    /// Unique pointer to the specified solver instance
     std::unique_ptr<Solver> _solver;
 
     friend class Logger;
+    /// logger to output information during runtime
     Logger logger = Logger();
 
     // global grid sizes without boundaries, needed for vtk output

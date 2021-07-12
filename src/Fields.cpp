@@ -254,11 +254,24 @@ void Fields::calculate_k_and_epsilon(Grid &grid, int turb_model) {
   
 }
 
-Real Fields::damp_f2(int i, int j) { return 1 - 0.3 * std::exp(-std::pow(k(i, j) * k(i, j) / (_nu * eps(i, j)), 2)); }
-
-Real Fields::damp_fnu(int i, int j) {
-    return std::exp(-3.4 / (std::pow(k(i, j) * k(i, j) / (_nu * eps(i, j) * 50), 2)));
+Real Fields::damp_f1(int i, int j, Real dist) {
+    Real R_t = k(i, j) * k(i, j) / (_nu * eps(i, j));
+    Real R_delta = std::sqrt(k(i, j)) * dist / _nu;
+    Real fnu = std::pow(1 - exp(-0.0165 * R_delta), 2) * (1 + 20.5 / R_t); 
+    return 1 + std::pow(0.05 / fnu, 3);
 }
+
+Real Fields::damp_f2(int i, int j) {
+    Real R_t = k(i, j) * k(i, j) / (_nu * eps(i, j));
+    return 1 - exp(- R_t * R_t);        
+}
+
+Real Fields::damp_fnu(int i, int j, Real dist) {
+    Real R_t = k(i, j) * k(i, j) / (_nu * eps(i, j));
+    Real R_delta = std::sqrt(k(i, j)) * dist / _nu;
+    return std::pow(1 - exp(-0.0165 * R_delta), 2) * (1 + 20.5 / R_t);              
+}
+
 
 void Fields::calculate_fluxes(Grid &grid, bool calc_temp, bool turbulent) {
     for (const auto &current_cell : grid.fluid_cells()) {

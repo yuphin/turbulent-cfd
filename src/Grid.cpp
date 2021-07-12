@@ -7,7 +7,7 @@
 #include <sstream>
 #include <vector>
 
-Grid::Grid(std::string geom_name, Domain &domain, std::vector<std::vector<int>> &geometry_data) {
+Grid::Grid(Domain &domain, std::vector<std::vector<int>> &geometry_data) {
 
     _domain = domain;
 

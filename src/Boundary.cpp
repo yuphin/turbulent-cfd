@@ -189,7 +189,7 @@ void Boundary::enforce_t_adiabatic_diag(Fields &field, Cell *cell) {
     }
 }
 
-void Boundary::enforce_nu_t(Fields &field, int turb_model, Real dx, Real dy) {
+void Boundary::enforce_nu_t(Fields &field, int turb_model) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();
@@ -364,7 +364,7 @@ void InletBoundary::enforce_t(Fields &field) {
     }
 }
 
-void InletBoundary::enforce_nu_t(Fields &field, int turb_model, Real dx, Real dy) {
+void InletBoundary::enforce_nu_t(Fields &field, int turb_model) {
     for (auto &cell : *_cells) {
         int i = cell->i();
         int j = cell->j();

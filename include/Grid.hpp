@@ -22,15 +22,11 @@ class Grid {
     /**
      * @brief Constructor for the Grid
      *
-     * @param[in] geometry file name
-     * @param[in] number of cells in x direction
-     * @param[in] number of cells in y direction
-     * @param[in] cell size in x direction
-     * @param[in] cell size in y direction
+     * @param[in] domain object specifying the domain
+     * @param[in] geometry_data layout of the problem case
      *
      */
-    Grid(std::string geom_name, Domain &domain, 
-         std::vector<std::vector<int>> &geometry_data);
+    Grid(Domain &domain, std::vector<std::vector<int>> &geometry_data);
 
     /// index based cell access
     Cell cell(int i, int j) const;
@@ -74,35 +70,45 @@ class Grid {
     std::vector<Cell *> &outlet_cells();
 
     /**
-     * @brief Access moving wall cells
+     * @brief Access noslip wall cells
      *
      * @param[out] vector of moving wall cells
      */
     std::vector<Cell *> &noslip_wall_cells();
 
     /**
-     * @brief Access fixed wall cells
+     * @brief Access freeslip cells
      *
      * @param[out] vector of fixed wall cells
      */
     std::vector<Cell *> &freeslip_wall_cells();
 
+    /// domain object 
     Domain _domain;
+
+    /// All cells of the grid
     Matrix<Cell> _cells;
 
+    /// Calculate cell wall distances
     void preprocess_geometry();
 
   private:
     /// Build cell data structures with given geometrical data
     void assign_cell_types(std::vector<std::vector<int>> &geometry_data);
 
+    /// Cell pointer to all fluid cells
     std::vector<Cell *> _fluid_cells;
+    /// Cell pointer to all inlet cells
     std::vector<Cell *> _inlet_cells;
+    /// Cell pointer to all outlet cells
     std::vector<Cell *> _outlet_cells;
+    /// Cell pointer to all freeslip wall cells
     std::vector<Cell *> _freeslip_wall_cells;
+    /// Cell pointer to all noslip wall cells
     std::vector<Cell *> _noslip_wall_cells;
 
-
+    /// Cells width
     Real _dx;
+    /// Cells height
     Real _dy;
 };

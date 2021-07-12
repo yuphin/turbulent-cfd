@@ -15,14 +15,21 @@ class Fields {
     /**
      * @brief Constructor for the fields
      *
-     * @param[in] kinematic viscosity
-     * @param[in] initial timestep size
-     * @param[in] adaptive timestep coefficient
-     * @param[in] number of cells in x direction
-     * @param[in] number of cells in y direction
-     * @param[in] initial x-velocity
-     * @param[in] initial y-velocity
-     * @param[in] initial pressure
+     * @param[in] _nu kinematic viscosity
+     * @param[in] _dt initial timestep size
+     * @param[in] _tau adaptive timestep coefficient
+     * @param[in] imax number of cells in x direction
+     * @param[in] jmax number of cells in y direction
+     * @param[in] UI initial x-velocity
+     * @param[in] VI initial y-velocity
+     * @param[in] PI initial pressure
+     * @param[in] TI initial temperature
+     * @param[in] KI initial k value
+     * @param[in] EPSI initial epsilon value
+     * @param[in] _alpha alpha parameter
+     * @param[in] _beta beta parameter
+     * @param[in] _gx external force in x direction
+     * @param[in] _gy exteral force in y direction
      *
      */
     Fields(Real _nu, Real _dt, Real _tau, int imax, int jmax, Real UI, Real VI, Real PI, Real TI, Real KI, Real EPSI, Real _alpha,
@@ -35,7 +42,8 @@ class Fields {
      * direction based on explicit discretization of the momentum equations
      *
      * @param[in] grid in which the fluxes are calculated
-     * @param[in] whether to include temperature related terms
+     * @param[in] calc_temp whether to include temperature related terms
+     * @param[in] turbulent whether to inclue turbulence calculations
      *
      */
     void calculate_fluxes(Grid &grid, bool calc_temp, bool turbulent);
@@ -70,7 +78,8 @@ class Fields {
      * y-velocity condition and CFL condition
      *
      * @param[in] grid in which the calculations are done
-     * @param[in] whether to include temperatures
+     * @param[in] calc_temp whether to include temperatures
+     * @param[in] turbulence whether to include turbulence
      */
     Real calculate_dt(Grid &grid, bool calc_temp, int turbulence);
 
@@ -103,7 +112,9 @@ class Fields {
 
     /// turbulent viscosity index based access and modify
     Real &nu_t(int i, int j);
+    /// turbulent viscosity on vertical edges index based access and modify
     Real &nu_i(int i, int j);
+    /// turbulent viscosity on horizontal edges index based access and modify
     Real &nu_j(int i, int j);
 
     /// get timestep size
@@ -136,19 +147,59 @@ class Fields {
     /// turbulent energy matrix
     Matrix<Real> &nu_t_matrix();
 
+    /**
+     * @brief Turbulent viscosity calculation using specified model
+     *
+     * @param[in] grid in which the calculations are done
+     * @param[in] turb_model to be used
+     *
+     */
     void calculate_nu_t(Grid &grid,int turb_model);
 
+    /**
+     * @brief Calculate k and epsilon values for turbulences
+     *
+     * @param[in] grid in which the calculations are done
+     * @param[in] turb_model to be used
+     *
+     */
     void calculate_k_and_epsilon(Grid &grid, int turb_model);
 
-     Real calculate_f1_sst(Grid &grid, Real omega, Real dk_di, Real dw_di, Real k, Real dist);
+    Real calculate_f1_sst(Grid &grid, Real omega, Real dk_di, Real dw_di, Real k, Real dist);
 
     Real calculate_f2_sst(Real omega, Real k, Real dist);
+
     Real calculate_sst_term(Grid &grid, Matrix<Real> &K, Matrix<Real> &EPS, Real omega, Real k, Real dist, int i,
                             int j);
 
+    /**
+     * @brief Damping function for C1 coefficient of k-epsilon model
+     *
+     * @param[in] i x index
+     * @param[in] j y index
+     * @param[in] dist distance of cell to the closest wall
+     *
+     */
+    Real damp_f1(int i, int j, Real dist);
+
+    /**
+     * @brief Damping function for C2 coefficient of k-epsilon model
+     *
+     * @param[in] i x index
+     * @param[in] j y index
+     *
+     */
     Real damp_f2(int i, int j);
 
-    Real damp_fnu(int i, int j);
+    /**
+     * @brief Damping function for C_nu coefficient of k-epsilon model
+     *
+     * @param[in] i x index
+     * @param[in] j y index
+     * @param[in] dist distance of cell to the closest wall
+     *
+     */
+    Real damp_fnu(int i, int j, Real dist);
 
     /// initial pressure
     Real _PI;

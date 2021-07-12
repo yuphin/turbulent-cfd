@@ -81,7 +81,9 @@ class Cell {
     /// Getter of cell id
     int id() const;
 
+    /// Distance to the closest wall in the domain
     Real closest_dist;
+    /// Id of the closest wall
     Real closest_wall_idx;
 
   private:
