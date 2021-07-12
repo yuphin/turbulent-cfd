@@ -62,6 +62,10 @@ For reference see [this template](TEMPLATE.dat)
    1 -> SSOR
    2 -> Jacobi preconditioner
    ```
+Note that following combinations are not supported:
+  * PCG - MPI
+  * Cuda - MPI
+  * Vulkan - MPI
 
 ### Design of boundaries and cell types
 
