@@ -249,7 +249,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     domain.size_y = params.size_y;
     domain.total_size = domain.imax * domain.jmax;
 
-    _solver->_grid = Grid(_geom_name, domain, local_geometry);
+    _solver->_grid = Grid(domain, local_geometry);
     _solver->_discretization = Discretization(domain.dx, domain.dy, gamma);
     _solver->_max_iter = itermax;
     _solver->_tolerance = eps;
