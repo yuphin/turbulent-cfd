@@ -342,9 +342,12 @@ Real Fields::calculate_dt(Grid &grid, bool calc_temp, int turbulence) {
     // Get the global maximums
     maxAbsU = Communication::reduce_all(maxAbsU, MPI_MAX);
     maxAbsV = Communication::reduce_all(maxAbsV, MPI_MAX);
-    nu_min = Communication::reduce_all(nu_min, MPI_MIN);
-    k_max = Communication::reduce_all(k_max, MPI_MAX);
-    eps_max = Communication::reduce_all(eps_max, MPI_MAX);
+    if (turbulence != 0) {
+        nu_min = Communication::reduce_all(nu_min, MPI_MIN);
+        k_max = Communication::reduce_all(k_max, MPI_MAX);
+        eps_max = Communication::reduce_all(eps_max, MPI_MAX); 
+    }
+  
 
 
     Real cond_2 = grid.dx() / maxAbsU;

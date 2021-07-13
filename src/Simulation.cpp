@@ -364,11 +364,11 @@ void Simulation::simulate(Params &params) {
         uint32_t it;
         Real res;
         _solver->solve_pressure(res, it);
-        /*
+        
         if (params.world_rank == 0) {
             std::cout << "Iter count: " << it << " ";
         }
-        */
+        
         // Check if max_iter was reached
         if (params.world_rank == 0 && it == _solver->_max_iter) {
             logger.max_iter_warning();
