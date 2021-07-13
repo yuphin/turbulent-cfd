@@ -57,7 +57,7 @@ struct Solver {
     
     Real _EPSIN;
     Real _KIN;
-    
+    bool _should_out = true;
     friend class Logger;
     /// logger to output simulation information at runtime
     Logger logger = Logger();

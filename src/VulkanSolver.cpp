@@ -58,23 +58,27 @@ void VulkanSolver::solve_pressure(Real &res, uint32_t &it) {
 
 void VulkanSolver::solve_post_pressure() {
     simulation.run_command_buffer(2);
-    u_buffer.copy(scratch_buffer, 3);
-    _field._U._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._U.size());
-    v_buffer.copy(scratch_buffer, 3);
-    _field._V._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._V.size());
-    p_buffer.copy(scratch_buffer, 3);
-    _field._P._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._P.size());
-    if (_field.calc_temp) {
-        t_new_buffer.copy(scratch_buffer, 3);
-        _field._T._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._T.size());
-    }
-    if (_turb_model != 0) {
-        nu_t_buffer.copy(scratch_buffer, 3);
-        _field._NU_T._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._NU_T.size());
-        k_buffer.copy(scratch_buffer, 3);
-        _field._K._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._K.size());
-        eps_buffer.copy(scratch_buffer, 3);
-        _field._EPS._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._EPS.size());
+    if (_should_out) {
+        u_buffer.copy(scratch_buffer, 3);
+        _field._U._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._U.size());
+        v_buffer.copy(scratch_buffer, 3);
+        _field._V._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._V.size());
+        p_buffer.copy(scratch_buffer, 3);
+        _field._P._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._P.size());
+        if (_field.calc_temp) {
+            t_new_buffer.copy(scratch_buffer, 3);
+            _field._T._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._T.size());
+        }
+        if (_turb_model != 0) {
+            nu_t_buffer.copy(scratch_buffer, 3);
+            _field._NU_T._container.assign((Real *)scratch_buffer.data,
+                                           (Real *)scratch_buffer.data + _field._NU_T.size());
+            k_buffer.copy(scratch_buffer, 3);
+            _field._K._container.assign((Real *)scratch_buffer.data, (Real *)scratch_buffer.data + _field._K.size());
+            eps_buffer.copy(scratch_buffer, 3);
+            _field._EPS._container.assign((Real *)scratch_buffer.data,
+                                          (Real *)scratch_buffer.data + _field._EPS.size());
+        } 
     }
 }
 

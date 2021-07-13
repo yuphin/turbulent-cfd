@@ -1186,16 +1186,18 @@ void CudaSolver::solve_post_pressure() {
         nu_t_boundary<<<num_blks_2d, blk_size_2d>>>(NU_T, K, EPS, grid_x, grid_y, neighborhood, cell_type, _KIN, _EPSIN,
                                                     _field._nu, _turb_model);
     }
-    chk(cudaMemcpy(_field._U._container.data(), U, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-    chk(cudaMemcpy(_field._V._container.data(), V, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-    chk(cudaMemcpy(_field._P._container.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-    if (_field.calc_temp) {
-        chk(cudaMemcpy(_field._T._container.data(), T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-    }
-    if (_turb_model != 0) {
-        chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-        chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
-        chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+    if (_should_out) {
+        chk(cudaMemcpy(_field._U._container.data(), U, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        chk(cudaMemcpy(_field._V._container.data(), V, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        chk(cudaMemcpy(_field._P._container.data(), P, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        if (_field.calc_temp) {
+            chk(cudaMemcpy(_field._T._container.data(), T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        }
+        if (_turb_model != 0) {
+            chk(cudaMemcpy(_field._NU_T._container.data(), NU_T, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+            chk(cudaMemcpy(_field._K._container.data(), K, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+            chk(cudaMemcpy(_field._EPS._container.data(), EPS, grid_size * sizeof(Real), cudaMemcpyDeviceToHost));
+        }
     }
 }
 

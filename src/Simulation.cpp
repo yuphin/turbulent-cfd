@@ -357,6 +357,7 @@ void Simulation::simulate(Params &params) {
     Real output_counter = 0.0;
     _solver->initialize();
     while (t < _t_end) {
+       
         // Print progress bar
         if (params.world_rank == 0) logger.progress_bar(t, _t_end);
 
@@ -377,13 +378,14 @@ void Simulation::simulate(Params &params) {
         logger.write_log(timestep, t, dt, it, _solver->_max_iter, res);
         _solver->solve_post_pressure();
         // Output u,v,p
-        if (t >= output_counter * _output_freq) {
+        if (_solver->_should_out) {
             output_vtk(timestep, params);
             output_counter++;
         }
 
         t += dt;
         timestep++;
+        _solver->_should_out = t >= output_counter * _output_freq;
         // output_vtk(timestep, params); // output every timestep for debugging
     }
     _solver->solve_post_pressure();
