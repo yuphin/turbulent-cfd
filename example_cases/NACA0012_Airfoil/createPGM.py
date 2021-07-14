@@ -9,7 +9,7 @@ import sys
 data = pd.read_csv("geom.csv", header=None)
 
 N = 100
-theta = np.radians(45)
+theta = np.radians(12)
 print(np.degrees(theta))
 
 c, s = np.cos(theta), np.sin(theta)
@@ -74,7 +74,32 @@ for i in range(N):
         geo[i, j] = checkPoint(x, y)
 
 
+# check invalid and modifiy the cell number
+def check_validity(geo):
+    offset = [1, 0, -1, 0, 1]
+    valid = 1
+    for i in range(N):
+        for j in range(N):
+            if(geo[i][j] == 10):
+                zeros = []
+                for k in range(4):
+                    x = i + offset[k]
+                    y = j + offset[k+1]
+                    if(x < N+1 and x > 0 and y < N+1 and y > 0):
+                        if(geo[x][y] == 0):
+                            zeros.append(k)
+                if(len(zeros)>2):
+                    print("invalid", i, j)
+                    geo[i+offset[zeros[0]]][j+offset[zeros[0]+1]] = 10
+                    valid = 0
+    if(valid):
+        print("valid")
+
+check_validity(geo)
+check_validity(geo)
+
 geo = np.swapaxes(geo, 0, 1)
+
 
 geo_padded = np.zeros((N+1, 2*N + N+1))
 geo_padded[:geo.shape[0], N : N + geo.shape[1]] = geo
