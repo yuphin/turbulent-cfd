@@ -135,9 +135,12 @@ jproc         1
 #--------------------------------------------
 #       turbulence parameters
 # KI: initial K
-# EPSI: initial epsilon (for now, interpreted as omega if K-omega and SST models are selected)
+# EPSI: initial epsilon
 # KIN_<num>: inlet K
-# EPSIN_<num>: inlet epsilon (interpreted as omega for K-omega/SST)
+# EPSIN_<num>: inlet epsilon
+# OMEGAI : initial omega (if K-omega models are selected)
+# OMEGAIN_<num> inlet OMEGAIN_
+# Note: You can specify epsilon while using a K-omega model 
 #--------------------------------------------
 
 KI           0.001
