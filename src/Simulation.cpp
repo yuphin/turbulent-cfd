@@ -188,6 +188,12 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
         }
     }
 
+    if (EPSI != REAL_MAX && OMEGAI == REAL_MAX) {
+        if (turb_model > 1) {
+            EPSI = EPSI /( 0.09 * KI);
+        } 
+    }
+
     if (params.iproc * params.jproc != params.world_size) {
         if (params.world_rank == 0)
             std::cout << "ERROR: Number of MPI processes doesn't match iproc * jproc! \nAborting... " << std::endl;
