@@ -2,8 +2,8 @@
 #--------------------------------------------
 #            size of the domain             
 #--------------------------------------------
-xlength      1
-ylength      1
+xlength      16
+ylength      16
 
 #--------------------------------------------
 #            number of cells
@@ -69,4 +69,6 @@ iproc         1
 jproc         1
 
 solver 1
-simulation cuda
+model 0
+simulation 2
+refine 3
