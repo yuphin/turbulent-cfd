@@ -8,14 +8,25 @@ from matplotlib import pyplot as plt
 data = pd.read_csv("geom.csv", header=None)
 
 N = 100
+theta = 3.62 / 25.75 # define the radians for rotation  
 
-
+c, s = np.cos(theta), np.sin(theta)
+R = np.array(((c, -s), (s, c)))
 
 x_range = data.iloc[:, 0].to_numpy()
-x_range = np.flip(x_range, axis=0)
 y_top = data.iloc[:, 1].to_numpy()
+top = np.stack((x_range, y_top))
+top = np.matmul(R, top)
+y_top = top[1, :]
 y_top = np.flip(y_top, axis=0)
+
+x_range = np.flip(x_range, axis=0)
 y_bot = data.iloc[:, 3].to_numpy()
+bot = np.stack((x_range, y_bot))
+bot = np.matmul(R, bot)
+x_range = bot[0, :]
+y_bot = bot[1, :]
+
 
 geo = np.zeros((N + 1, N + 1))
 
