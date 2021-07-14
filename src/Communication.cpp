@@ -56,7 +56,7 @@ void Communication::communicate(Params *params, Matrix<Real> &matrix) {
     int block_length_col = 1;
     int stride_col = size_x + 2;
     // TODO: Might need to use typedef later to adapt to different Real datatype.
-    MPI_Type_vector(block_count_col, block_length_col, stride_col, MPI_DOUBLE, &column_type);
+    MPI_Type_vector(block_count_col, block_length_col, stride_col, FLUIDCHEN_MPI_REAL, &column_type);
     MPI_Type_commit(&column_type);
 
     MPI_Datatype row_type;
@@ -64,7 +64,7 @@ void Communication::communicate(Params *params, Matrix<Real> &matrix) {
     int block_length_row = 1;
     int stride_row = 1;
     // TODO: Might need to use typedef later to adapt to different Real datatype.
-    MPI_Type_vector(block_count_row, block_length_row, stride_row, MPI_DOUBLE, &row_type);
+    MPI_Type_vector(block_count_row, block_length_row, stride_row, FLUIDCHEN_MPI_REAL, &row_type);
     MPI_Type_commit(&row_type);
 
     // send left column
@@ -93,7 +93,7 @@ Real Communication::reduce_all(Real loc_value, MPI_Op mpi_operation) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     Real global_value = 0.0;
     // TODO: Might need to use typedef later to adapt to different Real datatype.
-    MPI_Allreduce(&loc_value, &global_value, 1, MPI_DOUBLE, mpi_operation, MPI_COMM_WORLD);
+    MPI_Allreduce(&loc_value, &global_value, 1, FLUIDCHEN_MPI_REAL, mpi_operation, MPI_COMM_WORLD);
     return global_value;
 }
 

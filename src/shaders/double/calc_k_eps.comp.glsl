@@ -114,7 +114,7 @@ double convection_vKEPS(double V_stencil[2], double T_stencil[5]) {
         double interp4 = (T_stencil[4] - T_stencil[1]) /2;
 
         return inv_dy * ((V_stencil[1] * interp1 - V_stencil[0] * interp2) + 
-                gamma * (abs(V_stencil[1]) * interp3 - abs(V_stencil[0]) * interp4));
+                (abs(V_stencil[1]) * interp3 - abs(V_stencil[0]) * interp4));
     } else {
         // TODO
     }

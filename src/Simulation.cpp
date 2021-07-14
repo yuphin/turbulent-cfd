@@ -59,7 +59,8 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     SolverType solver_type;
     Real KI = REAL_MAX;
     Real EPSI = REAL_MAX;
-    int refine = 0;        /* Refinement based on power of 2 */
+    Real OMEGAI = REAL_MAX;
+    int refine = 0; /* Refinement based on power of 2 */
     int turb_model = 0;
     std::unordered_map<int, Real> wall_temps;
     std::unordered_map<int, Real> wall_vels;
@@ -68,6 +69,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
     std::unordered_map<int, Real> inlet_Ts;
     std::unordered_map<int, Real> inlet_Ks;
     std::unordered_map<int, Real> inlet_EPSs;
+    std::unordered_map<int, Real> inlet_OMEGAs;
     if (file.is_open()) {
         std::string var;
         while (!file.eof() && file.good()) {
@@ -109,6 +111,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
                 if (var == "model") file >> turb_model;
                 if (var == "KI") file >> KI;
                 if (var == "EPSI") file >> EPSI;
+                if (var == "OMEGAI") file >> OMEGAI;
                 if (!var.compare(0, 10, "wall_temp_")) {
                     Real temp;
                     file >> temp;
@@ -146,10 +149,45 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
                     file >> eps;
                     inlet_EPSs.insert({std::stoi(var.substr(6)), eps});
                 }
+
+                if (!var.compare(0, 8, "OMEGAIN_")) {
+                    Real eps;
+                    file >> eps;
+                    inlet_OMEGAs.insert({std::stoi(var.substr(8)), eps});
+                }
             }
         }
     }
     file.close();
+
+    if (turb_model > 1 && !inlet_EPSs.empty()) {
+        for (auto &inlet_ep : inlet_EPSs) {
+            // Convert given epsilon to omega if a k-omega model is selected
+            auto &eps = inlet_ep.second;
+            eps = eps / (0.09 * inlet_Ks[inlet_ep.first]);
+        }
+    }
+
+    if (turb_model == 1 && !inlet_OMEGAs.empty()) {
+        for (auto &inlet_omg : inlet_OMEGAs) {
+            // Convert given omega to epsilon if a k-epsilon model is selected
+            auto &omg = inlet_omg.second;
+            omg = omg * 0.09 * inlet_Ks[inlet_omg.first];
+        }
+    }
+
+    // Our internal representation is in the Epsilon vectors by convention
+    for (auto &elem : inlet_OMEGAs) {
+        inlet_EPSs.insert(elem);
+    }
+    if (EPSI == REAL_MAX && OMEGAI != REAL_MAX) {
+        if (turb_model == 1) {
+            EPSI = OMEGAI * 0.09 * KI;
+        } else if (turb_model > 1) {
+            EPSI = OMEGAI;
+        }
+    }
+
     if (params.iproc * params.jproc != params.world_size) {
         if (params.world_rank == 0)
             std::cout << "ERROR: Number of MPI processes doesn't match iproc * jproc! \nAborting... " << std::endl;
@@ -195,7 +233,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
             std::cout << "Precision: Single\n";
         } else {
             std::cout << "Precision: Double\n";
-        }        
+        }
     }
 
     // Prandtl number = nu / alpha
@@ -272,7 +310,7 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
             std::cout << "Turbulence model: K-Omega\n";
         } else if (turb_model == 3) {
             std::cout << "Turbulence model: K-Omega SST\n";
-        }        
+        }
     }
 
     // Construct boundaries
@@ -293,7 +331,8 @@ Simulation::Simulation(std::string file_name, int argn, char **args, Params &par
             std::make_unique<NoSlipWallBoundary>(&_solver->_grid.noslip_wall_cells(), wall_vels, wall_temps));
     }
 
-    // TODO
+    // Note: We only support 1 inlet K/EPS on the gpu for now
+    // TODO: Generalize
     for (auto &p : inlet_EPSs) {
         _solver->_EPSIN = p.second;
     }
@@ -357,7 +396,7 @@ void Simulation::simulate(Params &params) {
     Real output_counter = 0.0;
     _solver->initialize();
     while (t < _t_end) {
-       
+
         // Print progress bar
         if (params.world_rank == 0) logger.progress_bar(t, _t_end);
 
@@ -365,11 +404,11 @@ void Simulation::simulate(Params &params) {
         uint32_t it;
         Real res;
         _solver->solve_pressure(res, it);
-        
+
         if (params.world_rank == 0) {
             std::cout << "Iter count: " << it << " ";
         }
-        
+
         // Check if max_iter was reached
         if (params.world_rank == 0 && it == _solver->_max_iter) {
             logger.max_iter_warning();
