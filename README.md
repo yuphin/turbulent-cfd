@@ -1,5 +1,3 @@
-![](FluidchenLogo.png)
-
 Fluidchen is a CFD Solver developed for the CFD Lab taught at TUM Informatics, Chair of Scientific Computing in Computer Science.
 
 After forking, use this `README.md` however you want: feel free to remove anything you don't need,
