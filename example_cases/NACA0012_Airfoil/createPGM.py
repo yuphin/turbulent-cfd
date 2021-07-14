@@ -27,10 +27,8 @@ bot = np.vstack((x_range_flip, y_bot))
 # combine bot and top then rotate
 all = np.hstack((top, bot))
 mean = np.mean(all, axis=1)
-print(mean)
 mean = np.expand_dims(mean, axis=1)
 all = np.matmul(R, all - mean) + mean
-print(np.mean(all, axis=1))
 
 # get the value back
 y_top = all[1, :num]
@@ -59,7 +57,7 @@ def checkPoint(x, y):
             + y_bot[left+1] * (x - x_range[left]) / interval
 
     if interp1 >= y and interp2 <= y:
-        result = 10
+        result = 9
 
 
 
@@ -80,7 +78,7 @@ def check_validity(geo):
     valid = 1
     for i in range(N):
         for j in range(N):
-            if(geo[i][j] == 10):
+            if(geo[i][j] == 9):
                 zeros = []
                 for k in range(4):
                     x = i + offset[k]
@@ -90,16 +88,33 @@ def check_validity(geo):
                             zeros.append(k)
                 if(len(zeros)>2):
                     print("invalid", i, j)
-                    geo[i+offset[zeros[0]]][j+offset[zeros[0]+1]] = 10
+                    geo[i][j] = 5
                     valid = 0
+                    for k in range(len(zeros)):
+                        x = i + offset[zeros[k]]
+                        y = j + offset[zeros[k]]
+                        count = 0
+                        for kk in range(4):
+                            xx = x + offset[k]
+                            yy = y + offset[k+1]
+                            if(xx < N+1 and xx > 0 and yy < N+1 and yy > 0):
+                                if(geo[xx][yy] == 0):
+                                    count = count + 1
+                        if(count <= 2):
+                            geo[x][y] = 9
     if(valid):
         print("valid")
+        return True
+    return False
 
-check_validity(geo)
-check_validity(geo)
 
 geo = np.swapaxes(geo, 0, 1)
 
+max_iter = 5
+iter = 0
+while(iter < max_iter and not check_validity(geo)):
+    iter = iter + 1 
+    print(iter)
 
 geo_padded = np.zeros((N+1, 2*N + N+1))
 geo_padded[:geo.shape[0], N : N + geo.shape[1]] = geo
