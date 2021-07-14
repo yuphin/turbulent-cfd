@@ -3,29 +3,40 @@ import numpy as np
 from numpy.core.numeric import zeros_like
 import pandas as pd
 from matplotlib import pyplot as plt
+import sys
 
 
 data = pd.read_csv("geom.csv", header=None)
 
 N = 100
-theta = 3.62 / 25.75 # define the radians for rotation  
+theta = np.radians(45)
+print(np.degrees(theta))
 
 c, s = np.cos(theta), np.sin(theta)
 R = np.array(((c, -s), (s, c)))
 
 x_range = data.iloc[:, 0].to_numpy()
+num = x_range.size
 y_top = data.iloc[:, 1].to_numpy()
-top = np.stack((x_range, y_top))
-top = np.matmul(R, top)
-y_top = top[1, :]
-y_top = np.flip(y_top, axis=0)
+top = np.vstack((x_range, y_top))
 
-x_range = np.flip(x_range, axis=0)
+x_range_flip = np.flip(x_range, axis=0)
 y_bot = data.iloc[:, 3].to_numpy()
-bot = np.stack((x_range, y_bot))
-bot = np.matmul(R, bot)
-x_range = bot[0, :]
-y_bot = bot[1, :]
+bot = np.vstack((x_range_flip, y_bot))
+
+# combine bot and top then rotate
+all = np.hstack((top, bot))
+mean = np.mean(all, axis=1)
+print(mean)
+mean = np.expand_dims(mean, axis=1)
+all = np.matmul(R, all - mean) + mean
+print(np.mean(all, axis=1))
+
+# get the value back
+y_top = all[1, :num]
+y_top = np.flip(y_top, axis=0)
+x_range = all[0, num:]
+y_bot = all[1, num:]
 
 
 geo = np.zeros((N + 1, N + 1))
@@ -35,7 +46,11 @@ dy = 100 / N
 
 def checkPoint(x, y):
     result = 0
-    left = np.where(x_range >= x)[0][0] - 1
+    left = np.where(x_range >= x)[0]
+    if(left.size == 0):
+        return 0
+    left = left[0] - 1
+
     interval = x_range[left+1] - x_range[left]
     interp1 = y_top[left] * (x_range[left+1] - x) / interval \
             + y_top[left+1] * (x - x_range[left]) / interval
