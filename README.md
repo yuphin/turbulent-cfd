@@ -45,7 +45,7 @@ If input file does not contain a geometry file, vortigen will run lid-driven cav
 
 ### Scene configuration
 In addition to the usual options from the previous exercises, we have other options. All properties relevant for the simulation can be set in a .dat file.  
-For reference see [this template](TEMPLATE.dat)
+For reference see [this template](docs/TEMPLATE.dat)
 
 * model
   ```
