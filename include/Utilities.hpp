@@ -15,11 +15,11 @@
 #if USE_FLOATS
 const float REAL_MAX = FLT_MAX;
 typedef float Real;
-#define FLUIDCHEN_MPI_REAL MPI_FLOAT
+#define VORTIGEN_MPI_REAL MPI_FLOAT
 #else
 const double REAL_MAX = DBL_MAX;
 typedef double Real;
-#define FLUIDCHEN_MPI_REAL MPI_DOUBLE
+#define VORTIGEN_MPI_REAL MPI_DOUBLE
 #endif
 
 // If no geometry file is provided in the input file, lid driven cavity case

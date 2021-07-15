@@ -1,147 +1,120 @@
-Fluidchen is a CFD Solver developed for the CFD Lab taught at TUM Informatics, Chair of Scientific Computing in Computer Science.
+### Introduction
 
-After forking, use this `README.md` however you want: feel free to remove anything you don't need,
-or add any additional details we should know to run the code.
-
-## Working with fluidchen
-
-You will extend this code step-by-step starting from a pure framework to a parallel CFD solver. Please follow these [instructions for work with git and submitting the assignments](docs/first-steps.md).
+Vortigen is a CFD solver that supports turbulent flow on the GPU with various optimizations, preconditioners and more. The project itself is born from the TUM CFD Lab course. 
+Vortigen supports CPU, CUDA and Vulkan solvers and supports K-epsilon, K-omega and SST K-omega turbulence models. It also supports MPI in the CPU solver.
 
 ## Software Requirements
 
 * VTK 7 or higher
+* MPI
 * GCC 9 (optional)
-  
-Detailed information is given below.
+* Vulkan 1.1 (optional)
+* CUDA (optional)
 
-## Installing
-
-```shell
-git clone https://gitlab.lrz.de/oguzziya/GroupX_CFDLab.git
-cd GroupX_CFDLab
-mkdir build && cd build
+### Running
+The code has been tested on both Linux and Windows. For Linux you can build the code via CMake.
+Make sure you enable CUDA or Vulkan support from the CMake settings.
+```
+Vulkan : cmake .. -DUSE\_VULKAN=ON
+CUDA : cmake .. -DUSE\_CUDA=ON
+```
+Otherwise simply run with
+```
+mkdir build
+cd build
 cmake ..
 make
-make install # optional, check prefix
 ```
+Make sure you delete you CMake cache if you change these settings midway through the build. 
+Also note that the Vulkan code is only tested and designed on a RTX 3060 GPU, therefore there may be problems with Vulkan on AMD hardware.
 
-These commands will create the executable `fluidchen` and copy it to the default directory `/usr/local/bin` . If you want to install to a custom path, execute the cmake command as
+In order to run **Vortigen**, the case file should be given as input parameter. Some default case files are located in the `example_cases` directory. If you installed **Vortigen**, you can execute them from anywhere you want as  
+* For Serial
 
 ```shell
-cmake -DCMAKE_INSTALL_PREFIX=/path/to/directory ..
+vortigen /path/to/case/case_name.dat [-log]
 ```
-
-After `make && make install` **fluidchen** will be installed to `/path/to/directory/bin` . Note that you may need to update your `PATH` environment variable.
-
-By default, **fluidchen** is installed in `DEBUG` mode. To obtain full performance, you can execute cmake as
-
-```shell
-cmake -DCMAKE_BUILD_TYPE=RELEASE ..
+* For MPI
 ```
-
-or
-
-```shell
-cmake -DCMAKE_CXX_FLAGS="-O3" ..
-```
-
-A good idea would be that you setup your computers as runners for [GitLab CI](https://docs.gitlab.com/ee/ci/)
-(see the file `.gitlab-ci.yml` here) to check the code building automatically every time you push.
-
-## Running
-
-In order to run **Fluidchen**, the case file should be given as input parameter. Some default case files are located in the `example_cases` directory. If you installed **Fluidchen**, you can execute them from anywhere you want as
-For Serial:
-
-```shell
-fluidchen /path/to/case/case_name.dat [-log]
+mpirun -np <num_processes> ./vortigen /path/to/case/case_name.dat [-log] 
 ```
 
 This will run the case file and create the output folder `/path/to/case/case_name_Output` which holds the `.vtk` files of the solution. If the `-log` flag is specified a log file will also be created in the output directory. The output folder is created in the same location as your case file. Note that this may require write permissions in the given directory.
 
-If input file does not contain a geometry file, fluidchen will run lid-driven cavity case with given parameters.
+If input file does not contain a geometry file, vortigen will run lid-driven cavity case with given parameters.
 
-### GCC version
+### Scene configuration
+In addition to the usual options from the previous exercises, we have other options. All properties relevant for the simulation can be set in a .dat file.  
+For reference see [this template](TEMPLATE.dat)
 
-You can get you current version of GCC by running:
+* model
+  ```
+  0 -> Turbulence(default)
+  1 -> K-epsilon model
+  2 -> K-omega model
+  3 -> K-omega SST model  
+  ```
+* solver
+  ```
+  0 -> SOR(default)
+  1 -> PCG
+  ```
+* simulation
+  ```
+  0 -> CPU(default)
+  1 -> Cuda
+  2 -> Vulkan
+  ```
+* preconditioner
+  ```
+  -1 -> off(default)
+   0 -> AINV
+   1 -> SSOR
+   2 -> Jacobi preconditioner
+   ```
+* refine
+  ```
+  <num> -> Scene is subdivided into 2^num cells
+   ```   
+Note that following combinations are not supported:
+  * PCG - MPI
+  * Cuda - MPI
+  * Vulkan - MPI
 
-```shell
-g++ -v
+### Design of boundaries and cell types
+
+There are 5 different types of cells:
+
+* FLUID
+* OUTLET
+* INLET
+* NOSLIP_WALL
+* FREESLIP_WALL
+
+Cell types and geometry can be set via .pgm files, where the following values correspond to respective cell types.
+
+| Values    | Cell Type     |
+| --------- |:-------------:|
+| 0         | FLUID         |
+| 1         | OUTLET        |
+| 2 - 9     | INLET         |
+| 10 - 19   | NOSLIP_WALL   |
+| 20 - 25   | FREESLIP_WALL |
+
+
+### Single vs Double Precision
+
+By default, we use double precision floating point numbers. If you want to switch to single precision, use the macro 
+```C++
+   #define USE_FLOATS 1
 ```
+in `include/Utilities.hpp`
 
-### Setup of VTK and GCC 9 (Ubuntu **20.04**)
 
-```shell
-apt-get update &&
-apt-get upgrade -y &&
-apt-get install -y build-essential cmake libvtk7-dev libfmt-dev
-```
+### More information
 
-### Setup of VTK and GCC 9 (Ubuntu **18.04**)
+For more information about Vortigen, refer to  `docs/CFDLabDocument.pdf`
 
-If you want, you can upgrade your compiler version to have access to more recent C++ features.
-This is, however, optional.
+### License
 
-```shell
-apt-get update &&
-apt-get install -y software-properties-common &&
-add-apt-repository -y ppa:ubuntu-toolchain-r/test &&
-apt-get upgrade -y &&
-apt-get install -y build-essential cmake libvtk7-dev libfmt-dev gcc-9 g++-9
-apt-get install -y gcc-9 g++-9
-```
-
-### Setup of VTK and GCC 9 (OSX)
-
-The dependencies can be installed by using `homebrew` package manager as
-
-```shell
-brew install gcc
-brew install vtk
-```
-
-By default, `g++` command is linked to `clang` command in OSX operating systems. In order to use the installed version
-
-```shell
-cmake -DCMAKE_CXX_COMPILER=/usr/local/bin/g++-9 ..
-```
-
-should be used.
-
-## Using CMake
-
-CMake is a C++ build system generator, which simplifies the building process compared e.g. to a system-specific Makefile. The CMake configuration is defined in the `CMakeList.txt` file.
-
-In order to build your code with CMake, you can follow this (quite common) procedure:
-
-1. Create a build directory: `mkdir build`
-2. Get inside it: `cd build`
-3. Configure and generate the build system: `cmake ..` (Note the two dots, this means that the `CmakeLists.txt` File is in the folder above)
-4. Build your code: `make` (build the executable)
-
-### Troubleshooting: VTK not found
-
-You might run into a problem where the VTK library is not found. To fix this, you can try the following steps:
-
-1. Find the installation path of your VTK library 
-2. Define this path as an environment variable, as e.g. `export VTK_DIR=".../lib/cmake/vtk-8.2"`
-3. Start in a clean build folder
-4. Run `cmake ..` again
-
-### Set a different GCC version
-
-If you have multiple compiler versions installed you can set the GCC version which should be used by `cmake` like this:
-
-```shell
-export CXX=`which g++-7`
-```
-
-Make sure to use a backtick (\`) to get the `which` command executed. Afterwards, you can run `cmake ..`.
-
-### Running with MPI
-
-Make sure to run the program with `mpirun` or `mpiexec` with the number of processes matching the processes in the configuration file. For example
-
-```shell
-mpirun -np <num_processes> ./fluidchen <test_case>
-```
+This project is licensed under MIT license.

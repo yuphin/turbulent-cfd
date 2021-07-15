@@ -12,8 +12,8 @@ int main(int argn, char **args) {
         problem.simulate(params);
 
     } else {
-        std::cout << "Error: No input file is provided to fluidchen." << std::endl;
-        std::cout << "Example usage: /path/to/fluidchen /path/to/input_data.dat" << std::endl;
+        std::cout << "Error: No input file is provided to vortigen." << std::endl;
+        std::cout << "Example usage: /path/to/vortigen /path/to/input_data.dat" << std::endl;
     }
     Communication::finalize();
 }

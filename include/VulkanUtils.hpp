@@ -329,9 +329,9 @@ class GPUSimulation {
 
         VkApplicationInfo application_info = {};
         application_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        application_info.pApplicationName = "Fluidchen";
+        application_info.pApplicationName = "Vortigen";
         application_info.applicationVersion = 0;
-        application_info.pEngineName = "Fluidchen";
+        application_info.pEngineName = "Vortigen";
         application_info.engineVersion = 0;
         application_info.apiVersion = VK_API_VERSION_1_2;
 

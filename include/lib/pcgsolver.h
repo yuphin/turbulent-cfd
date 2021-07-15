@@ -1,7 +1,7 @@
 //
 //  Preconditioned conjugate gradient solver
 //
-//  Created by Robert Bridson, Ryoichi Ando and Nils Thuerey and Fluidchen Team
+//  Created by Robert Bridson, Ryoichi Ando and Nils Thuerey and Vortigen Team
 //
 
 #ifndef RCMATRIX3_H
