@@ -10,7 +10,7 @@
 #include <chrono>
 #include <mpi.h>
 
-#define USE_FLOATS 0
+#define USE_FLOATS 1
 
 #if USE_FLOATS
 const float REAL_MAX = FLT_MAX;

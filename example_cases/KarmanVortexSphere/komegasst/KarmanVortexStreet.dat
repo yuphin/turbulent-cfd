@@ -1,19 +1,19 @@
 #--------------------------------------------
 #           geometry file            
 #--------------------------------------------
-geo_file    StepFlow.pgm
+geo_file    KarmanVortexStreet.pgm
 
 #--------------------------------------------
 #            size of the domain             
 #--------------------------------------------
-xlength      12
+xlength      10
 ylength      2
 
 #--------------------------------------------
 #            number of cells
 #--------------------------------------------
-imax        120
-jmax        60
+imax        100
+jmax        25
 refine      0
 
 #--------------------------------------------
@@ -23,7 +23,7 @@ refine      0
 # tau: safety factor for time step size control
 #--------------------------------------------
 dt           0.05
-t_end        100
+t_end        500
 tau          0.5
 
 #--------------------------------------------
@@ -39,15 +39,15 @@ dt_value     0.05
 # omg: relaxation factor for SOR
 # gamma: upwind differencing factor
 #--------------------------------------------
-itermax      1000
-eps          0.001
+itermax      10000
+eps          0.0001
 omg          1.7
 gamma        0.5
 
 #--------------------------------------------
 #     kinematic viscosity
 #--------------------------------------------
-nu        0.0001
+nu        0
 
 #--------------------------------------------
 #        gravity / external forces
@@ -63,13 +63,13 @@ PI          0
 #--------------------------------------------
 #       initial velocity
 #--------------------------------------------
-UI          0
+UI          0.2
 VI          0
 
 #--------------------------------------------
 #       inlet velocity
 #--------------------------------------------
-UIN_2        1.0
+UIN_2        0.25
 VIN_2        0
 
 #--------------------------------------------
@@ -78,6 +78,17 @@ VIN_2        0
 
 iproc         1
 jproc         1
+
+#--------------------------------------------
+#       turbulence parameters
+#--------------------------------------------
+
+KI          0.1
+OMEGAI        28
+
+KIN_2          0.00001
+OMEGAIN_2      28
+
 
 #--------------------------------------------
 #       turbulence model
@@ -96,7 +107,7 @@ model 3
 #	   default is 0
 #--------------------------------------------
 
-solver 0
+solver 1
 
 #--------------------------------------------
 #      simulation
@@ -106,14 +117,26 @@ solver 0
 #	   default is 0
 #--------------------------------------------
 
-simulation 0
+simulation 2
 
 #--------------------------------------------
-#       turbulence parameters
+#      preconditioner(if pcg is selected)
+#	   -1 -> Off
+#	   0 -> SPAI via first order approximation
+#		    through a Jacobi preconditioner
+#	   1 -> SPAI via an SSOR preconditioner
+#	   2 -> Jacobi preconditioner
+#	   Note: Not all preconditioners are guarenteed to work
+#	   default is -1
 #--------------------------------------------
 
-KI              0.003
-EPSI            0.0005
+preconditioner -1
 
-KIN_2           0.003
-EPSIN_2        0.0005
+#--------------------------------------------
+#      refinement parameters 
+#--------------------------------------------
+
+imax_refined 200
+jmax_refined 40
+dy_min 0.005
+dx_min 0.05

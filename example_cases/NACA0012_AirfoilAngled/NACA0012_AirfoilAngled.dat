@@ -1,7 +1,7 @@
 #--------------------------------------------
 #           geometry file            
 #--------------------------------------------
-geo_file    NACA0012_Airfoil.pgm
+geo_file    NACA0012_AirfoilAngled.pgm
 
 xlength      105
 ylength      35
@@ -10,7 +10,7 @@ jmax        99
 refine      0
 
 dt           0.05
-t_end        50
+t_end        1000
 tau          0.5
 
 dt_value     0.05
@@ -22,16 +22,16 @@ nu          0.0001
 GX          0
 GY          0
 PI          0
-UI          25.75 
-VI          3.62
-UIN_2        25.75 
-VIN_2        3.62
+UI          5
+VI          0
+UIN_2       5
+VIN_2        0
 iproc         1
 jproc         1
-OMEGAI		10
-OMEGAIN_2   10
-KI			0.05
-KIN_2       0.05
+OMEGAI		25
+OMEGAIN_2   25
+KI			0.01
+KIN_2       0.01
 model 3
 solver 1
-simulation 1
+simulation 2
