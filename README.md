@@ -3,6 +3,8 @@
 Vortigen is a CFD solver that supports turbulent flow on the GPU with various optimizations, preconditioners and more. The project itself is born from the TUM CFD Lab course. 
 Vortigen supports CPU, CUDA and Vulkan solvers and supports K-epsilon, K-omega and SST K-omega turbulence models. It also supports MPI in the CPU solver.
 
+![](docs/images/cfd3.png)
+
 ## Software Requirements
 
 * VTK 7 or higher
